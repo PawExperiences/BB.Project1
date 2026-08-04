@@ -1,12 +1,10 @@
 /**
  * input.js — Keyboard input handler.
  *
- * Responsibilities (this card):
+ * Responsibilities:
  *  - Track which keys are currently held (keysDown).
  *  - Track which keys were pressed this frame (justPressed) so that
  *    one keydown fires exactly one action regardless of key-repeat.
- *
- * Full player-movement wiring is handled in the next card.
  */
 
 // Keys currently held down
@@ -37,8 +35,16 @@ export function initInput() {
 }
 
 /**
- * isKeyDown — returns true while the key is held.
- * @param {string} key — e.g. 'ArrowLeft', 'Space'
+ * isKeyHeld — returns true while the key is held.
+ * @param {string} key — e.g. 'ArrowLeft', ' ', 'a', 'd'
+ */
+export function isKeyHeld(key) {
+  return keysDown.has(key);
+}
+
+/**
+ * isKeyDown — alias for isKeyHeld (backwards-compatibility with game.js).
+ * @param {string} key
  */
 export function isKeyDown(key) {
   return keysDown.has(key);
