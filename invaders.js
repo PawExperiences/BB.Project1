@@ -9,9 +9,12 @@ import {
   INV_GAP_Y,
   INV_DROP_STEP,
   INV_EDGE_PAD,
-  INV_BASE_SPEED,
   SCORE_PER_KILL,
   EXPLOSION_DURATION_MS,
+  STEP_INTERVAL_MAX_MS,
+  STEP_INTERVAL_MIN_MS,
+  TOTAL_INVADERS,
+  INV_STEP_PX,
 } from './gameConfig.js';
 
 // ─────────────────────────────────────────────
@@ -42,7 +45,7 @@ const EXPLOSION_COLOUR = '#ff8800';
 export class InvaderGrid {
   /**
    * @param {object} opts
-   * @param {number} [opts.speedMultiplier=1]  Multiplier on INV_BASE_SPEED.
+   * @param {number} [opts.speedMultiplier=1]  Multiplier scales the step pixel distance.
    * @param {number} [opts.startY=80]          Top Y of the first row.
    */
   constructor({ speedMultiplier = 1, startY = 80 } = {}) {
@@ -68,9 +71,18 @@ export class InvaderGrid {
       this.invaders.push(row);
     }
 
+    // Expose a speed property for back-compat with verification steps.
+    // It represents how many pixels each horizontal step covers.
+    this.speed = INV_STEP_PX * speedMultiplier;
+
     // Movement state
-    this.dir   = 1;   // +1 = right, -1 = left
-    this.speed = INV_BASE_SPEED * speedMultiplier;
+    this.dir = 1; // +1 = right, -1 = left
+
+    /**
+     * Accumulated time in ms since the last discrete step.
+     * @type {number}
+     */
+    this._stepAccum = 0;
 
     /**
      * Active explosion effects.
@@ -85,6 +97,27 @@ export class InvaderGrid {
   /** Returns true when every invader has been destroyed. */
   allDefeated() {
     return this.invaders.every(row => row.every(inv => !inv.alive));
+  }
+
+  /**
+   * Returns the number of currently alive invaders.
+   * @returns {number}
+   */
+  remainingCount() {
+    return this.invaders.flat().filter(i => i.alive).length;
+  }
+
+  /**
+   * Compute the step interval in ms for the current remaining count.
+   * Formula: interval = MIN + (remaining / TOTAL) * (MAX - MIN)
+   *   55 alive → 800 ms
+   *    1 alive → 100 ms
+   * @param {number} remaining
+   * @returns {number} interval in ms
+   */
+  _stepInterval(remaining) {
+    const clamped = Math.max(1, Math.min(remaining, TOTAL_INVADERS));
+    return STEP_INTERVAL_MIN_MS + (clamped / TOTAL_INVADERS) * (STEP_INTERVAL_MAX_MS - STEP_INTERVAL_MIN_MS);
   }
 
   /**
@@ -105,7 +138,8 @@ export class InvaderGrid {
 
   /**
    * Advance the grid by dt seconds.
-   * Moves the formation horizontally; reverses and drops on edge contact.
+   * Uses a discrete step-timer: the formation only moves when the accumulated
+   * time exceeds the current step interval (which shrinks as invaders die).
    * Also ticks down active explosions.
    * @param {number} dt  Delta time in seconds.
    */
@@ -120,14 +154,29 @@ export class InvaderGrid {
     const aliveInvaders = this.invaders.flat().filter(i => i.alive);
     if (aliveInvaders.length === 0) return;
 
-    // Speed scales up as invaders are destroyed (classic feel)
-    const remaining   = aliveInvaders.length;
-    const total       = ROWS * COLS;
-    const scaledSpeed = this.speed * (1 + (total - remaining) / total);
+    // Accumulate time
+    this._stepAccum += dt * 1000; // ms
 
-    const dx = scaledSpeed * this.dir * dt;
+    const interval = this._stepInterval(aliveInvaders.length);
 
-    // Find the actual left/right extents of alive invaders
+    // Only step when the accumulated time has reached the interval.
+    // Consume as many steps as have elapsed (usually just 1).
+    while (this._stepAccum >= interval) {
+      this._stepAccum -= interval;
+      this._doStep(aliveInvaders);
+    }
+  }
+
+  /**
+   * Execute one discrete movement step.
+   * Checks edge conditions and either drops+reverses or moves horizontally.
+   * @param {Array} aliveInvaders  Pre-filtered list of alive invader objects.
+   */
+  _doStep(aliveInvaders) {
+    // Pixels to move per step, scaled by speedMultiplier
+    const stepPx = this.speed; // this.speed = INV_STEP_PX * speedMultiplier
+
+    // Find actual left/right extents of alive invaders
     let minX = Infinity;
     let maxX = -Infinity;
     for (const inv of aliveInvaders) {
@@ -135,22 +184,38 @@ export class InvaderGrid {
       if (inv.x + inv.w > maxX) maxX = inv.x + inv.w;
     }
 
-    // Will the move push us past an edge?
-    const nextMinX = minX + dx;
-    const nextMaxX = maxX + dx;
+    // Determine what the new extents would be after a horizontal step
+    const nextMinX = minX + stepPx * this.dir;
+    const nextMaxX = maxX + stepPx * this.dir;
 
-    if (nextMinX <= 0 || nextMaxX >= CANVAS_WIDTH - INV_EDGE_PAD) {
-      // Reverse direction and drop the entire formation
+    if (nextMinX <= INV_EDGE_PAD || nextMaxX >= CANVAS_WIDTH - INV_EDGE_PAD) {
+      // Hit an edge: reverse direction and drop by exactly one cell height
       this.dir *= -1;
       for (const inv of this.invaders.flat()) {
-        inv.y += INV_DROP_STEP;
+        inv.y += INV_CELL_H; // exactly one invader cell height
       }
     } else {
       // Normal horizontal step
       for (const inv of this.invaders.flat()) {
-        inv.x += dx;
+        inv.x += stepPx * this.dir;
       }
     }
+  }
+
+  /**
+   * Returns the Y coordinate of the bottom edge of the lowest alive invader.
+   * Returns -Infinity when no invaders are alive.
+   * @returns {number}
+   */
+  bottomY() {
+    let maxY = -Infinity;
+    for (const row of this.invaders) {
+      for (const inv of row) {
+        if (!inv.alive) continue;
+        if (inv.y + inv.h > maxY) maxY = inv.y + inv.h;
+      }
+    }
+    return maxY;
   }
 
   /**
