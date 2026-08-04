@@ -65,3 +65,23 @@ export const TOTAL_INVADERS = 55;
 
 /** Pixels the formation moves horizontally each discrete step. */
 export const INV_STEP_PX = 8;
+
+// ── Shield bunker constants (Level 3) ────────────────────────────────────────
+
+/** Number of shield bunkers across the screen. */
+export const BUNKER_COUNT = 4;
+
+/** Number of cell columns per bunker. */
+export const BUNKER_COLS = 4;
+
+/** Number of cell rows per bunker. */
+export const BUNKER_ROWS = 4;
+
+/** Size of each bunker cell in pixels. */
+export const BUNKER_CELL_SIZE = 8;
+
+/** Y position of bunkers as a fraction of canvas height (~80%). */
+export const BUNKER_Y_FRACTION = 0.80;
+
+/** Fill colour for shield bunker cells. */
+export const BUNKER_COLOUR = '#00cc44';

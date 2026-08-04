@@ -12,11 +12,19 @@ const SHIP_W = 50;
 /** Player ship height in pixels — must match the value used in player.js. */
 const SHIP_H = 30;
 
+/** Invader bullet dimensions (must match invader bullet rendering in game.js). */
+const INV_BULLET_W = 4;
+const INV_BULLET_H = 10;
+
 /**
  * Check whether the player's bullet has hit any live invader in the grid.
  * Performs an AABB intersection test against every live invader.
  * On a confirmed hit the invader is killed via grid.killInvader() which
  * removes it from the live set and spawns the explosion effect.
+ *
+ * Works with both InvaderGrid and SplitInvaderGrid — for a SplitInvaderGrid
+ * the method iterates `grid.invaders` (flat rows) normally before the split;
+ * after the split collision.js uses checkBulletSplitInvaderCollisions instead.
  *
  * This function NEVER calls any draw() or rendering function.
  *
@@ -31,21 +39,23 @@ const SHIP_H = 30;
 export function checkBulletInvaderCollisions(bullet, grid) {
   if (!bullet) return { hit: false, points: 0, invader: null };
 
-  for (const row of grid.invaders) {
-    for (const inv of row) {
-      if (!inv.alive) continue;
+  // SplitInvaderGrid exposes aliveInvadersList() which works across halves.
+  const candidates = (typeof grid.aliveInvadersList === 'function')
+    ? grid.aliveInvadersList()
+    : grid.invaders.flat().filter(i => i.alive);
 
-      // AABB intersection
-      if (
-        bullet.x          < inv.x + inv.w &&
-        bullet.x + BULLET_W > inv.x       &&
-        bullet.y          < inv.y + inv.h &&
-        bullet.y + BULLET_H > inv.y
-      ) {
-        // Kill the invader (marks alive=false, spawns explosion)
-        grid.killInvader(inv);
-        return { hit: true, points: inv.points, invader: inv };
-      }
+  for (const inv of candidates) {
+    if (!inv.alive) continue;
+
+    // AABB intersection
+    if (
+      bullet.x          < inv.x + inv.w &&
+      bullet.x + BULLET_W > inv.x       &&
+      bullet.y          < inv.y + inv.h &&
+      bullet.y + BULLET_H > inv.y
+    ) {
+      grid.killInvader(inv);
+      return { hit: true, points: inv.points, invader: inv };
     }
   }
 
@@ -65,8 +75,6 @@ export function checkBulletInvaderCollisions(bullet, grid) {
 export function checkInvaderBulletPlayerCollision(invaderBullet, player) {
   if (!invaderBullet || !player) return { hit: false };
 
-  const INV_BULLET_W = 4;
-  const INV_BULLET_H = 10;
   const pw = player.w !== undefined ? player.w : SHIP_W;
   const ph = player.h !== undefined ? player.h : SHIP_H;
 
@@ -78,4 +86,52 @@ export function checkInvaderBulletPlayerCollision(invaderBullet, player) {
   );
 
   return { hit };
+}
+
+/**
+ * Check whether a bullet (player or invader) has hit any cell of any bunker.
+ * On a hit, the individual cell is removed (set alive=false).
+ * Consistent with the checkBulletInvaderCollisions pattern.
+ *
+ * @param {{ x: number, y: number } | null} bullet
+ *   Any bullet object with x/y properties, or null.
+ * @param {number} bulletW  Width  of the bullet in pixels.
+ * @param {number} bulletH  Height of the bullet in pixels.
+ * @param {import('./shields.js').ShieldManager} shieldManager
+ *   The active ShieldManager instance.
+ * @returns {{ hit: boolean, bunkerIndex: number, cellRow: number, cellCol: number }}
+ *   hit        — true when a cell was destroyed this call.
+ *   bunkerIndex — index (0–3) of the struck bunker, or -1.
+ *   cellRow    — row of the struck cell within the bunker, or -1.
+ *   cellCol    — column of the struck cell within the bunker, or -1.
+ */
+export function checkBulletBunkerCollisions(bullet, bulletW, bulletH, shieldManager) {
+  if (!bullet || !shieldManager) {
+    return { hit: false, bunkerIndex: -1, cellRow: -1, cellCol: -1 };
+  }
+
+  const bunkers = shieldManager.bunkers;
+  for (let bi = 0; bi < bunkers.length; bi++) {
+    const bunker = bunkers[bi];
+    for (let r = 0; r < bunker.cells.length; r++) {
+      const row = bunker.cells[r];
+      for (let c = 0; c < row.length; c++) {
+        const cell = row[c];
+        if (!cell.alive) continue;
+
+        // AABB intersection
+        if (
+          bullet.x          < cell.x + cell.size &&
+          bullet.x + bulletW > cell.x            &&
+          bullet.y          < cell.y + cell.size &&
+          bullet.y + bulletH > cell.y
+        ) {
+          cell.alive = false;
+          return { hit: true, bunkerIndex: bi, cellRow: r, cellCol: c };
+        }
+      }
+    }
+  }
+
+  return { hit: false, bunkerIndex: -1, cellRow: -1, cellCol: -1 };
 }
