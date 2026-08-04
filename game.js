@@ -1,7 +1,10 @@
 // game.js — Main entry point: game loop, scene state machine, HUD.
 
-import { CANVAS_WIDTH, CANVAS_HEIGHT, STARTING_LIVES } from './gameConfig.js';
+import { CANVAS_WIDTH, CANVAS_HEIGHT, STARTING_LIVES, SCORE_PER_KILL } from './gameConfig.js';
 import { initInput, isKeyHeld } from './input.js';
+import { Player } from './player.js';
+import { InvaderGrid } from './invaders.js';
+import { checkBulletInvaderCollisions } from './collision.js';
 
 // ─────────────────────────────────────────────
 // Canvas setup
@@ -50,7 +53,7 @@ let enterWasHeld = false;
 
 /** Returns true on the frame ENTER transitions from released → held. */
 function enterJustPressed() {
-  const held = isKeyHeld('Enter');
+  const held  = isKeyHeld('Enter');
   const fired = held && !enterWasHeld;
   enterWasHeld = held;
   return fired;
@@ -94,7 +97,23 @@ export function renderHUD(renderCtx, lives) {
 }
 
 // ─────────────────────────────────────────────
-// Scene renderers / updaters
+// Playing scene — live game objects
+// ─────────────────────────────────────────────
+
+/** @type {Player|null} */
+let player = null;
+
+/** @type {InvaderGrid|null} */
+let grid = null;
+
+/** Initialise (or re-initialise) all Playing scene objects. */
+function initPlayingScene() {
+  player = new Player();
+  grid   = new InvaderGrid({ speedMultiplier: 1, startY: 80 });
+}
+
+// ─────────────────────────────────────────────
+// Scene updaters
 // ─────────────────────────────────────────────
 
 function updateTitle(/*dt*/) {
@@ -102,55 +121,36 @@ function updateTitle(/*dt*/) {
     // Reset game state for a fresh run
     hud.score = 0;
     hud.lives = STARTING_LIVES;
+    initPlayingScene();
     switchScene('Playing');
   }
 }
 
-function drawTitle() {
-  ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+/**
+ * Update the Playing scene for one fixed timestep.
+ * ORDER: collision pass FIRST, then state updates — never inside draw().
+ * @param {number} dt  Delta time in seconds.
+ */
+function updatePlaying(dt) {
+  if (!player || !grid) return;
 
-  // Title
-  ctx.save();
-  ctx.fillStyle = '#00ff00';
-  ctx.font      = 'bold 52px monospace';
-  ctx.textAlign = 'center';
-  ctx.fillText('SPACE INVADERS', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 - 60);
+  // 1. Update player input / movement / bullet
+  player.update(dt);
 
-  // Prompt
-  ctx.fillStyle = '#ffffff';
-  ctx.font      = '24px monospace';
-  // Blink effect: visible for ~700 ms, hidden for ~300 ms out of every 1000 ms
-  if (Math.floor(Date.now() / 600) % 2 === 0) {
-    ctx.fillText('Press ENTER to start', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 20);
+  // 2. Update invader formation
+  grid.update(dt);
+
+  // 3. ── COLLISION PASS (before any draw) ──────────────────────────────────
+  //    Player bullet vs. invaders
+  const result = checkBulletInvaderCollisions(player.bullet, grid);
+  if (result.hit) {
+    // Award points
+    hud.score += SCORE_PER_KILL;
+    if (hud.score > hud.hiScore) hud.hiScore = hud.score;
+    // Consume the bullet so it doesn't pass through
+    player.bullet = null;
   }
-  ctx.restore();
-}
-
-function updatePlaying(/*dt*/) {
-  // Stub — full implementation owned by later cards.
-  // Game Over transition will be triggered by the Playing scene implementation;
-  // for now ENTER also goes to GameOver so the scene machine can be verified.
-  if (enterJustPressed()) {
-    switchScene('GameOver');
-  }
-}
-
-function drawPlaying() {
-  ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-
-  // HUD
-  renderHUD(ctx, hud.lives);
-
-  // Placeholder message
-  ctx.save();
-  ctx.fillStyle = '#888888';
-  ctx.font      = '20px monospace';
-  ctx.textAlign = 'center';
-  ctx.fillText('[ Playing scene — implementation pending ]', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2);
-  ctx.fillStyle = '#555555';
-  ctx.font      = '16px monospace';
-  ctx.fillText('Press ENTER → Game Over', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 36);
-  ctx.restore();
+  // ── end collision pass ────────────────────────────────────────────────────
 }
 
 function updateGameOver(/*dt*/) {
@@ -159,23 +159,55 @@ function updateGameOver(/*dt*/) {
   }
 }
 
+// ─────────────────────────────────────────────
+// Scene draw functions
+// ─────────────────────────────────────────────
+
+function drawTitle() {
+  ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+  ctx.save();
+  ctx.fillStyle = '#00ff00';
+  ctx.font      = 'bold 52px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('SPACE INVADERS', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 - 60);
+
+  ctx.fillStyle = '#ffffff';
+  ctx.font      = '24px monospace';
+  if (Math.floor(Date.now() / 600) % 2 === 0) {
+    ctx.fillText('Press ENTER to start', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 20);
+  }
+  ctx.restore();
+}
+
+function drawPlaying() {
+  ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+  // HUD (score visible every frame — top-left)
+  renderHUD(ctx, hud.lives);
+
+  // Draw player ship and bullet
+  if (player) player.draw(ctx);
+
+  // Draw invader grid (alive invaders + explosion flashes)
+  // Collision logic has already executed this frame in updatePlaying().
+  if (grid) grid.draw(ctx);
+}
+
 function drawGameOver() {
   ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
   ctx.save();
 
-  // "GAME OVER"
   ctx.fillStyle = '#ff3333';
   ctx.font      = 'bold 64px monospace';
   ctx.textAlign = 'center';
   ctx.fillText('GAME OVER', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 - 80);
 
-  // Final score
   ctx.fillStyle = '#ffffff';
   ctx.font      = '28px monospace';
   ctx.fillText(`SCORE  ${hud.score}`, CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2);
 
-  // Restart prompt
   ctx.font = '20px monospace';
   if (Math.floor(Date.now() / 600) % 2 === 0) {
     ctx.fillText('Press ENTER to restart', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 60);
@@ -209,12 +241,10 @@ function loop(timestamp) {
   let elapsed = timestamp - lastTimestamp;
   lastTimestamp = timestamp;
 
-  // Cap to prevent spiral-of-death after backgrounded tab resumes
   if (elapsed > MAX_DELTA_MS) elapsed = MAX_DELTA_MS;
 
   accumulator += elapsed;
 
-  // Fixed-timestep update steps
   const dt = TIMESTEP_MS / 1000; // seconds per step
   while (accumulator >= TIMESTEP_MS) {
     switch (currentScene) {
