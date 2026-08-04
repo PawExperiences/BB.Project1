@@ -1,19 +1,26 @@
-// ─────────────────────────────────────────────
-// Named constants
-// ─────────────────────────────────────────────
-export const CANVAS_WIDTH   = 800;
-export const CANVAS_HEIGHT  = 600;
-export const TARGET_FPS     = 60;
-export const FIXED_DT       = 1000 / TARGET_FPS;   // ms per simulation step (~16.67 ms)
-export const MAX_DELTA      = 200;                  // cap to avoid spiral-of-death (ms)
+// game.js — Main game loop, scene state machine, HUD renderer, HUD state export.
+// Imports shared constants from gameConfig.js.
 
+import {
+  CANVAS_WIDTH,
+  CANVAS_HEIGHT,
+  STARTING_LIVES,
+} from './gameConfig.js';
+
+// ─────────────────────────────────────────────
+// Internal constants
+// ─────────────────────────────────────────────
+const TARGET_FPS  = 60;
+const FIXED_DT    = 1 / TARGET_FPS;          // seconds per simulation step (~0.01667 s)
+const FIXED_DT_MS = FIXED_DT * 1000;         // same in milliseconds (~16.67 ms)
+const MAX_DELTA   = 250;                     // ms — cap to avoid spiral-of-death on tab restore
+
+const STARTING_SCORE = 0;
+
+// Scene name constants
 export const SCENE_TITLE     = 'title';
 export const SCENE_PLAYING   = 'playing';
 export const SCENE_GAME_OVER = 'game-over';
-
-// Starting values
-const STARTING_LIVES = 3;
-const STARTING_SCORE = 0;
 
 // ─────────────────────────────────────────────
 // Canvas setup
@@ -40,7 +47,7 @@ let currentScene = null;
 const scenes = {
   [SCENE_TITLE]: {
     update(_dt) {
-      // Title scene has no time-based simulation; input handled below
+      // Title scene has no time-based simulation; input handled via keydown listener
     },
     render(ctx) {
       // Background
@@ -54,10 +61,9 @@ const scenes = {
       ctx.textBaseline = 'middle';
       ctx.fillText('SPACE INVADERS', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 - 60);
 
-      // Prompt
+      // Prompt — blink every ~500 ms
       ctx.fillStyle = '#ffffff';
       ctx.font = '28px monospace';
-      // Blink every ~800 ms
       const blink = Math.floor(Date.now() / 500) % 2 === 0;
       if (blink) {
         ctx.fillText('Press ENTER to start', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 40);
@@ -66,24 +72,24 @@ const scenes = {
   },
 
   [SCENE_PLAYING]: {
-    // Stub player rect
-    playerX: CANVAS_WIDTH / 2 - 25,
-    playerY: CANVAS_HEIGHT - 60,
+    // Stub player rectangle — replaced by the Player card
+    get playerX() { return CANVAS_WIDTH / 2 - 25; },
+    get playerY() { return CANVAS_HEIGHT - 60; },
 
     update(_dt) {
-      // Stub — entities will be added by future tasks
+      // Stub — entities will be populated by future cards
     },
     render(ctx) {
       // Background
       ctx.fillStyle = '#000';
       ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
-      // Stub player
-      ctx.fillStyle = '#00ff00';
-      ctx.fillRect(this.playerX, this.playerY, 50, 20);
-
       // HUD
       renderHUD(ctx);
+
+      // Stub player rectangle
+      ctx.fillStyle = '#00ff00';
+      ctx.fillRect(this.playerX, this.playerY, 50, 20);
     },
   },
 
@@ -111,7 +117,7 @@ const scenes = {
       ctx.font = '32px monospace';
       ctx.fillText(`Score: ${hudState.score}`, CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2);
 
-      // Prompt
+      // Restart prompt — blink every ~500 ms
       ctx.font = '24px monospace';
       const blink = Math.floor(Date.now() / 500) % 2 === 0;
       if (blink) {
@@ -122,8 +128,9 @@ const scenes = {
 };
 
 /**
- * Transition to a named scene, resetting HUD if restarting.
- * @param {string} name  One of the SCENE_* constants
+ * Transition to a named scene.
+ * Resets score and lives when beginning a new game (Title → Playing).
+ * @param {string} name  One of SCENE_TITLE | SCENE_PLAYING | SCENE_GAME_OVER
  */
 export function switchScene(name) {
   if (!scenes[name]) {
@@ -133,7 +140,7 @@ export function switchScene(name) {
   console.log(`[game] switchScene: ${currentScene ?? '(none)'} → ${name}`);
   currentScene = name;
 
-  // Reset HUD when a fresh game starts
+  // Reset HUD when a fresh game starts from the Title screen
   if (name === SCENE_PLAYING) {
     hudState.score = STARTING_SCORE;
     hudState.lives = STARTING_LIVES;
@@ -141,7 +148,7 @@ export function switchScene(name) {
 }
 
 // ─────────────────────────────────────────────
-// HUD renderer (shared by Playing + Game Over)
+// HUD renderer  (shared by Playing + Game Over)
 // ─────────────────────────────────────────────
 function renderHUD(ctx) {
   ctx.save();
@@ -165,8 +172,8 @@ function renderHUD(ctx) {
 }
 
 // ─────────────────────────────────────────────
-// Keyboard input (scoped to scene transitions only;
-// full keyboard module is a separate task)
+// Keyboard input — scene transitions only.
+// Full keyboard handling is owned by the 'Keyboard input' card (input.js).
 // ─────────────────────────────────────────────
 window.addEventListener('keydown', (e) => {
   if (e.key !== 'Enter') return;
@@ -174,6 +181,9 @@ window.addEventListener('keydown', (e) => {
   if (currentScene === SCENE_TITLE) {
     switchScene(SCENE_PLAYING);
   } else if (currentScene === SCENE_GAME_OVER) {
+    // Return to Title and reset HUD
+    hudState.score = STARTING_SCORE;
+    hudState.lives = STARTING_LIVES;
     switchScene(SCENE_TITLE);
   }
 });
@@ -181,13 +191,13 @@ window.addEventListener('keydown', (e) => {
 // ─────────────────────────────────────────────
 // Fixed-timestep game loop
 // ─────────────────────────────────────────────
-let lastTimestamp  = null;
-let accumulator    = 0;
-let updateCount    = 0;   // used for ~60 Hz logging
-let logTimer       = 0;   // accumulates wall-clock ms for logging
+let lastTimestamp = null;
+let accumulator   = 0;      // ms of unprocessed simulation time
+let updateCount   = 0;      // steps fired since last log
+let logTimer      = 0;      // wall-clock ms since last log
 
 function loop(timestamp) {
-  // Initialise on first frame
+  // Initialise on the very first frame
   if (lastTimestamp === null) {
     lastTimestamp = timestamp;
   }
@@ -195,7 +205,7 @@ function loop(timestamp) {
   let elapsed = timestamp - lastTimestamp;
   lastTimestamp = timestamp;
 
-  // AC7: cap delta to prevent spiral-of-death after tab blur/focus
+  // Spiral-of-death guard: cap elapsed to MAX_DELTA after a tab has been backgrounded
   if (elapsed > MAX_DELTA) {
     console.log(`[game] Delta capped: ${elapsed.toFixed(1)} ms → ${MAX_DELTA} ms`);
     elapsed = MAX_DELTA;
@@ -204,22 +214,22 @@ function loop(timestamp) {
   accumulator += elapsed;
   logTimer    += elapsed;
 
-  // Fixed-timestep update phase
+  // Fixed-timestep update phase: drain the accumulator in FIXED_DT_MS chunks
   const scene = scenes[currentScene];
-  while (accumulator >= FIXED_DT) {
-    if (scene) scene.update(FIXED_DT);
-    accumulator -= FIXED_DT;
+  while (accumulator >= FIXED_DT_MS) {
+    if (scene) scene.update(FIXED_DT);   // scene.update receives dt in seconds
+    accumulator -= FIXED_DT_MS;
     updateCount++;
   }
 
-  // AC6: log update frequency roughly once per second
+  // Log update frequency roughly once per second (AC6)
   if (logTimer >= 1000) {
     console.log(`[game] update steps in last ~1 s: ${updateCount}`);
     updateCount = 0;
     logTimer   -= 1000;
   }
 
-  // Render phase
+  // Render phase (once per animation frame)
   if (scene) scene.render(ctx);
 
   requestAnimationFrame(loop);
