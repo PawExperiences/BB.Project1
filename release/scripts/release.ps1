@@ -1,48 +1,72 @@
-# release.ps1 - package source, tag, and publish the GitHub Release.
-# Usage: .\release\scripts\release.ps1 -Version 0.1.0
-param(
-    [Parameter(Mandatory=$true)][string]$Version
+#Requires -Version 5.1
+# release.ps1 -- tag v0.1.0, zip artifact, create draft GitHub release.
+# Run from the repo root after CI passes. Requires git and gh (GitHub CLI) on PATH.
+Set-StrictMode -Version Latest
+$ErrorActionPreference = 'Stop'
+
+$VERSION      = '0.1.0'
+$TAG          = "v$VERSION"
+$ZIP_NAME     = "space-invaders-$VERSION.zip"
+$NOTES_PATH   = "release/notes-$VERSION.md"
+
+$ARTIFACT_FILES = @(
+    'index.html','game.js','gameConfig.js','input.js','player.js',
+    'invaders.js','collision.js','shields.js','README.md'
 )
 
-$ErrorActionPreference = 'Stop'
-$Tag = "v$Version"
-$Zip = "spaceinvaders-$Version.zip"
-$Sources = @('index.html','game.js','gameConfig.js','input.js','player.js','invaders.js','collision.js','README.md','CHANGELOG.md')
+$RELEASE_NOTES = @"
+## e2e Space Invaders $VERSION
 
-# Step 1: create zip artifact
-Write-Host "[1/4] Creating artifact $Zip..."
-if (Test-Path $Zip) {
-    Write-Host "      $Zip already exists, overwriting (idempotent)."
-    Remove-Item $Zip
-}
-$filesToZip = $Sources | Where-Object { Test-Path $_ }
-$missing   = $Sources | Where-Object { -not (Test-Path $_) }
-foreach ($f in $missing) { Write-Warning "$f not found, skipping" }
-Compress-Archive -Path $filesToZip -DestinationPath $Zip
-Write-Host "      $Zip created."
+First public release. Open ``index.html`` from the downloaded ZIP directly in
+Chrome or Firefox (no server needed). Three fully playable levels:
 
-# Step 2: create annotated tag (idempotent)
-Write-Host "[2/4] Tagging $Tag..."
-$existingTags = git tag -l
-if ($existingTags -contains $Tag) {
-    Write-Host "      Tag $Tag already exists, skipping."
+- Level 1: classic accelerating 11x5 invader grid
+- Level 2: invader return fire, player respawn/blink, bonus UFO with tier scoring
+- Level 3: destructible shield bunkers + formation split at 50% kills
+
+See README.md inside the ZIP for manual verification steps.
+"@
+
+Write-Host "[release.ps1] Releasing $TAG"
+
+# 1. Tag (idempotent)
+$existingTag = & git tag -l $TAG 2>&1
+if ($existingTag -match [regex]::Escape($TAG)) {
+    Write-Host "  Tag $TAG already exists -- skipping."
 } else {
-    git tag -a $Tag -m "Release $Tag -- e2e Space Invaders"
+    & git tag -a $TAG -m "Release $VERSION -- e2e Space Invaders initial release"
+    & git push origin $TAG
+    Write-Host "  Tag $TAG created and pushed."
 }
 
-# Step 3: push tag
-Write-Host "[3/4] Pushing tag $Tag to origin..."
-git push origin $Tag
+# 2. Package artifact
+foreach ($f in $ARTIFACT_FILES) {
+    if (-not (Test-Path $f)) {
+        Write-Error "  ERROR: missing file: $f"
+        exit 1
+    }
+}
+if (Test-Path $ZIP_NAME) { Remove-Item $ZIP_NAME -Force }
+Compress-Archive -Path $ARTIFACT_FILES -DestinationPath $ZIP_NAME
+$size = (Get-Item $ZIP_NAME).Length
+Write-Host "  Artifact: $ZIP_NAME ($size bytes)"
 
-# Step 4: create GitHub Release
-Write-Host "[4/4] Creating GitHub Release $Tag..."
-$ghArgs = @('release','create',$Tag,'--title',"e2e Space Invaders $Tag",$Zip)
-if (Test-Path 'CHANGELOG.md') {
-    $ghArgs += @('--notes-file','CHANGELOG.md')
+# 3. Write release notes
+$notesDir = Split-Path $NOTES_PATH
+if (-not (Test-Path $notesDir)) { New-Item -ItemType Directory -Path $notesDir | Out-Null }
+[System.IO.File]::WriteAllText($NOTES_PATH, $RELEASE_NOTES, [System.Text.Encoding]::UTF8)
+Write-Host "  Notes written to $NOTES_PATH"
+
+# 4. Create draft GitHub release (idempotent)
+$viewResult = & gh release view $TAG 2>&1
+if ($LASTEXITCODE -eq 0) {
+    Write-Host "  GitHub release $TAG already exists -- skipping creation."
 } else {
-    $ghArgs += @('--notes',"Release $Tag")
+    & gh release create $TAG $ZIP_NAME `
+        --title "e2e Space Invaders $VERSION" `
+        --notes-file $NOTES_PATH `
+        --draft
+    Write-Host "  Draft release created: https://github.com/PawExperiences/BB.Project1/releases"
 }
-gh @ghArgs
 
-Write-Host "
-Release $Tag complete. Artifact: $Zip"
+Write-Host "[release.ps1] Done. Review the draft on GitHub, then publish manually."
