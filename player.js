@@ -1,7 +1,13 @@
 // player.js — Player ship implementation.
 // Exports the Player class and shared constants.
 
-import { STARTING_LIVES, CANVAS_WIDTH as CFG_CANVAS_WIDTH } from './gameConfig.js';
+import {
+  STARTING_LIVES,
+  CANVAS_WIDTH as CFG_CANVAS_WIDTH,
+  CANVAS_HEIGHT as CFG_CANVAS_HEIGHT,
+  PLAYER_SPEED as CFG_PLAYER_SPEED,
+  BULLET_SPEED as CFG_BULLET_SPEED,
+} from './gameConfig.js';
 import { isKeyHeld } from './input.js';
 
 // ─────────────────────────────────────────────
@@ -11,11 +17,11 @@ import { isKeyHeld } from './input.js';
 /** Canvas width in pixels — re-exported so other modules can import from here. */
 export const CANVAS_WIDTH  = CFG_CANVAS_WIDTH;
 
-/** Player ship speed in pixels per second. */
-export const PLAYER_SPEED  = 200;
+/** Player ship speed in pixels per second — imported from gameConfig.js. */
+export const PLAYER_SPEED  = CFG_PLAYER_SPEED;
 
-/** Bullet travel speed in pixels per second (upward). */
-export const BULLET_SPEED  = 500;
+/** Bullet travel speed in pixels per second (upward) — imported from gameConfig.js. */
+export const BULLET_SPEED  = CFG_BULLET_SPEED;
 
 // ─────────────────────────────────────────────
 // Player class
@@ -30,17 +36,14 @@ const SHIP_H = 30;
 const BULLET_W = 4;
 const BULLET_H = 14;
 
-/** Canvas height — needed for initial Y position. */
-const CANVAS_HEIGHT = 896;
-
 export class Player {
   constructor() {
     // Starting lives from gameConfig
     this.lives = STARTING_LIVES;
 
     // Ship position (top-left corner)
-    this.x = CANVAS_WIDTH / 2 - SHIP_W / 2;
-    this.y = CANVAS_HEIGHT - 60 - SHIP_H;
+    this.x = CFG_CANVAS_WIDTH  / 2 - SHIP_W / 2;
+    this.y = CFG_CANVAS_HEIGHT - 60 - SHIP_H;
 
     // Bullet state: null means no bullet in flight
     // { x, y } when a bullet is active
@@ -54,22 +57,22 @@ export class Player {
   update(dt) {
     // ── Movement ──
     let dx = 0;
-    if (isKeyHeld('ArrowLeft')  || isKeyHeld('a')) dx -= PLAYER_SPEED * dt;
-    if (isKeyHeld('ArrowRight') || isKeyHeld('d')) dx += PLAYER_SPEED * dt;
+    if (isKeyHeld('ArrowLeft')  || isKeyHeld('a')) dx -= CFG_PLAYER_SPEED * dt;
+    if (isKeyHeld('ArrowRight') || isKeyHeld('d')) dx += CFG_PLAYER_SPEED * dt;
 
     this.x += dx;
 
     // Clamp: left edge ≥ 0, right edge ≤ CANVAS_WIDTH
-    if (this.x < 0)                       this.x = 0;
-    if (this.x + SHIP_W > CANVAS_WIDTH)   this.x = CANVAS_WIDTH - SHIP_W;
+    if (this.x < 0)                            this.x = 0;
+    if (this.x + SHIP_W > CFG_CANVAS_WIDTH)    this.x = CFG_CANVAS_WIDTH - SHIP_W;
 
     // ── Bullet ──
     if (this.bullet !== null) {
       // Move bullet upward
-      this.bullet.y -= BULLET_SPEED * dt;
+      this.bullet.y -= CFG_BULLET_SPEED * dt;
 
-      // Clear bullet once it exits the top of the canvas
-      if (this.bullet.y + BULLET_H < 0) {
+      // Clear bullet once its top edge exits the canvas (y < 0)
+      if (this.bullet.y < 0) {
         this.bullet = null;
       }
     }
@@ -112,7 +115,7 @@ export class Player {
       SHIP_W * 0.15,                // radius
       Math.PI,                      // startAngle  (left)
       0,                            // endAngle    (right)
-      false                         // anti-clockwise = false → top semicircle
+      false                         // clockwise = false → upper semicircle
     );
     ctx.fill();
 
