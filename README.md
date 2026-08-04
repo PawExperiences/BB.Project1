@@ -1,3 +1,3 @@
 # BB.Project1
 
-Initialized by BuildBoard.
+Reset by BuildBoard.
