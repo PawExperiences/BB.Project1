@@ -2,30 +2,28 @@
 
 A hand-written, dependency-free Space Invaders clone built with plain HTML5 Canvas and ES modules.
 
+## File Layout
+
+| File | Description |
+|------|-------------|
+| `index.html` | Entry point — open this file directly in a browser |
+| `game.js` | Game loop, scene state machine (Title / Playing / Game Over), HUD renderer, `hud` export, `switchScene` export |
+| `gameConfig.js` | Shared constants: `CANVAS_WIDTH`, `CANVAS_HEIGHT`, `PLAYER_SPEED`, `BULLET_SPEED`, `STARTING_LIVES` |
+| `input.js` | Keyboard handling — `initInput()` registers listeners, `isKeyHeld(key)` queries held-key state |
+| `player.js` | Player ship — movement, bullet, procedural canvas rendering, `Player` class |
+| `invaders.js` | Invader grid — 11×5 formation, march logic, procedural rendering, `InvaderGrid` class |
+| `collision.js` | Collision detection — `checkBulletInvaderCollisions(bullet, grid)` AABB pass |
+
 ## How to Play
 
 1. Open `index.html` directly in a modern browser (Chrome, Firefox, Edge).
    - No server required — the game runs from `file://` without any build step.
-2. Press **Enter** on the menu screen to start.
+2. Press **Enter** on the Title screen to start.
 3. Use **Arrow Left / Arrow Right** (or **A / D**) to move your ship.
 4. Press **Space** to fire.
 5. Defeat all invaders to advance through the levels.
 
-## Game Screens & Flow
-
-```
-Menu → Level 1 → Level 2 → Level 3 → Boss Fight → Win Screen
-                                          ↓
-                                    (player dies)
-                                          ↓
-                                       Level 1
-```
-
-- **Levels 1–3:** Clear all invaders to advance. Invaders shoot back; losing all lives restarts at Level 1.
-- **Boss Fight:** Reached automatically after clearing Level 3.
-- **Win Screen:** Displayed when the boss is defeated.
-
-## Controls Summary
+## Controls
 
 | Key | Action |
 |-----|--------|
@@ -34,52 +32,78 @@ Menu → Level 1 → Level 2 → Level 3 → Boss Fight → Win Screen
 | Space | Fire |
 | Enter | Start / Restart |
 
----
+## Game Flow
 
-## Manual Verification Path
+```
+Title → Playing → Game Over → Title
+```
 
-### Standard Play-Through
-1. Open `index.html` in a browser.
-2. Press **Enter** — Level 1 loads; the score shows `0` and lives show `3`.
-3. Destroy all 55 invaders — Level 2 loads automatically.
-4. Destroy all invaders in Level 2 — Level 3 loads.
-5. Destroy all invaders in Level 3 — **Boss Fight** loads.
-
-### Testing the Boss Fight
-1. **Boss appears:** A large (~120×80 px) red enemy appears at the top of the canvas, drawn entirely with canvas primitives (no image assets). It should be clearly larger and more visually distinct than the regular invaders.
-2. **Health bar:** A health bar reading `HP 10 / 10` is visible just below the boss. It updates immediately with each successful hit.
-3. **Phase 1 (HP 10–6):** Boss fires a 3-shot spread pattern roughly every **1.4 seconds**. Fire rate should feel moderate.
-4. **Phase transition at HP 5:** When the boss drops to 5 HP, the scene label changes to `⚠ PHASE 2 ⚠` (red text) and a glowing orange border appears around the boss. The fire rate visibly doubles — shots arrive roughly every **0.7 seconds**.
-5. **Boss horizontal movement:** The boss moves left and right, bouncing off both canvas edges.
-6. **Sudden-death rule:** A single boss projectile hitting the player immediately ends the run — score resets to 0 and Level 1 restarts, regardless of remaining lives.
-7. **Win condition:** Reduce the boss to 0 HP — the **Win Screen** appears.
-
-### Testing the Win Screen
-1. The Win Screen displays:
-   - `YOU WIN!` heading (yellow, glowing).
-   - `CONGRATULATIONS!` subtitle (green).
-   - `FINAL SCORE: <N>` where `<N>` is the score accumulated during the run.
-2. Press **Enter** — the game resets to Level 1 with score 0.
-
-### Testing Loss / Restart
-1. During the boss fight, allow a boss projectile to hit the player ship.
-2. The run immediately ends (no HP countdown), score resets, and Level 1 reloads.
-3. Confirm that Level 1 is fully functional after the restart.
-
-### Regression Check — Levels 1–3
-- After the boss additions, confirm Levels 1, 2, and 3 all play correctly from a fresh start.
-- Invaders shoot back, shields (Level 3) absorb bullets, and score accumulates correctly.
+- **Title**: Displays "SPACE INVADERS" and "Press ENTER to start". Press ENTER to begin.
+- **Playing**: HUD shows score and lives. Full gameplay implemented by later cards.
+- **Game Over**: Displays "GAME OVER" and the final score. Press ENTER to return to Title.
 
 ---
 
-## File Structure
+## Manual Verification Walkthrough
 
+These steps verify the game loop and canvas framework (this card's scope).
+
+### 1. Open the game
+1. Locate `index.html` in the project folder.
+2. Double-click it, or drag it into Chrome or Firefox.
+3. **Expected:** A 768×896 black canvas appears centred on the page. No console errors.
+
+### 2. Title scene
+1. The canvas should display **"SPACE INVADERS"** in large green text.
+2. **"Press ENTER to start"** should be visible (it blinks).
+3. Open DevTools → Console and confirm **no errors**.
+
+### 3. Title → Playing transition
+1. Press **ENTER**.
+2. **Expected:** The canvas clears and shows the HUD (score and lives at the top) plus a placeholder message.
+3. No page reload should occur (URL stays the same, no flicker).
+
+### 4. Playing scene HUD
+1. While on the Playing scene, confirm the top of the canvas shows:
+   - `SCORE  0` on the left.
+   - `HI  0` in the centre.
+   - `LIVES  3` on the right.
+2. A thin divider line separates the HUD from the play area.
+
+### 5. Playing → Game Over transition
+1. From the Playing scene, press **ENTER** (stub shortcut).
+2. **Expected:** The canvas clears and shows:
+   - **"GAME OVER"** in large red text.
+   - **`SCORE  0`** (or the current score value).
+   - **"Press ENTER to restart"** (blinking).
+
+### 6. Game Over → Title transition
+1. From the Game Over scene, press **ENTER**.
+2. **Expected:** Returns to the Title scene — "SPACE INVADERS" and "Press ENTER to start" are shown again.
+3. No page reload. Score resets to 0.
+
+### 7. Tab-backgrounding delta-cap
+1. Start the game (reach the Playing scene).
+2. Switch away from the tab for ~5 seconds.
+3. Switch back.
+4. **Expected:** The game resumes normally without any stutter or burst of update steps. The loop's 200 ms delta cap prevents accumulated catch-up updates.
+
+### 8. Exported API spot-check (DevTools console)
+Open DevTools and run:
+```js
+import('./game.js').then(m => {
+  console.log(m.hud);          // { score: 0, lives: 3, hiScore: 0 }
+  console.log(typeof m.switchScene);   // 'function'
+  console.log(typeof m.renderHUD);     // 'function'
+});
 ```
-index.html       — Entry point (open this)
-game.js          — Scene management, game loop, all scene classes
-player.js        — Player ship (movement, bullet, drawing)
-invaders.js      — Invader grid (movement, drawing)
-collision.js     — Bullet–invader collision detection
-input.js         — Keyboard input (held-key tracking)
-gameConfig.js    — Shared constants (lives, canvas height)
-```
+All three should resolve without errors.
+
+---
+
+## Architecture Notes
+
+- **Fixed timestep:** The game loop accumulates elapsed time and fires update steps at exactly 1000/60 ms (≈16.67 ms) each. The accumulated delta is capped at 200 ms so returning from a backgrounded tab never triggers a burst of catch-up updates.
+- **Scene machine:** `switchScene('Title' | 'Playing' | 'GameOver')` is the only way to change scenes. Each scene owns its own `update` and `draw` functions.
+- **HUD contract:** `hud.score`, `hud.lives`, and `hud.hiScore` are plain mutable properties. Later modules import `hud` and write to these directly.
+- **No bundler, no server:** Every import uses a relative path. The game works from `file://` in any browser that supports ES modules (Chrome 61+, Firefox 60+, Edge 79+).

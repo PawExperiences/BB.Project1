@@ -1,15 +1,15 @@
 // player.js — Player ship implementation.
 // Exports the Player class and shared constants.
 
-import { STARTING_LIVES } from './gameConfig.js';
+import { STARTING_LIVES, CANVAS_WIDTH as CFG_CANVAS_WIDTH } from './gameConfig.js';
 import { isKeyHeld } from './input.js';
 
 // ─────────────────────────────────────────────
-// Exported constants
+// Exported constants (kept for back-compat; invaders.js imports CANVAS_WIDTH from here)
 // ─────────────────────────────────────────────
 
-/** Canvas width in pixels — other modules (levels, collision) import from here. */
-export const CANVAS_WIDTH  = 768;
+/** Canvas width in pixels — re-exported so other modules can import from here. */
+export const CANVAS_WIDTH  = CFG_CANVAS_WIDTH;
 
 /** Player ship speed in pixels per second. */
 export const PLAYER_SPEED  = 200;
