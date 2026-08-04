@@ -29,13 +29,19 @@ export const INV_GAP_X = 16;
 /** Vertical gap between invader cells. */
 export const INV_GAP_Y = 18;
 
-/** Pixels dropped each time the formation reverses direction. */
-export const INV_DROP_STEP = 20;
+/**
+ * Pixels dropped each time the formation reverses direction.
+ * Set to INV_CELL_H so each drop is exactly one invader cell height.
+ */
+export const INV_DROP_STEP = 24;
 
 /** Horizontal padding from canvas edge that triggers direction reversal. */
 export const INV_EDGE_PAD = 16;
 
-/** Base horizontal speed of the invader formation in pixels per second. */
+/** Base horizontal speed of the invader formation in pixels per second.
+ * Used for continuous movement inside a single step; the step interval
+ * is now controlled by the timing formula in InvaderGrid.
+ */
 export const INV_BASE_SPEED = 60;
 
 // ── Scoring and effects ───────────────────────────────────────────────────────
@@ -45,3 +51,17 @@ export const SCORE_PER_KILL = 10;
 
 /** Duration of the explosion flash effect in milliseconds. */
 export const EXPLOSION_DURATION_MS = 300;
+
+// ── Level 1 step-interval formula constants ──────────────────────────────────
+
+/** Step interval (ms) when all 55 invaders are alive. */
+export const STEP_INTERVAL_MAX_MS = 800;
+
+/** Step interval (ms) when only 1 invader remains. */
+export const STEP_INTERVAL_MIN_MS = 100;
+
+/** Total invader count for the interval formula denominator. */
+export const TOTAL_INVADERS = 55;
+
+/** Pixels the formation moves horizontally each discrete step. */
+export const INV_STEP_PX = 8;

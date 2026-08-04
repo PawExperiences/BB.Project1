@@ -24,21 +24,26 @@ export const hud = {
   score:   0,
   lives:   STARTING_LIVES,
   hiScore: 0,
+  level:   1,
 };
 
 // ─────────────────────────────────────────────
 // Scene state machine
 // ─────────────────────────────────────────────
 
-/** Valid scene names: 'Title' | 'Playing' | 'GameOver' */
+/**
+ * Valid scene names: 'Title' | 'Playing' | 'Level2' | 'GameOver'
+ * 'Level2' is the scene entered when all Level 1 invaders are defeated.
+ */
 let currentScene = 'Title';
 
 /**
- * Switch to a named scene. Accepted values: 'Title', 'Playing', 'GameOver'.
- * @param {'Title'|'Playing'|'GameOver'} name
+ * Switch to a named scene. Accepted values: 'Title', 'Playing', 'Level2', 'GameOver'.
+ * @param {'Title'|'Playing'|'Level2'|'GameOver'} name
  */
 export function switchScene(name) {
-  if (name !== 'Title' && name !== 'Playing' && name !== 'GameOver') {
+  const valid = ['Title', 'Playing', 'Level2', 'GameOver'];
+  if (!valid.includes(name)) {
     console.warn(`switchScene: unknown scene '${name}'`);
     return;
   }
@@ -64,7 +69,7 @@ function enterJustPressed() {
 // ─────────────────────────────────────────────
 
 /**
- * Draw score, hi-score, and lives onto the canvas.
+ * Draw score, hi-score, lives, and level onto the canvas.
  * @param {CanvasRenderingContext2D} renderCtx
  * @param {number} lives
  */
@@ -85,12 +90,17 @@ export function renderHUD(renderCtx, lives) {
   renderCtx.textAlign = 'right';
   renderCtx.fillText(`LIVES  ${lives}`, CANVAS_WIDTH - 16, 28);
 
-  // Divider line
+  // Level — second row, left-aligned
+  renderCtx.textAlign = 'left';
+  renderCtx.fillStyle = '#ffff00';
+  renderCtx.fillText(`LEVEL  ${hud.level}`, 16, 52);
+
+  // Divider line — below both HUD rows
   renderCtx.strokeStyle = '#444444';
   renderCtx.lineWidth = 1;
   renderCtx.beginPath();
-  renderCtx.moveTo(0, 36);
-  renderCtx.lineTo(CANVAS_WIDTH, 36);
+  renderCtx.moveTo(0, 60);
+  renderCtx.lineTo(CANVAS_WIDTH, 60);
   renderCtx.stroke();
 
   renderCtx.restore();
@@ -106,10 +116,33 @@ let player = null;
 /** @type {InvaderGrid|null} */
 let grid = null;
 
-/** Initialise (or re-initialise) all Playing scene objects. */
+/**
+ * The player's starting Y position (top of ship).
+ * Computed once; used by lose-condition check.
+ * @type {number}
+ */
+let playerStartY = 0;
+
+/** Initialise (or re-initialise) all Playing scene objects, preserving lives. */
 function initPlayingScene() {
+  player      = new Player();
+  playerStartY = player.y;
+  grid        = new InvaderGrid({ speedMultiplier: 1, startY: 80 });
+}
+
+/**
+ * Reset the level (formation + player position) without changing lives.
+ * Called when the formation reaches the player row.
+ */
+function resetLevel() {
+  if (!player) return;
+  // Reset player position to starting X/Y but keep lives
+  const savedLives = player.lives;
   player = new Player();
-  grid   = new InvaderGrid({ speedMultiplier: 1, startY: 80 });
+  player.lives = savedLives;
+  playerStartY = player.y;
+  // Reset formation
+  grid = new InvaderGrid({ speedMultiplier: 1, startY: 80 });
 }
 
 // ─────────────────────────────────────────────
@@ -121,6 +154,7 @@ function updateTitle(/*dt*/) {
     // Reset game state for a fresh run
     hud.score = 0;
     hud.lives = STARTING_LIVES;
+    hud.level = 1;
     initPlayingScene();
     switchScene('Playing');
   }
@@ -137,7 +171,7 @@ function updatePlaying(dt) {
   // 1. Update player input / movement / bullet
   player.update(dt);
 
-  // 2. Update invader formation
+  // 2. Update invader formation (discrete step-interval timing)
   grid.update(dt);
 
   // 3. ── COLLISION PASS (before any draw) ──────────────────────────────────
@@ -151,12 +185,94 @@ function updatePlaying(dt) {
     player.bullet = null;
   }
   // ── end collision pass ────────────────────────────────────────────────────
+
+  // 4. ── WIN CONDITION ──────────────────────────────────────────────────────
+  //    All 55 invaders destroyed → advance to Level 2
+  if (grid.allDefeated()) {
+    hud.level = 2;
+    initLevel2Scene();
+    switchScene('Level2');
+    return;
+  }
+
+  // 5. ── LOSE CONDITION ─────────────────────────────────────────────────────
+  //    Bottom of formation reaches the player's Y row
+  if (grid.bottomY() >= player.y) {
+    hud.lives -= 1;
+    if (hud.lives <= 0) {
+      hud.lives = 0;
+      switchScene('GameOver');
+      return;
+    }
+    // Still has lives — reset level (formation + player position)
+    resetLevel();
+  }
 }
 
 function updateGameOver(/*dt*/) {
   if (enterJustPressed()) {
     switchScene('Title');
   }
+}
+
+// ─────────────────────────────────────────────
+// Level 2 scene
+// ─────────────────────────────────────────────
+
+/**
+ * Initialise objects for Level 2.
+ * Level 2 is a separate scene; full gameplay is implemented in a later task.
+ * For now this sets up the grid so the scene renders correctly.
+ */
+function initLevel2Scene() {
+  // Level 2 uses a fresh grid; the player carries over their existing lives.
+  if (!player) {
+    player = new Player();
+    player.lives = hud.lives;
+  } else {
+    // Reset player position but preserve lives
+    const savedLives = player.lives;
+    player = new Player();
+    player.lives = savedLives;
+  }
+  playerStartY = player.y;
+  grid = new InvaderGrid({ speedMultiplier: 1.5, startY: 80 });
+}
+
+function updateLevel2(dt) {
+  // Stub: Level 2 full gameplay is a later task.
+  // For now just render the static scene with the HUD.
+  // Pressing ENTER returns to Title (for testing).
+  if (enterJustPressed()) {
+    hud.score = 0;
+    hud.lives = STARTING_LIVES;
+    hud.level = 1;
+    initPlayingScene();
+    switchScene('Title');
+  }
+}
+
+function drawLevel2() {
+  ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+  // HUD
+  renderHUD(ctx, hud.lives);
+
+  ctx.save();
+  ctx.fillStyle = '#00ff00';
+  ctx.font      = 'bold 40px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('LEVEL 2', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 - 40);
+
+  ctx.fillStyle = '#ffffff';
+  ctx.font      = '22px monospace';
+  ctx.fillText('Coming soon...', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 20);
+
+  ctx.font = '18px monospace';
+  if (Math.floor(Date.now() / 600) % 2 === 0) {
+    ctx.fillText('Press ENTER to return to Title', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 70);
+  }
+  ctx.restore();
 }
 
 // ─────────────────────────────────────────────
@@ -183,7 +299,7 @@ function drawTitle() {
 function drawPlaying() {
   ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
-  // HUD (score visible every frame — top-left)
+  // HUD (score, hi-score, lives, level — visible every frame)
   renderHUD(ctx, hud.lives);
 
   // Draw player ship and bullet
@@ -250,6 +366,7 @@ function loop(timestamp) {
     switch (currentScene) {
       case 'Title':    updateTitle(dt);    break;
       case 'Playing':  updatePlaying(dt);  break;
+      case 'Level2':   updateLevel2(dt);   break;
       case 'GameOver': updateGameOver(dt); break;
     }
     accumulator -= TIMESTEP_MS;
@@ -259,6 +376,7 @@ function loop(timestamp) {
   switch (currentScene) {
     case 'Title':    drawTitle();    break;
     case 'Playing':  drawPlaying();  break;
+    case 'Level2':   drawLevel2();   break;
     case 'GameOver': drawGameOver(); break;
   }
 
