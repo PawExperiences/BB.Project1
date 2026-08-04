@@ -7,6 +7,11 @@ const BULLET_W = 4;
 /** Bullet height in pixels — must match the value used in player.js. */
 const BULLET_H = 14;
 
+/** Player ship width in pixels — must match the value used in player.js. */
+const SHIP_W = 50;
+/** Player ship height in pixels — must match the value used in player.js. */
+const SHIP_H = 30;
+
 /**
  * Check whether the player's bullet has hit any live invader in the grid.
  * Performs an AABB intersection test against every live invader.
@@ -48,10 +53,8 @@ export function checkBulletInvaderCollisions(bullet, grid) {
 }
 
 /**
- * Stub: check whether an invader bullet has hit the player ship.
- * Body is a no-op until Level 2 adds invader projectiles.
- * Exported now so the function can be wired into the game loop without
- * breaking changes when the full implementation lands.
+ * Check whether an invader bullet has hit the player ship.
+ * Uses AABB collision detection.
  *
  * @param {{ x: number, y: number } | null} invaderBullet
  *   An active invader projectile, or null.
@@ -60,6 +63,19 @@ export function checkBulletInvaderCollisions(bullet, grid) {
  * @returns {{ hit: boolean }}
  */
 export function checkInvaderBulletPlayerCollision(invaderBullet, player) {
-  // No-op stub — invader bullets are introduced in Level 2.
-  return { hit: false };
+  if (!invaderBullet || !player) return { hit: false };
+
+  const INV_BULLET_W = 4;
+  const INV_BULLET_H = 10;
+  const pw = player.w !== undefined ? player.w : SHIP_W;
+  const ph = player.h !== undefined ? player.h : SHIP_H;
+
+  const hit = (
+    invaderBullet.x               < player.x + pw         &&
+    invaderBullet.x + INV_BULLET_W > player.x             &&
+    invaderBullet.y               < player.y + ph         &&
+    invaderBullet.y + INV_BULLET_H > player.y
+  );
+
+  return { hit };
 }
