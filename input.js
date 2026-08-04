@@ -19,7 +19,7 @@ export function initInput() {
 
 /**
  * Returns true while the given key is held down.
- * @param {string} key  A KeyboardEvent.key string, e.g. 'ArrowLeft', 'Space'
+ * @param {string} key  A KeyboardEvent.key string, e.g. 'ArrowLeft', ' '
  * @returns {boolean}
  */
 export function isKeyHeld(key) {
