@@ -1,22 +1,27 @@
-// input.js — Keyboard handler scaffold.
-// Stub module: full implementation is owned by the 'Keyboard input and the player ship' card.
-// Other modules may safely import from this file; it will not throw on import.
+// input.js — Keyboard input handler.
+// Tracks which keys are currently held using a Set, avoiding reliance on key-repeat.
+
+/** @type {Set<string>} */
+const heldKeys = new Set();
 
 /**
- * Placeholder initialiser — call once after the canvas is ready.
- * The real implementation will register keydown/keyup listeners and expose
- * an `isKeyDown(key)` helper used by player.js.
+ * Register keydown/keyup listeners on window.
+ * Call once at startup before the game loop begins.
  */
 export function initInput() {
-  // TODO: implement in the Keyboard input card
+  window.addEventListener('keydown', (e) => {
+    heldKeys.add(e.key);
+  });
+  window.addEventListener('keyup', (e) => {
+    heldKeys.delete(e.key);
+  });
 }
 
 /**
  * Returns true while the given key is held down.
- * Stub always returns false until the input card is implemented.
- * @param {string} _key  A KeyboardEvent.key string, e.g. 'ArrowLeft'
+ * @param {string} key  A KeyboardEvent.key string, e.g. 'ArrowLeft', 'Space'
  * @returns {boolean}
  */
-export function isKeyDown(_key) {
-  return false;
+export function isKeyHeld(key) {
+  return heldKeys.has(key);
 }

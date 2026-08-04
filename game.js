@@ -7,6 +7,9 @@ import {
   STARTING_LIVES,
 } from './gameConfig.js';
 
+import { initInput } from './input.js';
+import { Player }    from './player.js';
+
 // ─────────────────────────────────────────────
 // Internal constants
 // ─────────────────────────────────────────────
@@ -38,6 +41,11 @@ export const hudState = {
   lives:   STARTING_LIVES,
   hiScore: 0,
 };
+
+// ─────────────────────────────────────────────
+// Player instance (created fresh when Playing scene starts)
+// ─────────────────────────────────────────────
+let player = null;
 
 // ─────────────────────────────────────────────
 // Scene state machine
@@ -72,12 +80,12 @@ const scenes = {
   },
 
   [SCENE_PLAYING]: {
-    // Stub player rectangle — replaced by the Player card
-    get playerX() { return CANVAS_WIDTH / 2 - 25; },
-    get playerY() { return CANVAS_HEIGHT - 60; },
-
-    update(_dt) {
-      // Stub — entities will be populated by future cards
+    update(dt) {
+      if (player) {
+        player.update(dt);
+        // Sync lives from player instance to HUD
+        hudState.lives = player.lives;
+      }
     },
     render(ctx) {
       // Background
@@ -87,9 +95,10 @@ const scenes = {
       // HUD
       renderHUD(ctx);
 
-      // Stub player rectangle
-      ctx.fillStyle = '#00ff00';
-      ctx.fillRect(this.playerX, this.playerY, 50, 20);
+      // Player ship
+      if (player) {
+        player.draw(ctx);
+      }
     },
   },
 
@@ -140,10 +149,11 @@ export function switchScene(name) {
   console.log(`[game] switchScene: ${currentScene ?? '(none)'} → ${name}`);
   currentScene = name;
 
-  // Reset HUD when a fresh game starts from the Title screen
+  // Reset HUD and create a fresh Player when a new game starts
   if (name === SCENE_PLAYING) {
     hudState.score = STARTING_SCORE;
     hudState.lives = STARTING_LIVES;
+    player = new Player();
   }
 }
 
@@ -173,7 +183,7 @@ function renderHUD(ctx) {
 
 // ─────────────────────────────────────────────
 // Keyboard input — scene transitions only.
-// Full keyboard handling is owned by the 'Keyboard input' card (input.js).
+// Full keyboard handling is owned by input.js / the Player instance.
 // ─────────────────────────────────────────────
 window.addEventListener('keydown', (e) => {
   if (e.key !== 'Enter') return;
@@ -222,7 +232,7 @@ function loop(timestamp) {
     updateCount++;
   }
 
-  // Log update frequency roughly once per second (AC6)
+  // Log update frequency roughly once per second
   if (logTimer >= 1000) {
     console.log(`[game] update steps in last ~1 s: ${updateCount}`);
     updateCount = 0;
@@ -238,5 +248,6 @@ function loop(timestamp) {
 // ─────────────────────────────────────────────
 // Boot
 // ─────────────────────────────────────────────
+initInput();
 switchScene(SCENE_TITLE);
 requestAnimationFrame(loop);
