@@ -1,16 +1,11 @@
 // game.js — Game loop, scene state machine, and HUD
 
-// --- Import stubs for later cards ---
-// input.js     — added by "Keyboard input and the player ship" card
-// player.js    — added by "Keyboard input and the player ship" card
-// invaders.js  — added by "Level 1: the classic grid" card
-// collision.js — added by "Sprite rendering and collision detection" card
-// level1.js    — added by "Level 1: the classic grid" card
-// level2.js    — added by "Level 2: they shoot back" card
-// level3.js    — added by "Level 3: shields and formations" card
-// boss.js      — added by "Boss level: multi-phase finale" card
-
 import { CANVAS_WIDTH, CANVAS_HEIGHT, STARTING_LIVES } from './gameConfig.js';
+import { initInput } from './input.js';
+import { Player, SHIP_WIDTH, SHIP_HEIGHT } from './player.js';
+import { initInvaders, getInvaders, updateInvaders, renderInvaders } from './invaders.js';
+import { initExplosions, triggerExplosion, updateExplosions, renderExplosions } from './explosion.js';
+import { collideBulletsWithInvaders, collideEnemyBulletsWithPlayer } from './collision.js';
 
 // ---------------------------------------------------------------------------
 // HUD STATE — exported so later cards can import and mutate directly
@@ -31,6 +26,19 @@ canvas.width  = CANVAS_WIDTH;
 canvas.height = CANVAS_HEIGHT;
 
 // ---------------------------------------------------------------------------
+// Game-object instances (created fresh on enterPlaying)
+// ---------------------------------------------------------------------------
+let player = null;
+
+// Enemy bullets — empty array until Level 2 wires in shooting
+let enemyBullets = [];
+
+// ---------------------------------------------------------------------------
+// Input initialisation
+// ---------------------------------------------------------------------------
+initInput();
+
+// ---------------------------------------------------------------------------
 // Scene state machine
 // Scenes: 'title' | 'playing' | 'gameover'
 // ---------------------------------------------------------------------------
@@ -40,11 +48,15 @@ function enterTitle() {
   hudState.score = 0;
   hudState.lives = STARTING_LIVES;
   currentScene   = 'title';
+  player = null;
 }
 
 function enterPlaying() {
   currentScene = 'playing';
-  // Later cards initialise their game objects here.
+  player = new Player();
+  enemyBullets = [];
+  initInvaders();
+  initExplosions();
 }
 
 function enterGameOver() {
@@ -82,14 +94,46 @@ const CAP_MS   = 250;         // maximum accumulated delta
 let lastTimestamp = null;
 let accumulator   = 0;
 
+// ---------------------------------------------------------------------------
+// UPDATE — game logic, one fixed tick
+// ---------------------------------------------------------------------------
 function update(dt) {
-  // dt is the fixed timestep in SECONDS (1/60)
-  if (currentScene === 'playing') {
-    // Later cards attach their update logic here via the exported helpers.
-    // Nothing to update in the shell beyond scene/HUD state.
-  }
+  if (currentScene !== 'playing') return;
+
+  // Player movement and bullet travel
+  if (player) player.update(dt);
+
+  // Invader formation movement
+  updateInvaders();
+
+  // Explosion countdown
+  updateExplosions();
 }
 
+// ---------------------------------------------------------------------------
+// COLLIDE — AABB pass, runs between update and render every frame
+// ---------------------------------------------------------------------------
+function collide() {
+  if (currentScene !== 'playing') return;
+  if (!player) return;
+
+  const invaders = getInvaders();
+
+  // Player bullet vs invaders
+  collideBulletsWithInvaders(
+    player,
+    invaders,
+    triggerExplosion,
+    () => { hudState.score += 10; }
+  );
+
+  // Enemy bullets vs player (stub — no enemy bullets until Level 2)
+  collideEnemyBulletsWithPlayer(enemyBullets, player);
+}
+
+// ---------------------------------------------------------------------------
+// RENDER — draw the current frame
+// ---------------------------------------------------------------------------
 function render() {
   ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
@@ -104,6 +148,20 @@ function render() {
   renderHUD();
 }
 
+function renderPlaying() {
+  // Invaders
+  renderInvaders(ctx);
+
+  // Explosions (drawn over invaders, under player)
+  renderExplosions(ctx);
+
+  // Player ship and bullet
+  if (player) player.draw(ctx);
+}
+
+// ---------------------------------------------------------------------------
+// Main loop — update → collide → render order is enforced here
+// ---------------------------------------------------------------------------
 function loop(timestamp) {
   if (lastTimestamp === null) {
     lastTimestamp = timestamp;
@@ -112,19 +170,20 @@ function loop(timestamp) {
   let elapsed = timestamp - lastTimestamp;
   lastTimestamp = timestamp;
 
-  // Cap to prevent catch-up burst after the tab was backgrounded
   if (elapsed > CAP_MS) {
     elapsed = CAP_MS;
   }
 
   accumulator += elapsed;
 
-  // Fixed-timestep updates
+  // Fixed-timestep: update + collide run together per tick
   while (accumulator >= STEP_MS) {
-    update(STEP_MS / 1000); // pass dt in seconds
+    update(STEP_MS / 1000);
+    collide();                  // collision pass between update and render
     accumulator -= STEP_MS;
   }
 
+  // Render once per animation frame (after all ticks)
   render();
 
   requestAnimationFrame(loop);
@@ -147,16 +206,6 @@ function renderTitle() {
   ctx.fillText('Press ENTER to start', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 30);
 }
 
-function renderPlaying() {
-  // Later cards (player.js, invaders.js, etc.) render game objects here.
-  // For now, show a placeholder so the scene is visually distinct.
-  ctx.fillStyle = '#444';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.font = '20px monospace';
-  ctx.fillText('[ game in progress ]', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2);
-}
-
 function renderGameOver() {
   ctx.fillStyle = '#fff';
   ctx.textAlign = 'center';
@@ -176,12 +225,11 @@ function renderGameOver() {
 // HUD renderer — score (top-left), hi-score (top-centre), lives (top-right)
 // ---------------------------------------------------------------------------
 function renderHUD() {
-  const PAD  = 16;
-  const TOP  = 24;
+  const PAD = 16;
 
-  ctx.font          = '20px monospace';
-  ctx.textBaseline  = 'top';
-  ctx.fillStyle     = '#0f0';
+  ctx.font         = '20px monospace';
+  ctx.textBaseline = 'top';
+  ctx.fillStyle    = '#0f0';
 
   // Score — top-left
   ctx.textAlign = 'left';

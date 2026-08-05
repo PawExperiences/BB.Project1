@@ -20,9 +20,9 @@ Reset by BuildBoard.
 |-----------------|--------------------------------------------------|
 | `input.js`      | "Keyboard input and the player ship"             |
 | `player.js`     | "Keyboard input and the player ship"             |
-| `invaders.js`   | "Level 1: the classic grid"                      |
+| `invaders.js`   | "Sprite rendering and collision detection"       |
 | `collision.js`  | "Sprite rendering and collision detection"       |
-| `level1.js`     | "Level 1: the classic grid"                      |
+| `explosion.js`  | "Sprite rendering and collision detection"       |
 | `level2.js`     | "Level 2: they shoot back"                       |
 | `level3.js`     | "Level 3: shields and formations"                |
 | `boss.js`       | "Boss level: multi-phase finale"                 |
@@ -44,7 +44,7 @@ Open `index.html` directly from the filesystem (double-click or use `File → Op
 
 ### 3. Title → Playing transition
 - [ ] Press **Enter**.
-- [ ] The canvas switches immediately to the Playing scene (placeholder text `[ game in progress ]`) — **no page reload**.
+- [ ] The canvas switches immediately to the Playing scene — **no page reload**.
 - [ ] Pressing Enter again during play has no effect.
 
 ### 4. HUD during play
@@ -55,7 +55,6 @@ Open `index.html` directly from the filesystem (double-click or use `File → Op
   ```js
   import('./game.js').then(m => m.enterGameOver());
   ```
-  *(or temporarily call `enterGameOver()` from the console after the module loads)*
 - [ ] The canvas shows **GAME OVER**, `Score: 0` (or current score), and **"Press ENTER to restart"**.
 
 ### 6. Game Over → Title transition
@@ -93,8 +92,7 @@ Open `index.html` directly from the filesystem. Press **Enter** to reach the Pla
 - [ ] Release the key and run it again — it should return `false`.
 
 ### 10. Player ship rendering
-- [ ] *(Requires game-loop integration card to wire in player.draw — see that card's checklist.)*
-- [ ] Once wired: a green ship shape (hull rectangle + dome arc + wing nubs) is visible near the bottom of the canvas.
+- [ ] A green ship shape (hull rectangle + dome arc + wing nubs) is visible near the bottom of the canvas during the Playing scene.
 - [ ] No external image files are loaded; the ship is drawn entirely with Canvas 2D calls.
 
 ### 11. Horizontal movement
@@ -121,3 +119,48 @@ Open `index.html` directly from the filesystem. Press **Enter** to reach the Pla
   ```
 - [ ] `p.lives` reads as `3` initially (from `STARTING_LIVES`).
 - [ ] `p.lives` can be decremented by external code.
+
+---
+
+## Manual Verification — Sprite Rendering & Collision Detection
+
+Open `index.html` from the filesystem, press **Enter** to enter the Playing scene, then verify:
+
+### 14. Invader formation renders
+- [ ] 55 lime-green (`#00FF00`) rectangles are visible, arranged in 11 columns × 5 rows.
+- [ ] Each rectangle is 30 × 20 px with 10 px horizontal and 10 px vertical gaps.
+- [ ] The formation is horizontally centred on the canvas.
+
+### 15. Formation movement
+- [ ] The entire grid moves horizontally at 1 px per frame.
+- [ ] When the leading edge reaches either canvas boundary the formation reverses direction and drops 20 px.
+
+### 16. Collision pass order
+- [ ] Verify in `game.js` that the call order inside the main loop is: `update()` → `collide()` → `render()`.
+
+### 17. Bullet-vs-invader collision
+- [ ] Move the ship under an invader and press **Space**.
+- [ ] The bullet travels up; on contact, the invader disappears and the SCORE counter increments by 10.
+- [ ] The bullet is also removed on hit (no pass-through).
+
+### 18. Explosion effect
+- [ ] A bright yellow (`#FFFF00`) rectangle appears at the killed invader's position for approximately 20 frames (~333 ms) then disappears.
+- [ ] Killing multiple invaders in quick succession shows multiple independent yellow rectangles.
+
+### 19. Score display
+- [ ] `SCORE: 0` is shown in the HUD from the first frame of the Playing scene.
+- [ ] Each kill increments the displayed score by exactly 10.
+- [ ] Destroying all 55 invaders results in `SCORE: 550` (or higher if replaying).
+
+### 20. onPlayerHit stub
+- [ ] In DevTools console, run:
+  ```js
+  import('./collision.js').then(m => m.onPlayerHit());
+  ```
+- [ ] The string `'Player hit'` appears in the console.
+
+### 21. collideEnemyBulletsWithPlayer stub wired
+- [ ] Verify in `game.js` that `collideEnemyBulletsWithPlayer` is imported from `collision.js` and called in the `collide()` function.
+
+### 22. file:// compatibility
+- [ ] The game runs with no errors in the browser console when opened directly from the filesystem (no server, no npm, no bundler).
