@@ -4,8 +4,9 @@ import { CANVAS_WIDTH, CANVAS_HEIGHT, STARTING_LIVES } from './gameConfig.js';
 import { initInput }                                   from './input.js';
 import { initLevel1, updateLevel1, renderLevel1 }      from './level1.js';
 import { initLevel2, updateLevel2, renderLevel2 }      from './level2.js';
-import { initLevel3, updateLevel3, renderLevel3 }      from './level3.js'; // Level 3 card
-// import { createBoss, updateBoss, renderBoss } from './boss.js';          // Boss card
+import { initLevel3, updateLevel3, renderLevel3 }      from './level3.js';
+import { initBoss,   updateBoss,   renderBoss }        from './boss.js';
+import { Player }                                       from './player.js';
 
 // ---------------------------------------------------------------------------
 // Canvas setup
@@ -33,16 +34,21 @@ let currentScene = 'title';
  * Transition to a new scene.
  * Exported so level modules can call it directly.
  *
- * Special intercept: when Level 2 calls transitionTo('gameover') after
- * clearing all invaders (hudState.lives > 0), we route to Level 3 instead.
+ * Special intercepts:
+ * - level2 → gameover (lives > 0): route to level3 (level cleared, not died)
+ * - level3 → gameover (lives > 0): route to boss
  *
  * @param {string} scene
  */
 export function transitionTo(scene) {
-  // --- Level-2 clear intercept: lives > 0 means the level was beaten, not
-  //     a game-over death. Route automatically to Level 3.
+  // Level-2 clear: lives > 0 means level beaten, auto-advance to Level 3
   if (scene === 'gameover' && currentScene === 'level2' && hudState.lives > 0) {
     scene = 'level3';
+  }
+
+  // Level-3 clear: lives > 0 means level beaten, auto-advance to Boss
+  if (scene === 'gameover' && currentScene === 'level3' && hudState.lives > 0) {
+    scene = 'boss';
   }
 
   if (scene === 'title') {
@@ -59,7 +65,10 @@ export function transitionTo(scene) {
   if (scene === 'level3') {
     initLevel3Scene();
   }
-  // 'boss' and 'gameover' need no extra init.
+  if (scene === 'boss') {
+    initBossScene();
+  }
+  // 'gameover' needs no extra init.
 
   currentScene = scene;
 }
@@ -91,6 +100,19 @@ function initLevel2Scene() {
 function initLevel3Scene() {
   initInput();
   initLevel3();
+}
+
+/**
+ * Initialise Boss level.
+ * Lives and score carry over from Level 3.
+ * A fresh Player is created at the standard bottom-centre position.
+ */
+function initBossScene() {
+  initInput();
+  // Create a fresh player; lives and score carry over from level 3
+  const bossPlayer = new Player(CANVAS_WIDTH / 2, null);
+  bossPlayer.lives = hudState.lives;
+  initBoss(bossPlayer);
 }
 
 // ---------------------------------------------------------------------------
@@ -174,9 +196,8 @@ function updateLevel3Scene(dt) {
   updateLevel3(dt);
 }
 
-function updateBossScene(_dt) {
-  // Placeholder: boss card not yet implemented.
-  if (enterJustPressed()) transitionTo('title');
+function updateBossScene(dt) {
+  updateBoss(dt);
 }
 
 // ---------------------------------------------------------------------------
@@ -228,21 +249,8 @@ function renderLevel3Scene() {
 }
 
 function renderBossScene() {
-  // Placeholder screen until the Boss card is implemented.
   drawHUD();
-  ctx.textAlign    = 'center';
-  ctx.textBaseline = 'middle';
-
-  ctx.fillStyle = '#ff0';
-  ctx.font      = 'bold 52px monospace';
-  ctx.fillText('BOSS INCOMING!', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 - 50);
-
-  ctx.fillStyle = '#fff';
-  ctx.font      = '26px monospace';
-  ctx.fillText('(Boss level — coming soon)', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 20);
-
-  ctx.font = '22px monospace';
-  ctx.fillText('Press ENTER to return to title', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 70);
+  renderBoss(ctx);
 }
 
 function renderGameOver() {
