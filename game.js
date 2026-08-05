@@ -17,14 +17,21 @@ import {
 } from './gameConfig.js';
 
 import { initInput } from './input.js';
-import { Player } from './player.js';
+import { Player }    from './player.js';
 
-// invaders.js added by: Invader grid and movement
-// collision.js added by: Collision detection
-// level1.js added by: Level 1 wave definition
-// level2.js added by: Level 2 wave definition
-// level3.js added by: Level 3 wave definition
-// boss.js added by: Boss enemy
+import {
+  initInvaders,
+  updateInvaders,
+  drawInvaders,
+} from './invaders.js';
+
+import {
+  updateExplosions,
+  drawExplosions,
+  clearExplosions,
+} from './explosion.js';
+
+import { runCollisionPass } from './collision.js';
 
 // ---------------------------------------------------------------------------
 // Canvas setup
@@ -78,6 +85,8 @@ window.addEventListener('keydown', function onKey(event) {
     // Transition: Title → Playing
     hudState.score = 0;
     hudState.lives = STARTING_LIVES;
+    initInvaders();
+    clearExplosions();
     setScene('playing');
 
   } else if (currentScene === 'gameover') {
@@ -112,8 +121,14 @@ function update(dt) {
   // Update player position and bullet.
   player.update(dt);
 
-  // invaders.js added by: Invader grid and movement         (update invader positions, bullets)
-  // collision.js added by: Collision detection              (check all collisions, mutate hudState)
+  // Collision pass runs BEFORE draw pass every frame.
+  runCollisionPass(player);
+
+  // Update invader formation position.
+  updateInvaders(dt);
+
+  // Update explosion timers.
+  updateExplosions();
 
   // Check for game-over condition (lives depleted).
   if (hudState.lives <= 0) {
@@ -163,11 +178,10 @@ function renderPlaying() {
   ctx.fillStyle = '#000000';
   ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
-  // Draw player ship and bullet.
+  // Draw order: invaders → explosions → player ship/bullet → HUD
+  drawInvaders(ctx);
+  drawExplosions(ctx);
   player.draw(ctx);
-
-  // invaders.js added by: Invader grid and movement          (render invaders)
-  // collision.js added by: Collision detection               (render bullets/shields)
 
   renderHUD();
 }

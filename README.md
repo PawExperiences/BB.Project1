@@ -15,16 +15,13 @@ ES module; there is no npm, no build step, and no server required.
 | `gameConfig.js` | ✅ Created | Game loop and canvas framework |
 | `input.js` | ✅ Created | Keyboard input and the player ship |
 | `player.js` | ✅ Created | Keyboard input and the player ship |
-| `invaders.js` | ⏳ Deferred | Invader grid and movement |
-| `collision.js` | ⏳ Deferred | Collision detection |
+| `invaders.js` | ✅ Created | Sprite rendering and collision detection |
+| `collision.js` | ✅ Created | Sprite rendering and collision detection |
+| `explosion.js` | ✅ Created | Sprite rendering and collision detection |
 | `level1.js` | ⏳ Deferred | Level 1 wave definition |
 | `level2.js` | ⏳ Deferred | Level 2 wave definition |
 | `level3.js` | ⏳ Deferred | Level 3 wave definition |
 | `boss.js` | ⏳ Deferred | Boss enemy |
-
-> **Note:** Files marked ⏳ Deferred are owned by later cards and must
-> **not** be created or stubbed by this card. Placeholder comments inside
-> `game.js` mark each future import point.
 
 ---
 
@@ -45,6 +42,15 @@ ES module; there is no npm, no build step, and no server required.
 - **`player.js`** — `Player` class. Reads input via `isKeyHeld`, moves the
   ship with delta-time scaling, clamps to canvas bounds, and manages a
   single-bullet firing mechanic. Draws procedurally (arcs + rectangles).
+- **`invaders.js`** — Formation state, movement logic (`updateInvaders(dt)`),
+  and rendering (`drawInvaders(ctx)`). Exports `INVADER_SPEED` as the named
+  speed constant. Edge detection uses surviving-invader bounding box only.
+- **`collision.js`** — `rectsOverlap(a, b)` pure AABB helper (exported);
+  `runCollisionPass(player)` checks player bullet vs invaders, marks kills,
+  deactivates bullets, spawns explosions, increments score. Exports
+  `SCORE_PER_KILL = 10`.
+- **`explosion.js`** — Explosion particle list. `spawnExplosion()`,
+  `updateExplosions()`, `drawExplosions(ctx)`. Flashes yellow for 10 frames.
 
 ---
 
@@ -68,97 +74,93 @@ build tool or test runner.
 ### 2 — Title → Playing transition
 1. Press **Enter**.
 2. **Expected:** The title text disappears. The canvas is black with the
-   HUD visible at the bottom (Score 0, BEST 0, LIVES 3). No page reload
-   occurs (the browser URL does not change).
+   HUD visible at the bottom (Score 0, BEST 0, LIVES 3). An 11×5 grid of
+   lime-green (#00FF00) rectangles appears in the upper portion of the
+   canvas, centred horizontally.
 
-### 3 — HUD content
+### 3 — Invader formation visible
+1. While in the Playing scene, observe the upper portion of the canvas.
+2. **Expected:** 55 lime-green filled rectangles arranged in 11 columns
+   and 5 rows. Each invader is 24×16 px with 12 px horizontal gaps and
+   8 px vertical gaps between cells. The entire formation is centred.
+
+### 4 — Formation moves horizontally
+1. Watch the formation over several seconds.
+2. **Expected:** All invaders move together as a unit, sliding left or right
+   at a steady speed. No invader moves independently.
+
+### 5 — Edge detection and row drop
+1. Watch the formation reach either canvas edge.
+2. **Expected:** When the rightmost surviving invader's right edge reaches
+   the canvas right edge (768 px), or the leftmost surviving invader's left
+   edge reaches 0, the entire formation drops exactly 24 px downward and
+   reverses horizontal direction.
+
+### 6 — Shrinking bounding box
+1. Fire at and destroy invaders on one side of the formation.
+2. **Expected:** The formation turns around sooner (because edge detection
+   uses the surviving invaders' bounding box, not the original full-grid width).
+
+### 7 — Shooting an invader
+1. Line up the player ship under an invader and press **Space**.
+2. **Expected:**
+   - The bullet travels upward and hits the invader.
+   - The invader disappears (is no longer drawn).
+   - A brief yellow flash appears at the invader's former position for
+     approximately 8–12 frames, then vanishes.
+   - The SCORE in the HUD increases by 10.
+
+### 8 — Bullet deactivation on hit
+1. Fire a bullet and observe a kill.
+2. **Expected:** After the kill, the bullet disappears immediately (it is
+   deactivated). The player can fire a new bullet right away.
+
+### 9 — No re-processing on same frame
+1. Fire multiple bullets rapidly (note: single-bullet mechanic means only
+   one is active at a time).
+2. **Expected:** Each bullet destroys at most one invader. No invader is
+   destroyed more than once.
+
+### 10 — Score increments correctly
+1. Destroy several invaders.
+2. **Expected:** Each kill increases SCORE by exactly 10. After 3 kills,
+   score reads 30, etc.
+
+### 11 — Destroyed invaders excluded from future collisions
+1. Shoot through a gap where an invader used to be.
+2. **Expected:** The bullet passes through the gap and may hit the invader
+   behind it — the destroyed invader does not block or intercept bullets.
+
+### 12 — HUD content
 1. While in the Playing scene, inspect the bottom strip of the canvas.
 2. **Expected:** Three labels are drawn directly on the canvas:
-   - `SCORE 0` (left)
+   - `SCORE 0` (left, updates on kills)
    - `BEST 0` (centre)
    - `LIVES 3` (right)
    A thin horizontal separator line appears above the labels.
 
-### 4 — Game Over transition (console trigger)
+### 13 — Game Over transition
 1. Open the browser DevTools console (`F12`).
-2. Run: `import('./game.js').then(m => { m.hudState.lives = 0; })`
-   *(Alternatively call `triggerGameOver` if you import it.)*
-3. Wait one frame (or run `m.triggerGameOver()` directly).
-4. **Expected:** The scene switches to Game Over — `GAME OVER` (red),
-   `Score: 0` (white), and `Press ENTER to restart` (white) are rendered
-   on the canvas without a page reload.
+2. Run: `import('./game.js').then(m => { m.triggerGameOver(); })`
+3. **Expected:** The scene switches to Game Over — `GAME OVER` (red),
+   `Score: <current>` (white), and `Press ENTER to restart` (white).
 
-### 5 — Game Over → Title transition
+### 14 — Game Over → Title transition
 1. While on the Game Over screen, press **Enter**.
-2. **Expected:** The scene returns to the Title screen (`SPACE INVADERS` /
-   `Press ENTER to start`). No page reload occurs.
+2. **Expected:** Returns to the Title screen.
 
-### 6 — Delta cap / background-tab check
-1. Switch to a different browser tab for at least 5 seconds.
-2. Switch back to the game tab.
-3. **Expected:** The game resumes normally with no visible freeze or burst
-   of rapid updates. (The loop caps accumulated delta to 250 ms ≈ 15
-   update steps maximum.)
-
-### 7 — Player ship visible in Playing scene
-1. Press **Enter** on the title screen to enter Playing.
-2. **Expected:** A green Space-Invaders-style player ship is visible near
-   the bottom of the canvas, above the HUD strip. The ship has a
-   rectangular body, a blue semicircle dome on top, and two wing
-   extensions — all drawn procedurally (no external images loaded).
-
-### 8 — Movement: left / right with clamping
-1. While in the Playing scene, hold the **Left Arrow** (or **A**) key.
-2. **Expected:** The ship moves left at a steady rate. When the ship's
-   left edge reaches `x = 0`, it stops moving further left and remains
-   flush with the canvas left edge — it does not slide off screen.
-3. Release the key; hold the **Right Arrow** (or **D**) key.
-4. **Expected:** The ship moves right. When the ship's right edge reaches
-   `x = CANVAS_WIDTH` (768 px), it stops — it does not slide off the
-   right edge of the canvas.
-5. **Clamping check:** Tap and hold both ArrowLeft and ArrowRight
-   simultaneously. The ship stays still (forces cancel). Move to the
-   far right, then tap only ArrowLeft — the ship moves left normally.
-
-### 9 — Single-bullet firing mechanic
-1. In the Playing scene, move the ship to a convenient position.
-2. Press **Space** once.
-3. **Expected:** A small yellow rectangle (≈4 × 10 px) appears at the
-   ship's horizontal centre, at the ship's top edge, and travels upward.
-4. While the bullet is in flight, press or hold **Space** again.
-5. **Expected:** No second bullet appears. Only one bullet is ever in
-   flight at a time.
-
-### 10 — Bullet expiry (single-bullet limit resets)
-1. Fire a bullet (Space) and do not fire again.
-2. Watch the bullet travel to the top of the canvas.
-3. **Expected:** When the bullet's top edge exits the canvas (passes
-   `y = 0`), it disappears — `this.bullet` becomes `null` internally.
-4. Press **Space** again immediately after.
-5. **Expected:** A new bullet spawns without any problem. The single-bullet
-   limit is fully reset after the previous bullet left the screen.
-
-### 11 — Key-repeat guard (input.js)
+### 15 — No console errors
 1. Open DevTools → Console.
-2. Run the following snippet to count how many times the Set grows while
-   holding ArrowLeft for ~1 second:
-   ```js
-   import('./input.js').then(m => {
-     let count = 0;
-     const orig = m.isKeyHeld;
-     // Observe by watching the Set in the closure — or just trust the
-     // movement test: the ship moves at a constant 200 px/s rate,
-     // not accelerating each key-repeat tick.
-   });
-   ```
-3. Alternatively, observe the ship: holding **Left Arrow** moves the ship
-   at a smooth, constant speed — it does not accelerate, which would
-   happen if key-repeat events were processed.
-4. **Expected:** Constant movement speed. The `event.repeat` guard in
-   `input.js` ensures repeated `keydown` events are discarded.
+2. Hard-reload the page with **Ctrl+Shift+R**.
+3. **Expected:** Zero red error messages.
 
-### 12 — DevTools: no console errors
-1. Open DevTools → Console.
-2. Hard-reload the page with **Ctrl+Shift+R** (or Cmd+Shift+R on macOS).
-3. **Expected:** Zero red error messages. The only output (if any) is
-   informational.
+### 16 — Scope note: HUD / Score display gap
+The score integer is incremented by `collision.js` (SCORE_PER_KILL = 10)
+and displayed by the existing HUD renderer in `game.js`. No separate HUD
+card is needed; this card closes the gap.
+
+### 17 — Scope note: Invader shooting
+Invader bullets are out of scope for this card (Level 2 card). The
+`rectsOverlap(a, b)` helper in `collision.js` is designed to be reusable:
+it accepts any two `{x, y, width, height}` objects and is exported for
+use by the Level 2 card without modification.
