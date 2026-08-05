@@ -13,15 +13,35 @@ from the Swing UI (`CalculatorWindow`), keeping it independently unit-testable.
 - Java 21 (JDK)
 - Apache Maven 3.9+
 
-## How to Build and Test
+## How to Build and Run
+
+### Build (and test)
 
 ```bash
-# Run all tests (must exit with BUILD SUCCESS)
-mvn -B test
-
-# Package into a JAR (also runs tests)
-mvn package
+mvn -B package
 ```
+
+This command compiles all sources, runs all JUnit 5 tests (including
+`SkeletonTest.skeletonSmokeTest` and the full `EvaluatorTest` suite), and
+packages the application. **All tests pass during `mvn -B package`.**
+
+### Run
+
+```bash
+java -jar target/calculator-0.1.0.jar
+```
+
+No Maven installation is required at runtime — only a JDK 21 (or later) JRE.
+
+## Packaging Notes
+
+The JAR is built with `maven-jar-plugin`, which sets `Main-Class` in
+`META-INF/MANIFEST.MF` to `com.buildboard.calculator.Main`. There are **no
+runtime dependencies** beyond the JDK (Swing ships with every standard JDK), so
+no fat/shade JAR is needed. Neither `maven-shade-plugin` nor
+`maven-assembly-plugin` is present in `pom.xml`. If a runtime dependency is
+ever introduced, `README.md` must be updated with an explicit rationale section
+explaining why a shade/assembly plugin was added.
 
 ## Project Structure
 
@@ -33,27 +53,16 @@ calculator/
     ├── main/
     │   └── java/
     │       └── com/buildboard/calculator/
-    │           ├── Evaluator.java          # owned by: Expression Evaluator card
-    │           ├── CalculatorWindow.java   # owned by: Swing UI card
-    │           └── Main.java              # owned by: Runnable JAR card
+    │           ├── Evaluator.java          # arithmetic expression parser
+    │           ├── CalculationException.java
+    │           ├── CalculatorWindow.java   # Swing UI
+    │           └── Main.java              # entry point — launches CalculatorWindow
     └── test/
         └── java/
             └── com/buildboard/calculator/
-                ├── SkeletonTest.java       # placeholder — this card
-                └── EvaluatorTest.java     # owned by: Expression Evaluator card
+                ├── SkeletonTest.java       # Maven/JUnit 5 wiring smoke test
+                └── EvaluatorTest.java     # full evaluator unit tests
 ```
-
-## Planned Files (not yet created)
-
-The following files are owned by sibling cards and will be added via their own
-PRs and reviews. They do **not** exist in this skeleton:
-
-| File | Owning Card |
-|------|-------------|
-| `src/main/java/com/buildboard/calculator/Evaluator.java` | Expression Evaluator |
-| `src/test/java/com/buildboard/calculator/EvaluatorTest.java` | Expression Evaluator |
-| `src/main/java/com/buildboard/calculator/CalculatorWindow.java` | Swing UI |
-| `src/main/java/com/buildboard/calculator/Main.java` | Runnable JAR / Entry Point |
 
 ## Dependencies
 
@@ -67,3 +76,4 @@ PRs and reviews. They do **not** exist in this skeleton:
 |--------|---------|--------|
 | `maven-compiler-plugin` | 3.12.1 | Compile with Java 21 (`--release 21`) |
 | `maven-surefire-plugin` | 3.2.5 | Run JUnit 5 tests |
+| `maven-jar-plugin` | 3.3.0 | Set `Main-Class` manifest entry; produce `calculator-0.1.0.jar` |
