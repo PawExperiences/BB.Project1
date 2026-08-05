@@ -16,8 +16,9 @@ import {
   STARTING_LIVES,
 } from './gameConfig.js';
 
-// input.js added by: Keyboard input and the player ship
-// player.js added by: Keyboard input and the player ship
+import { initInput } from './input.js';
+import { Player } from './player.js';
+
 // invaders.js added by: Invader grid and movement
 // collision.js added by: Collision detection
 // level1.js added by: Level 1 wave definition
@@ -33,6 +34,16 @@ const ctx    = canvas.getContext('2d');
 
 canvas.width  = CANVAS_WIDTH;
 canvas.height = CANVAS_HEIGHT;
+
+// ---------------------------------------------------------------------------
+// Initialise input (attaches keydown/keyup listeners exactly once)
+// ---------------------------------------------------------------------------
+initInput();
+
+// ---------------------------------------------------------------------------
+// Player entity
+// ---------------------------------------------------------------------------
+const player = new Player();
 
 // ---------------------------------------------------------------------------
 // Shared HUD state — exported so later cards can import and mutate it.
@@ -98,8 +109,9 @@ export function triggerGameOver() {
 function update(dt) {
   if (currentScene !== 'playing') return;
 
-  // input.js added by: Keyboard input and the player ship
-  // player.js added by: Keyboard input and the player ship  (update player position, bullets)
+  // Update player position and bullet.
+  player.update(dt);
+
   // invaders.js added by: Invader grid and movement         (update invader positions, bullets)
   // collision.js added by: Collision detection              (check all collisions, mutate hudState)
 
@@ -151,7 +163,9 @@ function renderPlaying() {
   ctx.fillStyle = '#000000';
   ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
-  // player.js added by: Keyboard input and the player ship   (render player)
+  // Draw player ship and bullet.
+  player.draw(ctx);
+
   // invaders.js added by: Invader grid and movement          (render invaders)
   // collision.js added by: Collision detection               (render bullets/shields)
 

@@ -13,8 +13,8 @@ ES module; there is no npm, no build step, and no server required.
 | `index.html` | ✅ Created | Game loop and canvas framework |
 | `game.js` | ✅ Created | Game loop and canvas framework |
 | `gameConfig.js` | ✅ Created | Game loop and canvas framework |
-| `input.js` | ⏳ Deferred | Keyboard input and the player ship |
-| `player.js` | ⏳ Deferred | Keyboard input and the player ship |
+| `input.js` | ✅ Created | Keyboard input and the player ship |
+| `player.js` | ✅ Created | Keyboard input and the player ship |
 | `invaders.js` | ⏳ Deferred | Invader grid and movement |
 | `collision.js` | ⏳ Deferred | Collision detection |
 | `level1.js` | ⏳ Deferred | Level 1 wave definition |
@@ -22,7 +22,7 @@ ES module; there is no npm, no build step, and no server required.
 | `level3.js` | ⏳ Deferred | Level 3 wave definition |
 | `boss.js` | ⏳ Deferred | Boss enemy |
 
-> **Note:** Every file marked ⏳ Deferred is owned by a later card and must
+> **Note:** Files marked ⏳ Deferred are owned by later cards and must
 > **not** be created or stubbed by this card. Placeholder comments inside
 > `game.js` mark each future import point.
 
@@ -39,6 +39,12 @@ ES module; there is no npm, no build step, and no server required.
   exported `hudState` object.
 - **`index.html`** — Minimal host page. Loads `game.js` as
   `type="module"` and centres the 768 × 896 canvas on a dark background.
+- **`input.js`** — Keyboard state module. `initInput()` attaches
+  `keydown`/`keyup` listeners; `isKeyHeld(code)` queries current hold state.
+  Key-repeat events are ignored via `event.repeat`.
+- **`player.js`** — `Player` class. Reads input via `isKeyHeld`, moves the
+  ship with delta-time scaling, clamps to canvas bounds, and manages a
+  single-bullet firing mechanic. Draws procedurally (arcs + rectangles).
 
 ---
 
@@ -94,14 +100,64 @@ build tool or test runner.
    of rapid updates. (The loop caps accumulated delta to 250 ms ≈ 15
    update steps maximum.)
 
-### 7 — No deferred files exist
-1. Inspect the project directory.
-2. **Expected:** Only `index.html`, `game.js`, `gameConfig.js`, and
-   `README.md` are present (plus `test/sample-pr.txt`). None of
-   `input.js`, `player.js`, `invaders.js`, `collision.js`, `level1.js`,
-   `level2.js`, `level3.js`, or `boss.js` exist.
+### 7 — Player ship visible in Playing scene
+1. Press **Enter** on the title screen to enter Playing.
+2. **Expected:** A green Space-Invaders-style player ship is visible near
+   the bottom of the canvas, above the HUD strip. The ship has a
+   rectangular body, a blue semicircle dome on top, and two wing
+   extensions — all drawn procedurally (no external images loaded).
 
-### 8 — DevTools: no console errors
+### 8 — Movement: left / right with clamping
+1. While in the Playing scene, hold the **Left Arrow** (or **A**) key.
+2. **Expected:** The ship moves left at a steady rate. When the ship's
+   left edge reaches `x = 0`, it stops moving further left and remains
+   flush with the canvas left edge — it does not slide off screen.
+3. Release the key; hold the **Right Arrow** (or **D**) key.
+4. **Expected:** The ship moves right. When the ship's right edge reaches
+   `x = CANVAS_WIDTH` (768 px), it stops — it does not slide off the
+   right edge of the canvas.
+5. **Clamping check:** Tap and hold both ArrowLeft and ArrowRight
+   simultaneously. The ship stays still (forces cancel). Move to the
+   far right, then tap only ArrowLeft — the ship moves left normally.
+
+### 9 — Single-bullet firing mechanic
+1. In the Playing scene, move the ship to a convenient position.
+2. Press **Space** once.
+3. **Expected:** A small yellow rectangle (≈4 × 10 px) appears at the
+   ship's horizontal centre, at the ship's top edge, and travels upward.
+4. While the bullet is in flight, press or hold **Space** again.
+5. **Expected:** No second bullet appears. Only one bullet is ever in
+   flight at a time.
+
+### 10 — Bullet expiry (single-bullet limit resets)
+1. Fire a bullet (Space) and do not fire again.
+2. Watch the bullet travel to the top of the canvas.
+3. **Expected:** When the bullet's top edge exits the canvas (passes
+   `y = 0`), it disappears — `this.bullet` becomes `null` internally.
+4. Press **Space** again immediately after.
+5. **Expected:** A new bullet spawns without any problem. The single-bullet
+   limit is fully reset after the previous bullet left the screen.
+
+### 11 — Key-repeat guard (input.js)
+1. Open DevTools → Console.
+2. Run the following snippet to count how many times the Set grows while
+   holding ArrowLeft for ~1 second:
+   ```js
+   import('./input.js').then(m => {
+     let count = 0;
+     const orig = m.isKeyHeld;
+     // Observe by watching the Set in the closure — or just trust the
+     // movement test: the ship moves at a constant 200 px/s rate,
+     // not accelerating each key-repeat tick.
+   });
+   ```
+3. Alternatively, observe the ship: holding **Left Arrow** moves the ship
+   at a smooth, constant speed — it does not accelerate, which would
+   happen if key-repeat events were processed.
+4. **Expected:** Constant movement speed. The `event.repeat` guard in
+   `input.js` ensures repeated `keydown` events are discarded.
+
+### 12 — DevTools: no console errors
 1. Open DevTools → Console.
 2. Hard-reload the page with **Ctrl+Shift+R** (or Cmd+Shift+R on macOS).
 3. **Expected:** Zero red error messages. The only output (if any) is
