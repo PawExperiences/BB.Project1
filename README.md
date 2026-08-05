@@ -287,6 +287,179 @@ is automatic.
 
 ---
 
+## Level 3 — Manual Verification Checklist
+
+Level 3 is reached by clearing Level 2 (destroying all invaders in Level 2).
+Alternatively, you can test `level3.js` directly by calling
+`level3.start(canvas, ctx, () => console.log('Level complete!'))` from the
+browser console after importing the module.
+
+---
+
+### L3-1. Reaching Level 3
+
+**How to verify:**
+- Clear Level 1 and Level 2 (shoot all invaders in each).
+- **Expected:**
+  - The HUD at the top of the canvas displays `LEVEL 3`.
+  - A fresh 5×11 invader grid appears at the top of the canvas.
+  - Four green shield bunkers are visible across the lower portion of the
+    canvas (approximately 80% of the canvas height).
+  - No console errors are visible in DevTools.
+
+---
+
+### L3-2. Bunker rendering
+
+**How to verify:**
+- At the start of Level 3, inspect the four bunkers visually.
+- **Expected:**
+  - Four bunkers are evenly distributed horizontally across the canvas
+    (centres at approximately 15%, 38%, 62%, and 85% of canvas width).
+  - Each bunker is a 4-column × 4-row grid of solid green (`#00FF00`)
+    squares, each approximately 8 px wide with a 1 px gap between cells.
+  - Bunkers appear at approximately 80% of the canvas height (y ≈ 717 px).
+
+---
+
+### L3-3. Bunker erosion — player bullet
+
+**How to verify:**
+- Move the player ship so it is directly beneath one of the bunkers.
+- Fire a bullet upward into the bunker.
+- **Expected:**
+  - The bullet stops when it intersects the first bunker cell it encounters.
+  - Exactly one cell is removed from the bunker (the cell now appears absent
+    on the next frame).
+  - The surrounding cells are unaffected.
+  - Fire repeatedly into the same bunker and observe individual cells
+    disappearing one at a time.
+
+---
+
+### L3-4. Bunker erosion — enemy bullet
+
+**How to verify:**
+- Allow enemy invaders to fire bullets downward.
+- Position or wait for enemy bullets to pass through a bunker.
+- **Expected:**
+  - Each enemy bullet that hits a bunker cell removes exactly that one cell
+    and is consumed (the bullet disappears).
+  - The bunker visibly erodes from the top as enemy bullets rain down.
+
+---
+
+### L3-5. Fully eroded bunker
+
+**How to verify:**
+- Destroy all 16 cells of one bunker (fire repeatedly into it from below;
+  let enemy fire hit it from above).
+- **Expected:**
+  - When all 16 cells are removed, no green cells are visible for that bunker.
+  - Player bullets and enemy bullets pass through the bunker's former
+    location without being consumed.
+  - No console errors occur related to the destroyed bunker.
+
+---
+
+### L3-6. Formation sweep before split
+
+**How to verify:**
+- At the start of Level 3, watch the invader formation.
+- **Expected:**
+  - The 5×11 grid sweeps left and right in the classic Space Invaders
+    style (same as Level 1).
+  - When the formation reaches the right or left canvas edge, it drops
+    down by 24 px and reverses direction.
+  - No split occurs while fewer than 28 invaders have been killed.
+
+---
+
+### L3-7. Formation split trigger
+
+**How to verify:**
+- Count your kills as you shoot invaders.
+- **Expected:**
+  - When your kill count reaches exactly **28** (the 28th invader you destroy),
+    the formation splits into two independent halves.
+  - The left half (columns 0–5, i.e. 6 columns including column 5) begins
+    moving **left**.
+  - The right half (columns 6–10, i.e. 5 columns) begins moving **right**.
+  - The split happens exactly once, even if you continue shooting.
+
+**Console verification:**
+```js
+// After the split fires, open DevTools and check that there are two
+// independent sub-formations rather than one combined formation.
+// You can observe this visually: the two halves move in opposite directions
+// simultaneously after the 28th kill.
+```
+
+---
+
+### L3-8. Independent sub-formation sweeps after split
+
+**How to verify:**
+- After the split, observe both halves independently.
+- **Expected:**
+  - The left sub-formation reverses direction when its **own** rightmost
+    surviving invader reaches the left canvas edge (independent of the right
+    half's position).
+  - The right sub-formation reverses direction when its **own** leftmost
+    surviving invader reaches the right canvas edge.
+  - If one sub-formation is fully destroyed, the other continues sweeping
+    independently.
+
+---
+
+### L3-9. Both halves fire after split
+
+**How to verify:**
+- After the formation splits, do not shoot any more invaders.
+- **Expected:**
+  - Red enemy bullets appear from both the left sub-formation and the right
+    sub-formation.
+  - Both halves independently fire at the player.
+
+---
+
+### L3-10. Level-complete condition
+
+**How to verify:**
+- Shoot all remaining invaders in both sub-formations.
+- **Expected:**
+  - The level-complete callback fires **only** when the last invader across
+    both halves is destroyed (zero remaining in both left and right).
+  - The game advances to the next scene (or logs "Level complete" if wired
+    to console).
+  - Destroying all invaders in one half alone does **not** trigger the
+    level-complete callback.
+
+---
+
+### L3-11. Bunkers remain active after split
+
+**How to verify:**
+- After the formation split (28+ kills), continue firing bullets into bunkers.
+- Allow enemy bullets from both sub-formations to hit bunkers.
+- **Expected:**
+  - Bunker cell erosion continues to work correctly from both player bullets
+    and enemy bullets from both sub-formations.
+  - No regression in bunker collision detection after the split event.
+
+---
+
+### L3-12. No console errors
+
+**How to verify:**
+- Open `index.html` via `file://` in Chrome or Firefox.
+- Open DevTools → Console.
+- Play through Level 3 (trigger the split, erode bunkers, destroy all invaders).
+- **Expected:** Zero console errors attributable to `level3.js` at any point
+  during play.
+
+---
+
 ## File Structure
 
 ```
@@ -297,6 +470,7 @@ player.js       — player ship
 invaders.js     — 11×5 invader grid, draw
 level1.js       — Level 1 logic (movement, edge-detect, life-loss, level-clear)
 level2.js       — Level 2 logic (enemy fire, UFO, invulnerability)
+level3.js       — Level 3 logic (bunkers, formation split)
 collision.js    — AABB collision detection
 explosion.js    — explosion effects
 input.js        — keyboard input
@@ -314,5 +488,8 @@ score.js        — score state
   Level 1 drives movement through `updateLevel1(dt)` called by the game loop.
 - `level2.js` follows the plain-object level protocol `{ init, update, draw }`
   and is driven by `game.js` when `currentScene === 'level2'`.
+- `level3.js` exports `level3 = { start, stop, update, draw }`. Call
+  `level3.start(canvas, ctx, onLevelComplete)` to launch Level 3. It owns its
+  own `requestAnimationFrame` loop and is entirely self-contained.
 - `game.js` exports `transitionTo`, `resetGame`, `checkGameOver`, `renderGameOver`,
   and `drawHUD` so future level modules can call them without circular imports.
