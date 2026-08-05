@@ -3,8 +3,8 @@
 import { CANVAS_WIDTH, CANVAS_HEIGHT, STARTING_LIVES } from './gameConfig.js';
 import { initInput } from './input.js';
 import { Player } from './player.js';
-import { initInvaders, updateInvaders, drawInvaders } from './invaders.js';
 import { checkCollisions } from './collision.js';
+import { init as level1Init, update as level1Update, render as level1Render } from './level1.js';
 
 // ---------------------------------------------------------------------------
 // HUD state — exported so sibling modules can read and mutate it.
@@ -13,6 +13,7 @@ export const hudState = {
   score:   0,
   lives:   STARTING_LIVES,
   hiScore: 0,
+  level:   1,
 };
 
 // ---------------------------------------------------------------------------
@@ -51,6 +52,14 @@ let   accumulator   = 0;                // leftover time carried between frames
 let   lastTimestamp = null;             // previous rAF timestamp (ms)
 
 // ---------------------------------------------------------------------------
+// Level initialisation helper
+// ---------------------------------------------------------------------------
+function startLevel() {
+  hudState.level = 1;
+  level1Init(ctx, hudState);
+}
+
+// ---------------------------------------------------------------------------
 // ENTER key — drives every scene transition
 // ---------------------------------------------------------------------------
 window.addEventListener('keydown', (e) => {
@@ -64,7 +73,7 @@ window.addEventListener('keydown', (e) => {
 
     // Initialise game objects
     player = new Player();
-    initInvaders();
+    startLevel();
     return;
   }
 
@@ -90,7 +99,21 @@ function update(dt) {
     player.update(dt);
   }
 
-  updateInvaders();
+  // Advance the current level (dt converted to ms for level modules).
+  const prevLevel = hudState.level;
+  level1Update(dt * 1000);
+
+  // Handle level transition: level1 sets hudState.level = 2 when cleared.
+  if (hudState.level !== prevLevel) {
+    // For now, Level 2 is not yet implemented — return to Title with a win
+    // note.  When level2.js is added, replace this block with level2Init().
+    if (hudState.score > hudState.hiScore) {
+      hudState.hiScore = hudState.score;
+    }
+    currentScene = SCENE.TITLE;
+    player = null;
+    return;
+  }
 
   // Collision pass: after update, before draw
   if (player) {
@@ -146,7 +169,8 @@ function renderPlaying(ctx) {
   ctx.fillStyle = '#000';
   ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
-  drawInvaders(ctx);
+  // Delegate invader drawing and level HUD to the active level module.
+  level1Render(ctx);
 
   if (player) {
     player.draw(ctx);
