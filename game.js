@@ -56,9 +56,21 @@ export function registerLevel(hooks) {
 /**
  * transitionTo(levelId)
  * Transitions to the named level or scene.
- * Currently supports: 'level1', 'level2', 'level3', 'gameover'
+ * Currently supports: 'level1', 'level2', 'level3', 'level4', 'gameover'
  */
 export function transitionTo(levelId) {
+  if (levelId === 'level4') {
+    registeredLevel = null;
+    hudState.level = 4;
+    // Re-initialise player and core systems so boss level starts clean
+    player = new Player();
+    enemyBullets = [];
+    initExplosions();
+    import('./boss.js').catch(() => {
+      enterGameOver();
+    });
+    return;
+  }
   if (levelId === 'level3') {
     registeredLevel = null;
     hudState.level = 3;
@@ -82,6 +94,10 @@ export function transitionTo(levelId) {
   if (levelId === 'level1') {
     registeredLevel = null;
     hudState.level = 1;
+    // Re-initialise player and core systems so level1 starts clean
+    player = new Player();
+    enemyBullets = [];
+    initExplosions();
     import('./level1.js').catch(() => {
       console.warn('level1.js not found');
     });
@@ -147,7 +163,7 @@ window.addEventListener('keydown', (e) => {
   } else if (currentScene === 'gameover') {
     enterTitle();
   }
-  // ENTER has no effect during 'playing'
+  // ENTER has no effect during 'playing' (levels handle their own Enter)
 });
 
 // ---------------------------------------------------------------------------
