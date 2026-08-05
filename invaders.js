@@ -3,20 +3,22 @@
 import { CANVAS_WIDTH } from './gameConfig.js';
 
 // ---------------------------------------------------------------------------
-// Named constants
+// Named constants — exported so level modules can compute layout geometry
+// without redeclaring them.
 // ---------------------------------------------------------------------------
 export const POINTS_PER_KILL = 10;
+export const INVADER_WIDTH   = 30;   // px
+export const INVADER_HEIGHT  = 20;   // px
+export const INVADER_GAP     = 10;   // px — same gap used horizontally and vertically
 
-const INVADER_WIDTH   = 30;   // px
-const INVADER_HEIGHT  = 20;   // px
-const H_GAP          = 10;   // horizontal gap between cells
-const V_GAP          = 10;   // vertical gap between cells
+const H_GAP          = INVADER_GAP;
+const V_GAP          = INVADER_GAP;
 const COLS           = 11;
 const ROWS           = 5;
 const FORMATION_ORIGIN_X = 50;   // left-edge x where the formation starts
 const FORMATION_ORIGIN_Y = 80;   // top-edge y where the formation starts (below HUD)
-const STEP_X         = 8;    // px moved horizontally each tick
-const DROP_Y         = 20;   // px dropped when reversing
+const STEP_X         = 8;    // px moved horizontally each tick (legacy tick-based path)
+const DROP_Y         = INVADER_HEIGHT + INVADER_GAP;  // px dropped when reversing
 const INVADER_COLOR  = '#00ccff';
 const EXPLOSION_COLOR = '#ff6600';
 const EXPLOSION_DURATION = 400; // ms
@@ -76,8 +78,10 @@ function getFormationBounds() {
 }
 
 /**
- * Advances invader formation state.
- * Called once per fixed-timestep tick from game.js.
+ * Advances invader formation state by one fixed-timestep tick.
+ * Used by the legacy game loop path (game.js direct call).
+ * Level modules that manage their own time-based stepping should call
+ * stepFormation() / dropFormation() directly instead.
  */
 export function updateInvaders() {
   if (invaders.length === 0) return;
@@ -99,6 +103,24 @@ export function updateInvaders() {
   } else {
     offsetX = nextOffsetX;
   }
+}
+
+/**
+ * Moves the entire formation horizontally by the given number of pixels.
+ * Positive dx = right, negative = left.
+ * Called by level modules that manage their own step timing.
+ * @param {number} dx
+ */
+export function stepFormation(dx) {
+  offsetX += dx;
+}
+
+/**
+ * Drops the entire formation down by one drop unit (INVADER_HEIGHT + INVADER_GAP).
+ * Called by level modules on edge-bounce detection.
+ */
+export function dropFormation() {
+  offsetY += DROP_Y;
 }
 
 /**
