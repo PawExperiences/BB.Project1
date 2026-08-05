@@ -9,8 +9,9 @@
 | `gameConfig.js` | ✅ Implemented | Game Loop & Canvas Framework |
 | `input.js` | ✅ Implemented | Input card |
 | `player.js` | ✅ Implemented | Player card |
-| `invaders.js` | ⏳ Future | Invaders card |
-| `collision.js` | ⏳ Future | Collision card |
+| `invaders.js` | ✅ Implemented | Invaders card |
+| `collisions.js` | ✅ Implemented | Collision card |
+| `explosions.js` | ✅ Implemented | Collision card |
 | `level1.js` | ⏳ Future | Level 1 card |
 | `level2.js` | ⏳ Future | Level 2 card |
 | `level3.js` | ⏳ Future | Level 3 card |
@@ -37,7 +38,7 @@ Pure ES module — named constants only, no logic:
 - **Fixed-timestep loop**: 60 update steps/second; accumulated delta capped at 0.25 s.
 - **Scene state machine**: `title` → `playing` → `gameover` → `title`.
 - **HUD**: drawn on-canvas; exports `hudState { score, lives, hiScore }` for later cards.
-- **Stub comments**: marks every future import site with the owning card.
+- **Playing scene**: initialises Player, InvaderGrid, and ExplosionPool on entry; wires collision pass before draw pass each tick.
 
 ### `input.js`
 - `initInput()` — attaches `keydown`/`keyup` listeners to `window`. Call once at startup.
@@ -51,6 +52,42 @@ Pure ES module — named constants only, no logic:
 - Shooting: `Space` fires one bullet (4 × 14 px yellow rectangle) upward at 500 px/s. Only one bullet in flight at a time; slot re-opens when bullet exits the top.
 - `draw(ctx)` renders a procedural green spaceship (rectangles + arcs) and the active bullet.
 - `player.lives` initialised to `STARTING_LIVES` (3); readable and writable by level cards.
+
+### `invaders.js`
+- Exports `InvaderGrid` class and `INVADER_W`, `INVADER_H`, `GAP` constants.
+- **Formation**: 11 columns × 5 rows = 55 invaders, each 24 × 16 px, filled `#00FF00`, with 8 px gaps.
+- **Centred**: formation starts horizontally centred on the 768 px canvas.
+- **March**: moves 8 px sideways every 30 game-loop ticks (~0.5 s at 60 fps).
+- **Edge detection**: when rightmost live invader's right edge reaches 768 px, or leftmost live invader's left edge reaches 0 px — drop 16 px downward and reverse direction.
+- **`invaderRect(inv)`**: returns `{x, y, w, h}` for a given invader in canvas space.
+- **`liveInvaders()`**: returns only invaders with `alive === true`.
+
+### `explosions.js`
+- Exports `ExplosionPool` class.
+- **`spawn(x, y)`**: adds an explosion entry `{ x, y, framesLeft: 8 }` at the dead invader's position.
+- **`tick()`**: decrements all `framesLeft` counters; removes entries that reach 0. Call before draw.
+- **`draw(ctx)`**: renders each active explosion as a 24 × 16 px filled rectangle in `#FFFF00` (yellow).
+
+### `collisions.js`
+- Exports `collide(player, invaderGrid, explosions, hudState)`.
+- **Runs before the draw pass** every tick (enforced in `game.js`).
+- **Bullet-vs-Invader**: for every live player bullet, AABB-tests against every live invader. On hit: marks invader dead, consumes bullet, spawns explosion, awards 10 points.
+- **Invader-Bullet-vs-Player**: clearly commented stub for Level 2 — no implementation.
+
+---
+
+## Running
+
+No build step, no server, no npm required.
+
+```
+# Simply open the file:
+open index.html          # macOS
+start index.html         # Windows
+xdg-open index.html      # Linux
+```
+
+Or drag `index.html` into any modern browser (Chrome, Firefox, Edge, Safari).
 
 ---
 
@@ -75,21 +112,64 @@ Open `index.html` by double-clicking it (or dragging it into a browser) so the U
   - **SCORE: 0** on the left.
   - **HI: 0** centred.
   - **LIVES: 3** on the right (in green).
-- [ ] A placeholder message `"(Press G to simulate Game Over)"` is shown mid-canvas.
 
-### 5 — Game Over transition (Playing → Game Over)
-- [ ] Pressing **G** switches to the Game Over scene **without** a page reload.
-- [ ] **"GAME OVER"** appears in large red text.
-- [ ] The final score is shown below it.
-- [ ] **"Press ENTER to restart"** appears below the score.
+### 5 — Invader formation visible
+- [ ] An **11-column × 5-row** grid of green filled rectangles is visible on the canvas.
+- [ ] Each rectangle is approximately **24 × 16 px**.
+- [ ] The formation is **horizontally centred** on the 768 px canvas.
+- [ ] There are **8 px gaps** between invaders both horizontally and vertically.
+- [ ] The player ship is visible near the bottom of the canvas.
 
-### 6 — ENTER transition (Game Over → Title)
-- [ ] Pressing **ENTER** returns to the **Title scene** (no page reload).
-- [ ] Score has been reset to 0; HI score (if any) is preserved for the session.
+### 6 — Formation march
+- [ ] Watch the formation for ~0.5 seconds — it steps **8 px sideways** approximately once every 30 frames (visually: a smooth, discrete hop roughly twice per second).
+- [ ] The direction starts moving **right**.
 
-### 7 — Background-tab behaviour
-- [ ] Switch away from the browser tab for 5+ seconds, then switch back.
-- [ ] The game does **not** stutter or fire a burst of updates on return (delta cap works).
+### 7 — Edge detection and drop
+- [ ] Wait (or watch) until the formation's right edge reaches the canvas right edge (768 px).
+- [ ] The formation **drops 16 px downward** and begins moving **left**.
+- [ ] When the formation's left edge reaches 0 px, it **drops 16 px** again and reverses to the **right**.
+- [ ] This repeats indefinitely.
+
+### 8 — Bullet fires (Space)
+- [ ] Press **Space** — a small **yellow bullet** appears above the player ship and travels upward.
+- [ ] Holding **Space** does not fire a second bullet while one is in flight.
+
+### 9 — Bullet kills invader (collision)
+- [ ] Manoeuvre the player ship under any live invader using **ArrowLeft / ArrowRight** (or **A / D**).
+- [ ] Fire with **Space**.
+- [ ] When the bullet overlaps the invader:
+  - The **invader disappears** from the canvas.
+  - The **bullet disappears** (consumed).
+  - A **yellow flash rectangle** (24 × 16 px) appears at the invader's last position.
+
+### 10 — Explosion flash duration
+- [ ] The yellow flash rectangle is visible for **approximately 8 game frames** (~0.13 s at 60 fps), then vanishes.
+- [ ] No lingering artifact remains after 8 frames.
+
+### 11 — Score increments
+- [ ] After killing one invader the HUD shows **SCORE: 10**.
+- [ ] After killing a second invader the HUD shows **SCORE: 20**.
+- [ ] Score increments by exactly **10** for each kill; it never resets mid-session.
+
+### 12 — Dead invaders excluded
+- [ ] After an invader is killed, firing another bullet through the same grid position where the dead invader was does **not** trigger a collision — the bullet passes through.
+- [ ] The dead invader's rectangle is not drawn on the canvas.
+
+### 13 — Collision pass ordering
+- [ ] (Code review) Open `game.js` and confirm that in `updatePlaying()` the call to `collide(…)` appears **before** the draw pass (`explosions.tick()` / `player.draw()` / `invaderGrid.draw()`).
+- [ ] No collision logic appears inside `invaderGrid.draw()`, `explosions.draw()`, or `player.draw()`.
+
+### 14 — Invader-bullet stub
+- [ ] Open `collisions.js` and confirm a clearly commented stub/hook for **invader-bullet-vs-player** collision exists.
+- [ ] The stub contains **no executable invader-firing logic**.
+
+### 15 — Game Over transition
+- [ ] Press **G** — the Game Over scene appears showing the current score.
+- [ ] Press **ENTER** — returns to the Title scene; score resets to 0.
+
+### 16 — No server required
+- [ ] Close the browser, re-open `index.html` by double-clicking it from the file system.
+- [ ] All of the above steps still work with a `file://` URL (no "blocked by CORS" errors).
 
 ---
 
@@ -155,56 +235,23 @@ it; it is a scratch file) with the content below, then open it from a
 </html>
 ```
 
-### 8 — `initInput()` / `isKeyHeld()`
+### 17 — `initInput()` / `isKeyHeld()`
 - [ ] Open `player-test.html` from a `file://` URL. No console errors.
 - [ ] Hold **ArrowLeft** — the on-screen label shows `ArrowLeft=true`.
 - [ ] Release **ArrowLeft** — label immediately shows `ArrowLeft=false` (no key-repeat lag).
 - [ ] Same check for **ArrowRight** and **Space**.
 
-### 9 — Ship renders
+### 18 — Ship renders
 - [ ] A **green spaceship shape** is visible near the bottom of the canvas.
 - [ ] The shape is built from arcs and rectangles (no external image).
-- [ ] Right-click → "Inspect" confirms no `<img>` or `drawImage` call.
 
-### 10 — Movement (ArrowLeft / ArrowRight / A / D)
+### 19 — Movement
 - [ ] Holding **ArrowLeft** moves the ship left; releasing stops it.
 - [ ] Holding **ArrowRight** moves the ship right; releasing stops it.
 - [ ] **A** and **D** produce the same result as the arrow keys.
-- [ ] The ship cannot be moved off the left edge (left edge stays ≥ 0).
-- [ ] The ship cannot be moved off the right edge (right edge stays ≤ 768).
+- [ ] The ship cannot be moved off the left or right edge.
 
-### 11 — Speed calibration (200 px/s)
-- [ ] Start the ship somewhere in the middle of the canvas.
-- [ ] Hold **ArrowRight** for exactly **1 second** (use the browser's performance timer or a stopwatch).
-- [ ] The `x=` readout in the HUD increases by approximately **200 px** (±2 px acceptable).
-
-### 12 — Shooting (Space)
+### 20 — Shooting
 - [ ] Press **Space** — a small **yellow rectangle** (bullet) appears above the ship and travels upward.
-- [ ] While the bullet is in flight, `bullet=true` shows in the HUD.
-- [ ] Press/hold **Space** repeatedly while the bullet is visible — only **one** bullet exists at a time (second bullet is not created).
-- [ ] The bullet disappears once it exits the top of the canvas.
-- [ ] Immediately after the bullet disappears, pressing **Space** fires a **new** bullet.
-
-### 13 — Lives counter
-- [ ] The HUD shows `lives=3` on load.
-- [ ] In the browser console, type: `/* no direct access from devtools module scope — see below */`.
-- [ ] Alternatively, add `window._player = player;` temporarily in the test script, then in DevTools Console run `_player.lives = 2;` — the HUD immediately shows `lives=2`, confirming the property is writable.
-
-### 14 — No server required
-- [ ] Close the browser, re-open `player-test.html` by double-clicking it from the file system.
-- [ ] All of the above steps still work with a `file://` URL (no "blocked by CORS" or "not allowed to load local resource" errors).
-
----
-
-## Running
-
-No build step, no server, no npm required.
-
-```
-# Simply open the file:
-open index.html          # macOS
-start index.html         # Windows
-xdg-open index.html      # Linux
-```
-
-Or drag `index.html` into any modern browser (Chrome, Firefox, Edge, Safari).
+- [ ] Only **one** bullet exists at a time.
+- [ ] The bullet disappears once it exits the top of the canvas; a new one can then be fired.

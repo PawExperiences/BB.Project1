@@ -1,12 +1,13 @@
 // game.js — Game loop, scene state machine, and HUD for Space Invaders
 
 import { CANVAS_WIDTH, CANVAS_HEIGHT, STARTING_LIVES } from './gameConfig.js';
+import { initInput } from './input.js';         // Input card
+import { Player }    from './player.js';         // Player card
+import { InvaderGrid } from './invaders.js';     // Invaders card
+import { ExplosionPool } from './explosions.js'; // Explosions
+import { collide }   from './collisions.js';     // Collision card
 
 // Future card imports (do NOT create these files here — they are added by later cards):
-// import { initInput, isKeyPressed, consumeKey } from './input.js';     // Added by: Input card
-// import { createPlayer, updatePlayer, renderPlayer } from './player.js'; // Added by: Player card
-// import { createInvaders, updateInvaders, renderInvaders } from './invaders.js'; // Added by: Invaders card
-// import { checkCollisions } from './collision.js';                      // Added by: Collision card
 // import { loadLevel1 } from './level1.js';                              // Added by: Level 1 card
 // import { loadLevel2 } from './level2.js';                              // Added by: Level 2 card
 // import { loadLevel3 } from './level3.js';                              // Added by: Level 3 card
@@ -28,6 +29,22 @@ export const hudState = {
 };
 
 // ---------------------------------------------------------------------------
+// Playing-scene entities (created fresh each time the Playing scene starts)
+// ---------------------------------------------------------------------------
+let player      = null;
+let invaderGrid = null;
+let explosions  = null;
+
+function initPlayingScene() {
+  initInput(); // safe to call multiple times — listeners accumulate but are idempotent
+  player      = new Player(CANVAS_WIDTH / 2, ctx);
+  invaderGrid = new InvaderGrid();
+  explosions  = new ExplosionPool();
+  hudState.score = 0;
+  hudState.lives = STARTING_LIVES;
+}
+
+// ---------------------------------------------------------------------------
 // Scene state machine
 // Scenes: 'title' | 'playing' | 'gameover'
 // ---------------------------------------------------------------------------
@@ -39,11 +56,14 @@ function transitionTo(scene) {
     hudState.score = 0;
     hudState.lives = STARTING_LIVES;
   }
+  if (scene === 'playing') {
+    initPlayingScene();
+  }
   currentScene = scene;
 }
 
 // ---------------------------------------------------------------------------
-// Input — minimal ENTER-key handling (full input system added by Input card)
+// Input — minimal ENTER-key handling (full input system initialised above)
 // ---------------------------------------------------------------------------
 const keysDown = {};
 
@@ -140,12 +160,21 @@ function updateTitle(_dt) {
   }
 }
 
-function updatePlaying(_dt) {
-  // Future cards will add: input polling, player update, invader update, collision checks.
+function updatePlaying(dt) {
+  // --- Player update (movement + shooting) ---
+  player.update(dt);
+
+  // --- Invader march ---
+  invaderGrid.update();
+
+  // --- Collision pass (MUST run before draw) ---
+  collide(player, invaderGrid, explosions, hudState);
+
+  // --- Explosion tick (decrement frame counters, remove expired) ---
+  explosions.tick();
 
   // Placeholder game-over trigger: press G to simulate game over
   if (goKeyJustPressed()) {
-    // Update hi-score before transitioning
     if (hudState.score > hudState.hiScore) {
       hudState.hiScore = hudState.score;
     }
@@ -199,15 +228,15 @@ function renderTitle() {
 }
 
 function renderPlaying() {
-  // Future cards will render player, invaders, bullets here.
+  // Draw order (back to front):
+  //  1. HUD
+  //  2. Invader formation
+  //  3. Explosions
+  //  4. Player ship (+ bullet)
   drawHUD();
-
-  // Placeholder hint
-  ctx.textAlign    = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillStyle    = '#555';
-  ctx.font         = '18px monospace';
-  ctx.fillText('(Press G to simulate Game Over)', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2);
+  invaderGrid.draw(ctx);
+  explosions.draw(ctx);
+  player.draw(ctx);
 }
 
 function renderGameOver() {
@@ -234,7 +263,6 @@ function renderGameOver() {
 // ---------------------------------------------------------------------------
 function drawHUD() {
   const PAD  = 16;
-  const LINE = 28;
 
   ctx.textAlign    = 'left';
   ctx.textBaseline = 'top';
