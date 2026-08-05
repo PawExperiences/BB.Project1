@@ -1,4 +1,15 @@
 // invaders.js — Invader grid: state, movement, drawing
+//
+// Public API
+//   initInvaders()          — reset grid to full 55-invader starting layout
+//   updateInvaders(dt)      — tick explosion visual timers only (called every frame)
+//   stepFormation()         — advance the formation by one march step (called by level1.js
+//                             on the interval timer)
+//   drawInvaders(ctx)       — render living invaders + explosion flashes
+//   getInvaders()           — return reference to the invaders array (for collision.js)
+//   getLivingCount()        — return the number of currently alive invaders
+//   triggerExplosion(inv)   — add an explosion flash at the invader's position
+
 import {
   CANVAS_WIDTH,
   INVADER_COLS,
@@ -17,21 +28,14 @@ import {
 // Grid state
 // ---------------------------------------------------------------------------
 
-/**
- * Each invader: { col, row, x, y, alive }
- * x and y are the top-left pixel coordinates of the cell (updated each tick
- * by adding the shared formation offset).
- */
-let invaders = [];
+/** Each invader: { col, row, x, y, alive } */
+let invaders   = [];
 
-/**
- * Active explosion effects: [{ x, y, timeLeft }]
- * timeLeft counts down in ms; the effect is drawn while timeLeft > 0.
- */
+/** Active explosion effects: [{ x, y, timeLeft }] */
 let explosions = [];
 
-// Shared formation offset (all invaders translate by this amount)
-let formationX = 0;  // cumulative px offset from the initial layout
+// Shared cumulative formation offset (all invaders translate by this amount)
+let formationX = 0;
 let formationY = 0;
 
 // Current horizontal direction: +1 = right, -1 = left
@@ -40,11 +44,10 @@ let directionX = 1;
 // ---------------------------------------------------------------------------
 // Helpers — base (initial) positions before offset is applied
 // ---------------------------------------------------------------------------
-const CELL_W = INVADER_WIDTH  + INVADER_H_GAP;
-const CELL_H = INVADER_HEIGHT + INVADER_V_GAP;
+const CELL_W = INVADER_WIDTH  + INVADER_H_GAP; // 36 + 12 = 48 px
+const CELL_H = INVADER_HEIGHT + INVADER_V_GAP; // 24 + 16 = 40 px
 
 function baseX(col) {
-  // Centre the entire formation horizontally on the canvas
   const formationWidth = INVADER_COLS * CELL_W - INVADER_H_GAP;
   const startX = (CANVAS_WIDTH - formationWidth) / 2;
   return startX + col * CELL_W;
@@ -59,10 +62,10 @@ function baseY(row) {
 // ---------------------------------------------------------------------------
 
 /**
- * (Re-)initialise the invader grid. Call at game start / restart.
+ * (Re-)initialise the invader grid. Call at game start / level reset.
  */
 export function initInvaders() {
-  invaders = [];
+  invaders   = [];
   explosions = [];
   formationX = 0;
   formationY = 0;
@@ -82,19 +85,33 @@ export function initInvaders() {
 }
 
 /**
- * Update formation movement and explosion timers.
- * @param {number} dt - Delta time in milliseconds (game loop passes UPDATE_STEP ~16.67 ms)
+ * Tick explosion visual timers. Called every fixed-timestep frame.
+ * Does NOT move the formation — formation stepping is done by stepFormation().
+ *
+ * @param {number} dt - Delta time in milliseconds
  */
 export function updateInvaders(dt) {
-  // --- Move formation ---
+  for (const exp of explosions) {
+    exp.timeLeft -= dt;
+  }
+  explosions = explosions.filter(exp => exp.timeLeft > 0);
+}
+
+/**
+ * Advance the formation by exactly one march step.
+ * Called by level1.js when the interval-based step timer elapses.
+ *
+ * Edge detection: when the leading edge of the formation reaches a canvas
+ * boundary, the formation drops INVADER_DROP_Y px and reverses direction
+ * instead of translating horizontally.
+ */
+export function stepFormation() {
   const livingInvaders = invaders.filter(inv => inv.alive);
   if (livingInvaders.length === 0) return;
 
-  // Tentative step
   const step = INVADER_STEP_X * directionX;
-
-  // Find leading edge in the current direction
   let hitEdge = false;
+
   if (directionX === 1) {
     // Moving right — check rightmost edge of rightmost living invader
     const maxRight = Math.max(...livingInvaders.map(inv => inv.x + INVADER_WIDTH));
@@ -110,25 +127,19 @@ export function updateInvaders(dt) {
   }
 
   if (hitEdge) {
-    // Drop down and reverse
+    // Drop and reverse
     formationY += INVADER_DROP_Y;
     directionX  = -directionX;
   } else {
     formationX += step;
   }
 
-  // Apply cumulative offset to all living invaders
+  // Apply cumulative offset to every invader (alive or dead, so dead ones
+  // remain position-accurate for any future reference, though they aren't drawn)
   for (const inv of invaders) {
     inv.x = baseX(inv.col) + formationX;
     inv.y = baseY(inv.row) + formationY;
   }
-
-  // --- Tick explosions ---
-  for (const exp of explosions) {
-    exp.timeLeft -= dt;
-  }
-  // Remove expired
-  explosions = explosions.filter(exp => exp.timeLeft > 0);
 }
 
 /**
@@ -136,7 +147,7 @@ export function updateInvaders(dt) {
  * @param {CanvasRenderingContext2D} ctx
  */
 export function drawInvaders(ctx) {
-  // Draw living invaders
+  // Living invaders
   ctx.fillStyle = '#0cf';
   for (const inv of invaders) {
     if (!inv.alive) continue;
@@ -148,10 +159,9 @@ export function drawInvaders(ctx) {
     );
   }
 
-  // Draw explosion effects
+  // Explosion flashes
   for (const exp of explosions) {
     if (exp.timeLeft <= 0) continue;
-    // Flash: alternating yellow/orange rectangle + X cross-hair
     ctx.fillStyle = '#ff0';
     ctx.fillRect(
       Math.round(exp.x),
@@ -162,25 +172,34 @@ export function drawInvaders(ctx) {
     ctx.strokeStyle = '#f80';
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.moveTo(Math.round(exp.x),                         Math.round(exp.y));
-    ctx.lineTo(Math.round(exp.x + INVADER_WIDTH),         Math.round(exp.y + INVADER_HEIGHT));
-    ctx.moveTo(Math.round(exp.x + INVADER_WIDTH),         Math.round(exp.y));
-    ctx.lineTo(Math.round(exp.x),                         Math.round(exp.y + INVADER_HEIGHT));
+    ctx.moveTo(Math.round(exp.x),                 Math.round(exp.y));
+    ctx.lineTo(Math.round(exp.x + INVADER_WIDTH), Math.round(exp.y + INVADER_HEIGHT));
+    ctx.moveTo(Math.round(exp.x + INVADER_WIDTH), Math.round(exp.y));
+    ctx.lineTo(Math.round(exp.x),                 Math.round(exp.y + INVADER_HEIGHT));
     ctx.stroke();
   }
 }
 
 /**
- * Return a reference to the internal invaders array for use by the collision module.
- * @returns {Array<{col, row, x, y, alive}>}
+ * Return a reference to the internal invaders array.
+ * Used by collision.js to iterate living invaders.
+ * @returns {Array<{col:number, row:number, x:number, y:number, alive:boolean}>}
  */
 export function getInvaders() {
   return invaders;
 }
 
 /**
+ * Return the count of currently alive invaders.
+ * @returns {number}
+ */
+export function getLivingCount() {
+  return invaders.filter(inv => inv.alive).length;
+}
+
+/**
  * Trigger an explosion visual at the given invader's position.
- * Called by the collision module after marking the invader dead.
+ * Called by collision.js after marking the invader dead.
  * @param {{ x: number, y: number }} invader
  */
 export function triggerExplosion(invader) {
