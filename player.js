@@ -4,20 +4,22 @@ import { CANVAS_WIDTH, CANVAS_HEIGHT, PLAYER_SPEED, BULLET_SPEED, STARTING_LIVES
 import { isKeyHeld } from './input.js';
 
 // Ship dimensions (used for clamping and drawing)
-const SHIP_WIDTH  = 40;
-const SHIP_HEIGHT = 32;
+export const SHIP_WIDTH  = 40;
+export const SHIP_HEIGHT = 32;
 
 // Bullet dimensions
-const BULLET_WIDTH  = 4;
-const BULLET_HEIGHT = 12;
+export const BULLET_WIDTH  = 4;
+export const BULLET_HEIGHT = 12;
 
 /**
  * Player class
  *
  * Public API:
- *   update(dt)   — call each fixed-timestep tick (dt in seconds)
- *   draw(ctx)    — call each render frame
- *   lives        — readable integer; initialised from STARTING_LIVES
+ *   update(dt)      — call each fixed-timestep tick (dt in seconds)
+ *   draw(ctx)       — call each render frame
+ *   lives           — readable integer; initialised from STARTING_LIVES
+ *   getBullet()     — returns the current bullet object or null
+ *   clearBullet()   — removes the bullet (called by collision system)
  */
 export class Player {
   constructor() {
@@ -28,6 +30,29 @@ export class Player {
     this.lives = STARTING_LIVES;
 
     // Bullet state — null means no bullet in flight
+    this._bullet = null;
+  }
+
+  /**
+   * getBullet()
+   * Returns the current bullet with normalised width/height fields,
+   * or null if no bullet is in flight.
+   */
+  getBullet() {
+    if (this._bullet === null) return null;
+    return {
+      x:      this._bullet.x,
+      y:      this._bullet.y,
+      width:  BULLET_WIDTH,
+      height: BULLET_HEIGHT,
+    };
+  }
+
+  /**
+   * clearBullet()
+   * Deactivates the current bullet (called by the collision system on hit).
+   */
+  clearBullet() {
     this._bullet = null;
   }
 
