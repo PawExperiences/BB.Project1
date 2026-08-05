@@ -14,6 +14,7 @@ export const hudState = {
   score: 0,
   lives: STARTING_LIVES,
   hiScore: 0,
+  level: 0,
 };
 
 // ---------------------------------------------------------------------------
@@ -28,7 +29,7 @@ canvas.height = CANVAS_HEIGHT;
 // ---------------------------------------------------------------------------
 // Game-object instances (created fresh on enterPlaying)
 // ---------------------------------------------------------------------------
-let player = null;
+export let player = null;
 
 // Enemy bullets — empty array until Level 2 wires in shooting
 let enemyBullets = [];
@@ -39,6 +40,51 @@ let enemyBullets = [];
 initInput();
 
 // ---------------------------------------------------------------------------
+// Level registry — levels register their update/render hooks here
+// ---------------------------------------------------------------------------
+let registeredLevel = null;
+
+/**
+ * registerLevel({ update, render })
+ * Called by a level module to hook into the game loop.
+ * Only one level is active at a time.
+ */
+export function registerLevel(hooks) {
+  registeredLevel = hooks;
+}
+
+/**
+ * transitionTo(levelId)
+ * Transitions to the named level or scene.
+ * Currently supports: 'level1', 'level2', 'gameover'
+ */
+export function transitionTo(levelId) {
+  if (levelId === 'level2') {
+    // Level 2 not yet implemented — go to game over as placeholder
+    // When level2.js is created it will call registerLevel and handle itself
+    registeredLevel = null;
+    hudState.level = 2;
+    // Import level2 dynamically if available, otherwise go to gameover
+    import('./level2.js').catch(() => {
+      enterGameOver();
+    });
+    return;
+  }
+  if (levelId === 'level1') {
+    registeredLevel = null;
+    hudState.level = 1;
+    import('./level1.js').catch(() => {
+      console.warn('level1.js not found');
+    });
+    return;
+  }
+  if (levelId === 'gameover') {
+    enterGameOver();
+    return;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Scene state machine
 // Scenes: 'title' | 'playing' | 'gameover'
 // ---------------------------------------------------------------------------
@@ -47,8 +93,10 @@ let currentScene = 'title';
 function enterTitle() {
   hudState.score = 0;
   hudState.lives = STARTING_LIVES;
+  hudState.level = 0;
   currentScene   = 'title';
   player = null;
+  registeredLevel = null;
 }
 
 function enterPlaying() {
@@ -57,6 +105,12 @@ function enterPlaying() {
   enemyBullets = [];
   initInvaders();
   initExplosions();
+  // Load level 1
+  hudState.level = 1;
+  registeredLevel = null;
+  import('./level1.js').catch((err) => {
+    console.warn('level1.js not found:', err);
+  });
 }
 
 function enterGameOver() {
@@ -64,10 +118,14 @@ function enterGameOver() {
     hudState.hiScore = hudState.score;
   }
   currentScene = 'gameover';
+  registeredLevel = null;
 }
 
 // Expose transition helpers so later cards can trigger Game Over
 export { enterTitle, enterPlaying, enterGameOver };
+
+// Export canvas context for level modules
+export { ctx, canvas };
 
 // ---------------------------------------------------------------------------
 // Keyboard input — ENTER key drives scene transitions
@@ -103,8 +161,13 @@ function update(dt) {
   // Player movement and bullet travel
   if (player) player.update(dt);
 
-  // Invader formation movement
-  updateInvaders();
+  // If a level is registered, let it update
+  if (registeredLevel && registeredLevel.update) {
+    registeredLevel.update(dt);
+  } else {
+    // Legacy: use the old invaders module directly (no level registered)
+    updateInvaders();
+  }
 
   // Explosion countdown
   updateExplosions();
@@ -117,15 +180,18 @@ function collide() {
   if (currentScene !== 'playing') return;
   if (!player) return;
 
-  const invaders = getInvaders();
+  // If a level is registered, it handles its own collisions internally
+  if (!registeredLevel) {
+    const invaders = getInvaders();
 
-  // Player bullet vs invaders
-  collideBulletsWithInvaders(
-    player,
-    invaders,
-    triggerExplosion,
-    () => { hudState.score += 10; }
-  );
+    // Player bullet vs invaders
+    collideBulletsWithInvaders(
+      player,
+      invaders,
+      triggerExplosion,
+      () => { hudState.score += 10; }
+    );
+  }
 
   // Enemy bullets vs player (stub — no enemy bullets until Level 2)
   collideEnemyBulletsWithPlayer(enemyBullets, player);
@@ -149,8 +215,13 @@ function render() {
 }
 
 function renderPlaying() {
-  // Invaders
-  renderInvaders(ctx);
+  if (registeredLevel && registeredLevel.render) {
+    // Level handles its own rendering
+    registeredLevel.render(ctx);
+  } else {
+    // Legacy: use the old invaders module directly
+    renderInvaders(ctx);
+  }
 
   // Explosions (drawn over invaders, under player)
   renderExplosions(ctx);
@@ -223,6 +294,7 @@ function renderGameOver() {
 
 // ---------------------------------------------------------------------------
 // HUD renderer — score (top-left), hi-score (top-centre), lives (top-right)
+// Level number displayed bottom-left during play
 // ---------------------------------------------------------------------------
 function renderHUD() {
   const PAD = 16;
@@ -242,4 +314,10 @@ function renderHUD() {
   // Lives — top-right
   ctx.textAlign = 'right';
   ctx.fillText(`LIVES: ${hudState.lives}`, CANVAS_WIDTH - PAD, PAD);
+
+  // Level number — shown during playing scene
+  if (currentScene === 'playing' && hudState.level > 0) {
+    ctx.textAlign = 'left';
+    ctx.fillText(`LEVEL: ${hudState.level}`, PAD, PAD + 28);
+  }
 }
