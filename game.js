@@ -1,8 +1,14 @@
 // game.js — Main entry module: fixed-timestep loop, scene state machine, HUD
 import { CANVAS_WIDTH, CANVAS_HEIGHT, STARTING_LIVES } from './gameConfig.js';
+import { initInput, isKeyHeld } from './input.js';
+import { Player } from './player.js';
+import { invaders, updateInvaders, drawInvaders } from './invaders.js';
+import { runCollisionPass } from './collision.js';
+import { updateExplosions, drawExplosions } from './explosion.js';
+import { getScore, addScore, resetScore } from './score.js';
 
 // ---------------------------------------------------------------------------
-// HUD state — exported so sibling modules (player, invaders, …) can mutate it
+// HUD state — exported so sibling modules can read it
 // ---------------------------------------------------------------------------
 export const hudState = {
   score:   0,
@@ -26,19 +32,26 @@ const canvas = document.getElementById('gameCanvas');
 const ctx    = canvas.getContext('2d');
 
 // ---------------------------------------------------------------------------
-// Input — track ENTER key (full keyboard handling is in input.js / player card)
+// Player instance
 // ---------------------------------------------------------------------------
-const keys = {};
+let player = new Player();
 
+// ---------------------------------------------------------------------------
+// Input — initialise the input module
+// ---------------------------------------------------------------------------
+initInput();
+
+// Track ENTER key for scene transitions (game.js handles this independently
+// from the player ship fire key so we do not interfere with isKeyHeld('Space')).
+const _enterKeys = {};
 window.addEventListener('keydown', (e) => {
-  if (!keys[e.code] && e.code === 'Enter') {
+  if (!_enterKeys[e.code] && e.code === 'Enter') {
     handleEnter();
   }
-  keys[e.code] = true;
+  _enterKeys[e.code] = true;
 });
-
 window.addEventListener('keyup', (e) => {
-  keys[e.code] = false;
+  _enterKeys[e.code] = false;
 });
 
 function handleEnter() {
@@ -47,8 +60,6 @@ function handleEnter() {
       transitionTo(SCENE_PLAYING);
       break;
     case SCENE_PLAYING:
-      // ENTER during gameplay is reserved for gameplay mechanics (future cards).
-      // Scene exits to Game Over when lives reach 0 — see checkGameOver().
       break;
     case SCENE_GAME_OVER:
       resetGame();
@@ -64,10 +75,37 @@ function transitionTo(scene) {
 function resetGame() {
   hudState.score = 0;
   hudState.lives = STARTING_LIVES;
+  resetScore();
+  // Rebuild the player instance so position and bullet are fresh.
+  player = new Player();
+  // Reset invader formation.
+  resetInvaders();
 }
 
-// Hook called by sibling modules (player card) whenever lives change.
-// Also checked each update tick so the Game Over transition fires automatically.
+/**
+ * resetInvaders — mark all invaders alive again and restore starting positions.
+ * Kept here to avoid circular imports; invaders.js owns the array.
+ */
+function resetInvaders() {
+  const COLS           = 11;
+  const ROWS           = 5;
+  const INVADER_WIDTH  = 24;
+  const INVADER_HEIGHT = 16;
+  const INVADER_GAP_X  = 12;
+  const INVADER_GAP_Y  = 8;
+  const START_X        = 208;
+  const START_Y        = 60;
+  let i = 0;
+  for (let row = 0; row < ROWS; row++) {
+    for (let col = 0; col < COLS; col++) {
+      invaders[i].x     = START_X + col * (INVADER_WIDTH  + INVADER_GAP_X);
+      invaders[i].y     = START_Y + row * (INVADER_HEIGHT + INVADER_GAP_Y);
+      invaders[i].alive = true;
+      i++;
+    }
+  }
+}
+
 function checkGameOver() {
   if (currentScene === SCENE_PLAYING && hudState.lives <= 0) {
     if (hudState.score > hudState.hiScore) {
@@ -80,8 +118,8 @@ function checkGameOver() {
 // ---------------------------------------------------------------------------
 // Fixed-timestep loop
 // ---------------------------------------------------------------------------
-const FIXED_DT   = 1 / 60;      // seconds per update tick (~16.67 ms)
-const MAX_DELTA  = 0.250;        // 250 ms cap — prevents burst after tab switch
+const FIXED_DT  = 1 / 60;    // seconds per update tick
+const MAX_DELTA = 0.250;      // 250 ms cap
 
 let lastTimestamp = null;
 let accumulator   = 0;
@@ -91,32 +129,43 @@ function loop(timestamp) {
     lastTimestamp = timestamp;
   }
 
-  // Raw delta in seconds, clamped to MAX_DELTA
   const rawDelta = (timestamp - lastTimestamp) / 1000;
   lastTimestamp  = timestamp;
   const delta    = Math.min(rawDelta, MAX_DELTA);
 
   accumulator += delta;
 
-  // Drain accumulator in fixed steps
   while (accumulator >= FIXED_DT) {
     update(FIXED_DT);
     accumulator -= FIXED_DT;
   }
 
   render();
-
   requestAnimationFrame(loop);
 }
 
 // ---------------------------------------------------------------------------
 // Update — called once per fixed tick
 // ---------------------------------------------------------------------------
-function update(dt) {  // eslint-disable-line no-unused-vars
+function update(dt) {
   checkGameOver();
 
-  // Future cards (player, invaders, bullets, …) call their own update logic
-  // here, driven by the dt argument (seconds).
+  if (currentScene !== SCENE_PLAYING) return;
+
+  // Player update.
+  player.update(dt);
+
+  // Invader movement.
+  updateInvaders();
+
+  // Explosion timers.
+  updateExplosions();
+
+  // COLLISION PASS — runs before render.
+  runCollisionPass(player);
+
+  // Keep hudState.score in sync with score module.
+  hudState.score = getScore();
 }
 
 // ---------------------------------------------------------------------------
@@ -161,7 +210,16 @@ function renderPlaying() {
   ctx.fillStyle = '#000';
   ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
-  // Stub: future cards draw sprites here.
+  // Draw invaders (green rectangles).
+  drawInvaders(ctx);
+
+  // Draw explosions (white flicker).
+  drawExplosions(ctx);
+
+  // Draw player ship and bullet.
+  player.draw(ctx);
+
+  // HUD overlay.
   drawHUD();
 }
 
@@ -189,7 +247,7 @@ function renderGameOver() {
 }
 
 // ---------------------------------------------------------------------------
-// HUD — drawn on canvas during Playing scene
+// HUD
 // ---------------------------------------------------------------------------
 function drawHUD() {
   const PAD = 16;
@@ -206,6 +264,6 @@ function drawHUD() {
 }
 
 // ---------------------------------------------------------------------------
-// Kick off the loop
+// Kick off
 // ---------------------------------------------------------------------------
 requestAnimationFrame(loop);
