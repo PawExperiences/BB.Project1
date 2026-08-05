@@ -1,14 +1,10 @@
 // game.js — Main entry point: fixed-timestep game loop, scene FSM, HUD.
 
 import { CANVAS_WIDTH, CANVAS_HEIGHT, STARTING_LIVES } from './gameConfig.js';
-// input.js added by "Keyboard input and the player ship"
-// player.js added by "Keyboard input and the player ship"
-// invaders.js added by "Invader grid and movement"
-// collision.js added by "Collision detection"
-// level1.js added by "Level 1"
-// level2.js added by "Level 2"
-// level3.js added by "Level 3"
-// boss.js added by "Boss battle"
+import { initInput } from './input.js';
+import { Player } from './player.js';
+import { initInvaders, updateInvaders, drawInvaders } from './invaders.js';
+import { checkCollisions } from './collision.js';
 
 // ---------------------------------------------------------------------------
 // HUD state — exported so sibling modules can read and mutate it.
@@ -37,6 +33,16 @@ const canvas = document.getElementById('gameCanvas');
 const ctx    = canvas.getContext('2d');
 
 // ---------------------------------------------------------------------------
+// Player instance
+// ---------------------------------------------------------------------------
+let player = null;
+
+// ---------------------------------------------------------------------------
+// Input
+// ---------------------------------------------------------------------------
+initInput();
+
+// ---------------------------------------------------------------------------
 // Fixed-timestep constants
 // ---------------------------------------------------------------------------
 const FIXED_STEP    = 1 / 60;           // seconds per update tick
@@ -55,6 +61,10 @@ window.addEventListener('keydown', (e) => {
     hudState.score = 0;
     hudState.lives = STARTING_LIVES;
     currentScene   = SCENE.PLAYING;
+
+    // Initialise game objects
+    player = new Player();
+    initInvaders();
     return;
   }
 
@@ -64,6 +74,7 @@ window.addEventListener('keydown', (e) => {
       hudState.hiScore = hudState.score;
     }
     currentScene = SCENE.TITLE;
+    player = null;
     return;
   }
 });
@@ -75,12 +86,18 @@ window.addEventListener('keydown', (e) => {
 function update(dt) {
   if (currentScene !== SCENE.PLAYING) return;
 
-  // Future cards will hook their update logic here via the imported modules.
-  // e.g. updatePlayer(dt);   // player.js
-  //      updateInvaders(dt); // invaders.js
-  //      checkCollisions();  // collision.js
+  if (player) {
+    player.update(dt);
+  }
 
-  // Demo: trigger GAME_OVER when lives reach 0 (sibling cards will drive this).
+  updateInvaders();
+
+  // Collision pass: after update, before draw
+  if (player) {
+    checkCollisions(player);
+  }
+
+  // Trigger GAME_OVER when lives reach 0
   if (hudState.lives <= 0) {
     currentScene = SCENE.GAME_OVER;
   }
@@ -129,9 +146,11 @@ function renderPlaying(ctx) {
   ctx.fillStyle = '#000';
   ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
-  // Future cards render their entities here.
-  // e.g. renderPlayer(ctx);   // player.js
-  //      renderInvaders(ctx); // invaders.js
+  drawInvaders(ctx);
+
+  if (player) {
+    player.draw(ctx);
+  }
 
   renderHUD(ctx);
 }

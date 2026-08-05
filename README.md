@@ -25,13 +25,13 @@ A hand-crafted browser Space Invaders game built with plain HTML, CSS, and ES mo
 | `game.js` | Fixed-timestep loop, scene FSM (Title / Playing / Game Over), canvas HUD, `hudState` export |
 | `input.js` | Keyboard held-key tracker (`initInput`, `isKeyHeld`) |
 | `player.js` | Player ship: movement, single-bullet firing, procedural drawing, lives counter |
+| `invaders.js` | 11×5 invader formation: creation, step-and-drop movement, explosion flashes, rendering |
+| `collision.js` | AABB collision pass: player bullets vs living invaders, score increment |
 
 ### Planned (owned by sibling cards)
 
 | File | Owning Card |
 |---|---|
-| `invaders.js` | "Invader grid and movement" |
-| `collision.js` | "Collision detection" |
 | `level1.js` | "Level 1" |
 | `level2.js` | "Level 2" |
 | `level3.js` | "Level 3" |
@@ -47,66 +47,99 @@ A hand-crafted browser Space Invaders game built with plain HTML, CSS, and ES mo
 - **Scene FSM:** `TITLE → PLAYING → GAME_OVER → TITLE`. ENTER drives every transition.
 - **Player position convention:** `player.x` / `player.y` is the **top-left corner** of the ship's 40×32 px bounding box.
 - **Single-bullet lock:** only one bullet may be in flight at a time. A new bullet cannot be fired until the previous one either hits something or exits the top of the canvas.
+- **`POINTS_PER_KILL = 10`** is exported from `invaders.js` and is the single named constant for score-per-kill.
+- **Invader formation:** 11 columns × 5 rows, each cell 30×20 px, 10 px gaps. The formation steps sideways 8 px per tick; when the leading edge hits a canvas boundary it drops 20 px and reverses.
+- **AABB collision:** `collision.js` performs axis-aligned bounding-box tests between the player's bullet and every living invader after each update and before each render.
+- **Explosion flashes:** orange 30×20 px rectangles appear at the kill site for 400 ms, managed in `invaders.js`.
 
 ---
 
-## Manual Verification Steps
+## Manual Verification Checklist
 
-Open `index.html` in a browser (Chrome, Firefox, or Edge) and verify each point:
+Open `index.html` in a browser (Chrome, Firefox, or Edge — must support ES modules). Verify each item:
+
+### General / Setup
+
+1. **No console errors** — open DevTools (F12) → Console; it must be clean on load.
+2. **Title scene** — the canvas shows "SPACE INVADERS" and "Press ENTER to start".
+3. **Scene transition** — pressing **Enter** moves to the Playing scene; URL bar is unchanged.
+
+---
+
+### Formation Rendering
+
+4. **55 invaders visible at game start** — after pressing Enter, count the grid: 11 columns × 5 rows of cyan (`#00ccff`) filled rectangles, each exactly 30 px wide × 20 px tall.
+5. **Correct gaps** — visually confirm approximately 10 px horizontal and vertical spacing between each invader cell.
+6. **Formation position** — the formation starts near the top-left of the playing area, well below the HUD separator line.
+
+---
+
+### Step-and-Drop Movement
+
+7. **Horizontal drift** — the entire formation moves smoothly to the right (or left) as a unit each game tick.
+8. **Direction reversal** — when the right-most invader's right edge reaches the right canvas edge (768 px), the formation drops 20 px downward and begins moving left. When the left-most invader's left edge reaches the canvas left edge (0 px), it drops again and reverses back to the right.
+9. **Drop amount** — each reversal drops the formation exactly 20 px (one invader-height).
+
+---
+
+### Bullet–Invader Collision
+
+10. **Fire a bullet** — press **Space** while in the Playing scene; a yellow bullet travels upward from the player ship.
+11. **Hit detection** — fly the bullet into the invader formation; when the bullet's bounding box overlaps an invader's bounding box:
+    - The bullet disappears.
+    - The invader disappears.
+    - An orange flash rectangle appears at the invader's position.
+12. **Single hit per bullet** — one bullet destroys exactly one invader; it cannot pass through to hit a second.
+
+---
+
+### Explosion Flash
+
+13. **Orange flash appears** — at the moment of a kill, an orange (`#ff6600`) 30×20 px rectangle is visible at the invader's last position.
+14. **Flash duration** — the orange rectangle disappears after approximately 400 ms (between 300–500 ms is acceptable).
+15. **No residual artifact** — after the flash expires the cell is empty (no ghost rectangle remains).
+
+---
+
+### Score Increment
+
+16. **Score display** — the HUD at the top of the Playing canvas shows `SCORE  0` at game start.
+17. **Score increments on kill** — each invader destroyed adds exactly 10 points to the displayed score (`POINTS_PER_KILL = 10`).
+18. **Cumulative score** — destroy 3 invaders in one play; the score must read `SCORE  30`.
+19. **Score persists to Game Over** — the Game Over screen shows the correct final score matching the HUD.
+20. **Hi-score updates** — after a Game Over with a higher score than before, returning to Title and starting a new game shows the updated `HI` value.
+
+---
+
+### Dynamic Edge Detection After Kills
+
+21. **Shrinking formation** — destroy all invaders in the right-most column. The formation should now reverse direction earlier (when the new right-most column's right edge reaches the canvas boundary).
+22. **Left-edge shrink** — destroy all invaders in the left-most column; the formation reverses later when moving left (i.e. travels further left before dropping).
+
+---
+
+### Absence of Invader Bullets
+
+23. **No invader projectiles** — play for at least 30 seconds; invaders must never fire any bullet or projectile toward the player. (Invader firing is out of scope for this card.)
+24. **Inspect source** — open `invaders.js` and `collision.js` in DevTools; neither file should contain any logic for creating, moving, or detecting invader-fired bullets.
+
+---
 
 ### Game loop / canvas (from the previous card)
 
-1. **No console errors** — open DevTools (F12) → Console; it must be clean on load.
-2. **Canvas size** — the black canvas is exactly 768 px wide × 896 px tall and centred on a dark page background.
-3. **Title scene** — the canvas shows "SPACE INVADERS" and "Press ENTER to start".
-4. **Scene transition** — pressing **Enter** moves to the Playing scene without reloading the page (URL bar unchanged).
-5. **Playing scene & HUD** — the canvas shows a black field with a HUD at the top: `SCORE 0` on the left, `HI 0` in the centre, `LIVES 3` on the right.
-6. **`hudState` console test** — in DevTools console, run:
-   ```js
-   import('./game.js').then(m => { m.hudState.score = 9999; });
-   ```
-   The HUD score must update to `9999` on the next frame (no reload).
-7. **Game Over scene** — manually trigger it from the console:
-   ```js
-   import('./game.js').then(m => { m.hudState.lives = 0; });
-   ```
-   The canvas must show "GAME OVER", the score, and "Press ENTER to restart".
-8. **Return to Title** — pressing **Enter** on the Game Over screen returns to the Title scene (no reload).
-9. **Background-tab cap** — switch to another tab for 10+ seconds, return; the game must resume smoothly with at most 5 catch-up `update()` calls (no freeze or jump).
-10. **`gameConfig.js` exports** — in DevTools console:
-    ```js
-    import('./gameConfig.js').then(m => console.log(m));
-    ```
-    Must print: `{ CANVAS_WIDTH: 768, CANVAS_HEIGHT: 896, PLAYER_SPEED: 200, BULLET_SPEED: 500, STARTING_LIVES: 3 }`.
+25. **Canvas size** — the black canvas is exactly 768 px wide × 896 px tall and centred on a dark page background.
+26. **HUD layout** — Playing scene shows `SCORE 0` left, `HI 0` centre, `LIVES 3` right.
+27. **Background-tab cap** — switch to another tab for 10+ seconds, return; the game resumes smoothly with no freeze or large jump in formation position.
+28. **Game Over scene** — manually trigger via console: `import('./game.js').then(m => { m.hudState.lives = 0; })` → canvas must show "GAME OVER", the score, and "Press ENTER to restart".
+29. **Return to Title** — pressing **Enter** on Game Over returns to Title scene (no reload).
 
-### Input module (`input.js`)
+---
 
-11. **`initInput` / `isKeyHeld` exports** — in DevTools console:
-    ```js
-    import('./input.js').then(m => console.log(typeof m.initInput, typeof m.isKeyHeld));
-    ```
-    Must print `function function`.
-12. **Held-key detection** — in DevTools console:
-    ```js
-    import('./input.js').then(({ initInput, isKeyHeld }) => {
-      initInput();
-      window._isKeyHeld = isKeyHeld;
-    });
-    ```
-    Then hold **ArrowLeft** and run `_isKeyHeld('ArrowLeft')` — must return `true`. Release the key and run again — must return `false`.
+### Input / Player (from the previous card)
 
-### Player ship (`player.js`)
-
-13. **Ship appears** — wire the player into the game loop temporarily via the console:
-    ```js
-    import('./input.js').then(({ initInput }) => initInput());
-    import('./player.js').then(({ Player }) => { window._p = new Player(); });
-    ```
-    Open the Playing scene (press Enter on Title). In the console, call `_p.draw(document.getElementById('gameCanvas').getContext('2d'))` — a green spaceship shape must appear on the canvas.
-14. **Movement** — after step 13, hold **ArrowLeft** or **A**: the ship must drift left. Hold **ArrowRight** or **D**: the ship must drift right. Release the key: the ship stops.
-15. **Clamping** — hold a direction key until the ship reaches the edge; it must stop exactly at the canvas boundary and never go beyond.
-16. **Firing** — press **Space**: a yellow bullet must appear above the ship and travel upward.
-17. **Single-bullet lock** — hold **Space** while a bullet is in flight; no second bullet must appear.
-18. **Bullet recycling** — let the bullet travel off the top of the canvas; pressing **Space** again must fire a new bullet.
-19. **`lives` initialisation** — in the console: `_p.lives` must equal `3`.
-20. **Procedural drawing only** — inspect `player.js` source; it must contain `arc` and `fillRect` calls and no `drawImage` / `new Image` / `src` references.
+30. **Ship visible** — after pressing Enter, a green spaceship shape appears near the bottom of the canvas.
+31. **Movement** — hold **ArrowLeft** / **A**: ship drifts left. Hold **ArrowRight** / **D**: ship drifts right. Release: stops.
+32. **Clamping** — ship cannot move beyond canvas edges.
+33. **Firing** — press **Space**: yellow bullet appears above ship and travels upward.
+34. **Single-bullet lock** — holding Space while a bullet is in flight produces no second bullet.
+35. **Bullet recycling** — bullet that exits the top of the canvas allows firing again.
