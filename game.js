@@ -60,9 +60,12 @@ export function registerLevel(hooks) {
  */
 export function transitionTo(levelId) {
   if (levelId === 'level3') {
-    // Level 3 not yet implemented — go to game over as placeholder
     registeredLevel = null;
     hudState.level = 3;
+    // Re-initialise player and core systems so level3 starts clean
+    player = new Player();
+    enemyBullets = [];
+    initExplosions();
     import('./level3.js').catch(() => {
       enterGameOver();
     });
