@@ -28,12 +28,12 @@ A hand-crafted browser Space Invaders game built with plain HTML, CSS, and ES mo
 | `invaders.js` | 11×5 invader formation: creation, step-and-drop movement, explosion flashes, rendering |
 | `collision.js` | AABB collision pass: player bullets vs living invaders, score increment |
 | `level1.js` | Level 1: time-based marching loop, edge-bounce-and-drop, loss/win conditions, level HUD |
+| `level2.js` | Level 2: 1.5× faster formation, enemy fire, bonus UFO, hit/respawn/invulnerability |
 
 ### Planned (owned by sibling cards)
 
 | File | Owning Card |
 |---|---|
-| `level2.js` | "Level 2" |
 | `level3.js` | "Level 3" |
 | `boss.js` | "Boss battle" |
 
@@ -43,15 +43,20 @@ A hand-crafted browser Space Invaders game built with plain HTML, CSS, and ES mo
 
 - **`gameConfig.js`** is the single source of truth for all numeric constants. Every other module imports from it.
 - **`hudState`** is a named export from `game.js`. Sibling modules increment `hudState.score` on a kill, decrement `hudState.lives` on a hit, etc. Changes are reflected on the canvas on the very next frame.
+- **`hudState.playerTotalShotCount`** is incremented by `game.js` each time the player fires a new bullet, and is used by Level 2 to determine UFO score tier.
 - **Fixed timestep:** the loop runs `update()` at exactly 60 steps/second regardless of monitor refresh rate. If the tab is backgrounded and returned to, the accumulated delta is capped at 5 × (1/60) s so no burst of catch-up updates occurs.
 - **Scene FSM:** `TITLE → PLAYING → GAME_OVER → TITLE`. ENTER drives every transition.
 - **Player position convention:** `player.x` / `player.y` is the **top-left corner** of the ship's 40×32 px bounding box.
 - **Single-bullet lock:** only one bullet may be in flight at a time. A new bullet cannot be fired until the previous one either hits something or exits the top of the canvas.
 - **`POINTS_PER_KILL = 10`** is exported from `invaders.js` and is the single named constant for score-per-kill.
 - **Invader formation:** 11 columns × 5 rows, each cell 30×20 px, 10 px gaps. The formation marches sideways using a time-based step interval that scales from ~800 ms (55 invaders) down to ~100 ms (1 invader). When the leading edge hits a canvas boundary the formation drops `(INVADER_HEIGHT + INVADER_GAP) = 30 px` and reverses.
+- **Level 2 formation speed:** The same step-interval curve as Level 1, but every interval is multiplied by **0.67** (1.5× faster). At 55 invaders alive the interval is ~536 ms; at 1 alive it is ~67 ms.
 - **AABB collision:** `collision.js` performs axis-aligned bounding-box tests between the player's bullet and every living invader after each update and before each render.
 - **Explosion flashes:** orange 30×20 px rectangles appear at the kill site for 400 ms, managed in `invaders.js`.
-- **Level system:** `level1.js` owns the formation marching logic (time-based, not tick-based). `game.js` calls `level1Init/Update/Render` each frame. When `hudState.level` changes to 2, the game currently returns to the Title screen (Level 2 is a sibling card).
+- **Level system:** `level1.js` owns Level 1 formation logic. `level2.js` owns Level 2 logic. `game.js` calls the appropriate `init/update/render` functions for the active level. When Level 1 is cleared (`hudState.level` becomes 2), `game.js` calls `advanceLevel(hudState)` which calls `level2Init(ctx, state, player)` — the player's life count is **not** reset.
+- **Enemy fire (Level 2):** A global shoot timer fires at a random interval in [800, 2000] ms. On each trigger, the lowest invader in a randomly chosen non-empty column fires a bullet downward at 300 px/s.
+- **UFO (Level 2):** Spawns every 20 seconds. Alternates start side (left on first, right on second, etc.). Travels at 120 px/s. Score tier is `[50, 100, 150, 300][playerTotalShotCount % 4]`.
+- **Hit/respawn (Level 2):** Enemy bullet hits deduct one life. The player respawns at the same X position. A 2-second invulnerability window causes the ship to flash (visible/invisible every 200 ms); enemy bullets pass through without effect during this period.
 
 ---
 
@@ -101,7 +106,7 @@ Open `index.html` in a browser (Chrome, Firefox, or Edge — must support ES mod
 
 ### Level Clear Condition
 
-16. **Destroy all 55 invaders** — when the last invader is killed, `hudState.level` becomes 2 and the game returns to the Title screen (Level 2 is not yet implemented; the win transition reuses the Title scene for now).
+16. **Destroy all 55 invaders** — when the last invader is killed, the game automatically transitions to Level 2 (no level-select screen, no lives reset).
 
 ---
 
@@ -126,8 +131,8 @@ Open `index.html` in a browser (Chrome, Firefox, or Edge — must support ES mod
 
 ### HUD — Level Number
 
-23. **Level displayed** — while playing, the top-right area of the canvas shows `Level: 1` in a light blue/purple colour, below the main HUD line and above the invader formation.
-24. **No overlap** — the level label does not overlap the LIVES counter (which is at the very top-right) and does not overlap the invader formation (which starts at Y ≈ 80 px).
+23. **Level displayed** — while playing, the top-right area of the canvas shows `Level: 1` (or `Level: 2` in Level 2) in a light blue/purple colour.
+24. **No overlap** — the level label does not overlap the LIVES counter or the invader formation.
 
 ---
 
@@ -141,27 +146,73 @@ Open `index.html` in a browser (Chrome, Firefox, or Edge — must support ES mod
 
 ---
 
+### Level 2 — Formation Speed
+
+30. **Faster march** — immediately upon entering Level 2, the formation noticeably marches faster than the slowest Level 1 speed (interval is ~536 ms at 55 invaders vs ~800 ms in Level 1).
+31. **Speed curve still accelerates** — as invaders are killed in Level 2, the march continues to accelerate (same curve shape as Level 1, just 1.5× faster throughout).
+
+---
+
+### Level 2 — Enemy Fire
+
+32. **Invaders fire bullets** — within 2 seconds of entering Level 2, at least one red bullet should appear travelling downward from the formation.
+33. **Lowest-in-column** — enemy bullets always originate from the bottom of a column, never from a row above a living invader in the same column.
+34. **Bullet travels downward at 300 px/s** — time how long a bullet takes to travel the visible canvas height (896 px); it should take approximately 3 seconds.
+35. **Bullet removed on hit** — when an enemy bullet hits the player, the bullet disappears.
+36. **Bullet removed at bottom** — enemy bullets that reach the bottom of the canvas (y > 896) are removed.
+37. **Timer continues during invulnerability** — after being hit, enemy bullets continue to spawn and travel normally.
+
+---
+
+### Level 2 — Hit / Respawn / Invulnerability
+
+38. **Life deducted on hit** — when an enemy bullet hits the player, the LIVES counter decrements by 1.
+39. **Same-X respawn** — the player ship remains at the same horizontal position after being hit (no teleport).
+40. **Flashing ship** — for approximately 2 seconds after being hit, the ship flashes (alternately visible and invisible, roughly every 200 ms).
+41. **Invulnerability** — during the 2-second flash window, additional enemy bullets overlapping the player produce no life loss.
+42. **Normal hit detection resumes** — after the flash stops, the next enemy bullet to hit causes another life loss.
+43. **Game Over at 0 lives** — losing the last life in Level 2 transitions to the Game Over screen.
+
+---
+
+### Level 2 — UFO
+
+44. **UFO appears at 20 s** — approximately 20 seconds after entering Level 2, a magenta rectangle (UFO) appears at the top of the play area and travels horizontally.
+45. **Alternating sides** — the first UFO enters from the left; the second from the right; the third from the left again, and so on.
+46. **UFO speed** — the UFO takes roughly 768/120 ≈ 6.4 seconds to cross the full canvas width.
+47. **UFO exits and is removed** — a UFO that is not shot disappears when it exits the opposite edge; no ghost remains.
+48. **UFO scoring** — shoot the UFO and verify the score increment matches the expected tier:
+    - 0 total shots fired → 50 pts
+    - 1 total shot fired → 100 pts
+    - 2 total shots fired → 150 pts
+    - 3 total shots fired → 300 pts
+    - 4 total shots fired → 50 pts (wraps)
+49. **Subsequent UFO spawns** — after the 20-second mark, another UFO spawns every 20 seconds.
+
+---
+
+### Level 2 — Automatic Level Transition from Level 1
+
+50. **No level-select screen** — destroying the last invader in Level 1 immediately starts Level 2; there is no intermediate screen.
+51. **Lives unchanged** — the LIVES counter after entering Level 2 equals whatever it was at the end of Level 1.
+
+---
+
 ### Game loop / canvas
 
-30. **Canvas size** — the black canvas is exactly 768 px wide × 896 px tall and centred on a dark page background.
-31. **HUD layout** — Playing scene shows `SCORE 0` left, `HI 0` centre, `LIVES 3` right.
-32. **Background-tab cap** — switch to another tab for 10+ seconds, return; the game resumes smoothly with no freeze or large jump in formation position.
-33. **Game Over scene** — manually trigger via console: `import('./game.js').then(m => { m.hudState.lives = 0; })` → canvas must show "GAME OVER", the score, and "Press ENTER to restart".
-34. **Return to Title** — pressing **Enter** on Game Over returns to Title scene (no reload).
+52. **Canvas size** — the black canvas is exactly 768 px wide × 896 px tall and centred on a dark page background.
+53. **HUD layout** — Playing scene shows `SCORE 0` left, `HI 0` centre, `LIVES 3` right.
+54. **Background-tab cap** — switch to another tab for 10+ seconds, return; the game resumes smoothly with no freeze or large jump in formation position.
+55. **Game Over scene** — canvas shows "GAME OVER", the score, and "Press ENTER to restart".
+56. **Return to Title** — pressing **Enter** on Game Over returns to Title scene (no reload).
 
 ---
 
 ### Input / Player
 
-35. **Ship visible** — after pressing Enter, a green spaceship shape appears near the bottom of the canvas.
-36. **Movement** — hold **ArrowLeft** / **A**: ship drifts left. Hold **ArrowRight** / **D**: ship drifts right. Release: stops.
-37. **Clamping** — ship cannot move beyond canvas edges.
-38. **Firing** — press **Space**: yellow bullet appears above ship and travels upward.
-39. **Single-bullet lock** — holding Space while a bullet is in flight produces no second bullet.
-40. **Bullet recycling** — bullet that exits the top of the canvas allows firing again.
-
----
-
-### Absence of Invader Bullets
-
-41. **No invader projectiles** — play for at least 30 seconds; invaders must never fire any bullet or projectile toward the player. (Invader firing is out of scope for this card.)
+57. **Ship visible** — after pressing Enter, a green spaceship shape appears near the bottom of the canvas.
+58. **Movement** — hold **ArrowLeft** / **A**: ship drifts left. Hold **ArrowRight** / **D**: ship drifts right. Release: stops.
+59. **Clamping** — ship cannot move beyond canvas edges.
+60. **Firing** — press **Space**: yellow bullet appears above ship and travels upward.
+61. **Single-bullet lock** — holding Space while a bullet is in flight produces no second bullet.
+62. **Bullet recycling** — bullet that exits the top of the canvas allows firing again.

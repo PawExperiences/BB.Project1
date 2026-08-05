@@ -5,15 +5,17 @@ import { initInput } from './input.js';
 import { Player } from './player.js';
 import { checkCollisions } from './collision.js';
 import { init as level1Init, update as level1Update, render as level1Render } from './level1.js';
+import { init as level2Init, update as level2Update, render as level2Render } from './level2.js';
 
 // ---------------------------------------------------------------------------
 // HUD state — exported so sibling modules can read and mutate it.
 // ---------------------------------------------------------------------------
 export const hudState = {
-  score:   0,
-  lives:   STARTING_LIVES,
-  hiScore: 0,
-  level:   1,
+  score:              0,
+  lives:              STARTING_LIVES,
+  hiScore:            0,
+  level:              1,
+  playerTotalShotCount: 0,   // incremented by player.js or here on each shot
 };
 
 // ---------------------------------------------------------------------------
@@ -43,6 +45,9 @@ let player = null;
 // ---------------------------------------------------------------------------
 initInput();
 
+// Track Space key for shot counting (detect new presses, not held state)
+let spaceWasHeld = false;
+
 // ---------------------------------------------------------------------------
 // Fixed-timestep constants
 // ---------------------------------------------------------------------------
@@ -52,11 +57,20 @@ let   accumulator   = 0;                // leftover time carried between frames
 let   lastTimestamp = null;             // previous rAF timestamp (ms)
 
 // ---------------------------------------------------------------------------
-// Level initialisation helper
+// Level initialisation helpers
 // ---------------------------------------------------------------------------
 function startLevel() {
   hudState.level = 1;
   level1Init(ctx, hudState);
+}
+
+/**
+ * Called by the game loop when hudState.level transitions from 1 → 2.
+ * Hands off to Level 2 with the player's current lives intact.
+ */
+function advanceLevel(state) {
+  state.level = 2;
+  level2Init(ctx, state, player);
 }
 
 // ---------------------------------------------------------------------------
@@ -67,9 +81,10 @@ window.addEventListener('keydown', (e) => {
 
   if (currentScene === SCENE.TITLE) {
     // Reset HUD when starting a new game
-    hudState.score = 0;
-    hudState.lives = STARTING_LIVES;
-    currentScene   = SCENE.PLAYING;
+    hudState.score              = 0;
+    hudState.lives              = STARTING_LIVES;
+    hudState.playerTotalShotCount = 0;
+    currentScene                = SCENE.PLAYING;
 
     // Initialise game objects
     player = new Player();
@@ -95,27 +110,48 @@ window.addEventListener('keydown', (e) => {
 function update(dt) {
   if (currentScene !== SCENE.PLAYING) return;
 
+  // Track player shots for UFO scoring
+  if (player) {
+    const spaceHeld = isSpaceHeld();
+    const bulletActive = player.bullet !== null && player.bullet.active;
+    if (spaceHeld && !spaceWasHeld && !bulletActive) {
+      // Player just fired a new bullet
+      hudState.playerTotalShotCount += 1;
+    }
+    spaceWasHeld = spaceHeld;
+  }
+
   if (player) {
     player.update(dt);
   }
 
-  // Advance the current level (dt converted to ms for level modules).
+  // Advance the active level (dt converted to ms)
   const prevLevel = hudState.level;
-  level1Update(dt * 1000);
 
-  // Handle level transition: level1 sets hudState.level = 2 when cleared.
-  if (hudState.level !== prevLevel) {
-    // For now, Level 2 is not yet implemented — return to Title with a win
-    // note.  When level2.js is added, replace this block with level2Init().
-    if (hudState.score > hudState.hiScore) {
-      hudState.hiScore = hudState.score;
+  if (hudState.level === 1) {
+    level1Update(dt * 1000);
+
+    // Handle Level 1 → Level 2 transition
+    if (hudState.level !== prevLevel && hudState.level === 2) {
+      advanceLevel(hudState);
+      return;
     }
-    currentScene = SCENE.TITLE;
-    player = null;
-    return;
+  } else if (hudState.level === 2) {
+    level2Update(dt * 1000);
+
+    // If level2 sets level to 3 (cleared), handle as win for now
+    if (hudState.level !== prevLevel) {
+      if (hudState.score > hudState.hiScore) {
+        hudState.hiScore = hudState.score;
+      }
+      currentScene = SCENE.TITLE;
+      player = null;
+      return;
+    }
   }
 
-  // Collision pass: after update, before draw
+  // Collision pass: player bullet vs invaders (handles both levels since
+  // getLivingInvaders() is shared)
   if (player) {
     checkCollisions(player);
   }
@@ -124,6 +160,14 @@ function update(dt) {
   if (hudState.lives <= 0) {
     currentScene = SCENE.GAME_OVER;
   }
+}
+
+// Small helper: check if Space is currently held using the input module.
+// Avoids importing isKeyHeld at module scope if not already done — we inline it
+// via a dynamic check against the held-key set via a closure-compatible approach.
+import { isKeyHeld } from './input.js';
+function isSpaceHeld() {
+  return isKeyHeld(' ');
 }
 
 // ---------------------------------------------------------------------------
@@ -169,11 +213,16 @@ function renderPlaying(ctx) {
   ctx.fillStyle = '#000';
   ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
-  // Delegate invader drawing and level HUD to the active level module.
-  level1Render(ctx);
-
-  if (player) {
-    player.draw(ctx);
+  if (hudState.level === 2) {
+    // Level 2 render handles invaders, UFO, enemy bullets, AND the player ship
+    // (with invulnerability flash).  We do NOT call player.draw separately.
+    level2Render(ctx);
+  } else {
+    // Level 1
+    level1Render(ctx);
+    if (player) {
+      player.draw(ctx);
+    }
   }
 
   renderHUD(ctx);
