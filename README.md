@@ -14,8 +14,8 @@ step.
 | `index.html` | Entry point — mounts the `<canvas>` element and loads `game.js` as an ES module. |
 | `gameConfig.js` | Shared constants (canvas size, speeds, starting lives) exported as named ES-module exports. |
 | `game.js` | Main entry module: fixed-timestep loop, three-scene state machine (Title → Playing → Game Over), canvas HUD, and the exported `hudState` object. |
-| `input.js` | Keyboard-input stub that exports `inputState`; full key handling is added in the Keyboard Input card. |
-| `player.js` | Player-ship stub; full implementation added in the Player Ship card. |
+| `input.js` | Keyboard-input module: `initInput()` attaches held-key listeners; `isKeyHeld(code)` queries live key state. |
+| `player.js` | Player ship: `Player` class with `update(dt)`, `draw(ctx)`, position, bullet state, and lives. |
 | `invaders.js` | Invader-grid stub; full implementation added in the Enemy Grid card. |
 | `collision.js` | Collision-detection stub that exports `checkCollision`; full implementation added in the Collision card. |
 
@@ -68,8 +68,8 @@ A QA tester can confirm every acceptance criterion by following these steps:
    ```js
    import('./gameConfig.js').then(m => console.log(m));
    ```
-2. **Expected:** Object contains exactly:
-   `CANVAS_WIDTH=768, CANVAS_HEIGHT=896, PLAYER_SPEED=200, BULLET_SPEED=500, STARTING_LIVES=3`.
+2. **Expected:** Object contains at minimum:
+   `CANVAS_WIDTH=768, CANVAS_HEIGHT=896, PLAYER_SPEED=200, BULLET_SPEED=500, STARTING_LIVES=3, PLAYER_LIVES=3`.
 
 ### 7. Stub modules load without errors
 1. In DevTools Console run each of the following and confirm no error is thrown:
@@ -106,6 +106,137 @@ A QA tester can confirm every acceptance criterion by following these steps:
 
 ---
 
+## Manual Verification — Keyboard Input & Player Ship
+
+The following steps verify every acceptance criterion for the
+`input.js` and `player.js` implementation.
+
+> **Setup:** Open `index.html` from a `file://` URL, press **ENTER** to enter
+> the Playing scene so the ship is visible, then follow each step.
+>
+> *The game loop and Player integration are in `game.js` — if the ship is not
+> yet wired into the loop, use the DevTools console snippets below as an
+> alternative confirmation path.*
+
+---
+
+### 11. initInput / isKeyHeld — module loads and listener attaches
+1. In DevTools Console run:
+   ```js
+   import('./input.js').then(({ initInput, isKeyHeld }) => {
+     initInput();
+     console.log('isKeyHeld ArrowLeft before press:', isKeyHeld('ArrowLeft'));
+   });
+   ```
+2. **Expected:** Logs `false` (no key held yet). No errors thrown.
+3. Call `initInput()` a second time in the console — confirm it does **not**
+   attach duplicate listeners (the console log count should not double).
+
+---
+
+### 12. Held-key tracking (not key-repeat)
+1. In DevTools Console, after running `initInput()`, hold **ArrowLeft**.
+2. While holding, run:
+   ```js
+   import('./input.js').then(({ isKeyHeld }) => console.log(isKeyHeld('ArrowLeft')));
+   ```
+3. **Expected:** Logs `true`.
+4. Release the key and run the same line again.
+5. **Expected:** Logs `false`.
+6. Confirm that holding the key for several seconds does **not** log additional
+   `true` values beyond the first keydown (i.e., key-repeat events are
+   ignored).
+
+---
+
+### 13. Ship movement — left
+1. Enter the Playing scene so the ship is drawn.
+2. Hold **ArrowLeft** (or **A**) for approximately 1 second.
+3. **Expected:** The ship moves left smoothly. Speed should be approximately
+   200 px/s (the ship's 40 px width crosses its own width in ~0.2 s).
+4. Release the key — the ship stops immediately.
+
+---
+
+### 14. Ship movement — right
+1. Hold **ArrowRight** (or **D**) for approximately 1 second.
+2. **Expected:** The ship moves right smoothly at ~200 px/s.
+3. Release the key — the ship stops immediately.
+
+---
+
+### 15. Edge clamping — left boundary
+1. Hold **ArrowLeft** or **A** continuously for at least 5 seconds.
+2. **Expected:** The ship's left edge reaches x = 0 and **stops there**.
+   It must not move off the left edge of the canvas, regardless of how long
+   the key is held.
+
+---
+
+### 16. Edge clamping — right boundary
+1. Hold **ArrowRight** or **D** continuously for at least 5 seconds.
+2. **Expected:** The ship's right edge reaches `CANVAS_WIDTH` (768 px) and
+   **stops there**.  It must not move off the right edge of the canvas.
+
+---
+
+### 17. Single-bullet constraint — firing
+1. Press **Space** once.
+2. **Expected:** A small yellow rectangle (bullet) appears at the top-centre
+   of the ship and travels upward.
+3. While the bullet is in flight, press **Space** repeatedly.
+4. **Expected:** **No second bullet appears.** Only one bullet is ever visible
+   at a time.
+
+---
+
+### 18. Bullet travel speed
+1. Fire a bullet (press **Space**).
+2. The bullet should cross the full 896 px canvas height in approximately
+   **1.79 seconds** (896 ÷ 500 px/s).
+3. **Expected:** Bullet travels upward smoothly and exits the top of the
+   canvas in roughly that time.
+
+---
+
+### 19. Bullet exit and reset
+1. Fire a bullet and wait for it to exit the top of the canvas (y < 0).
+2. **Expected:** The bullet disappears.
+3. Immediately press **Space** again.
+4. **Expected:** A new bullet fires from the ship's cannon. The single-bullet
+   constraint is enforced per flight, not permanently.
+
+---
+
+### 20. Lives initialisation
+1. In DevTools Console run:
+   ```js
+   import('./player.js').then(({ Player }) => {
+     const p = new Player();
+     console.log('lives:', p.lives);
+   });
+   ```
+2. **Expected:** Logs `lives: 3` (the value of `PLAYER_LIVES` from
+   `gameConfig.js`).
+
+---
+
+### 21. Procedural drawing — no image assets
+1. Open the **Network** tab in DevTools.
+2. Reload the page and play normally (move and shoot).
+3. **Expected:** No image files (`.png`, `.jpg`, `.svg`, `.gif`, etc.) are
+   requested. The ship and bullet are drawn entirely with canvas API calls.
+
+---
+
+### 22. ES module compatibility from file:// URL
+1. Open `index.html` directly from the filesystem (double-click or
+   `File → Open`) — **not** via `localhost`.
+2. **Expected:** The game loads and all features above work without any
+   CORS or module-loading errors in the DevTools Console.
+
+---
+
 ## Architecture Notes
 
 ### Fixed-Timestep Loop
@@ -129,6 +260,38 @@ it and mutate its fields directly:
 import { hudState } from './game.js';
 hudState.score += 10;   // award points
 hudState.lives  -= 1;   // lose a life (triggers Game Over check)
+```
+
+### Player Ship Contract
+`player.x` / `player.y` are the **top-left corner** of the 40 × 32 px ship
+bounding box.  Collision-detection cards use this box directly.
+
+```js
+import { Player } from './player.js';
+const player = new Player();
+
+// Game loop:
+player.update(dt);   // dt in seconds
+player.draw(ctx);
+
+// Collision check:
+if (player.bullet !== null) {
+  // player.bullet.x, player.bullet.y — top-left of 4×12 px bullet rect
+}
+
+// Lives:
+player.lives -= 1;   // decrement when hit (owned by level cards)
+```
+
+### Input Module Contract
+```js
+import { initInput, isKeyHeld } from './input.js';
+
+initInput();   // call once at startup (safe to call multiple times)
+
+// In update():
+if (isKeyHeld('ArrowLeft')) { /* move left */ }
+if (isKeyHeld('Space'))     { /* fire */ }
 ```
 
 ---
