@@ -75,3 +75,49 @@ Open `index.html` directly from the filesystem (double-click or use `File → Op
   import('./game.js').then(m => { m.hudState.score = 1234; });
   ```
 - [ ] The HUD score updates to **1234** on the very next rendered frame.
+
+---
+
+## Manual Verification — Keyboard Input & Player Ship
+
+Open `index.html` directly from the filesystem. Press **Enter** to reach the Playing scene, then verify:
+
+### 9. input.js — key held detection
+- [ ] Open DevTools console and run:
+  ```js
+  import('./input.js').then(m => {
+    window._isKeyHeld = m.isKeyHeld;
+  });
+  ```
+- [ ] Hold **ArrowLeft** and run `window._isKeyHeld('ArrowLeft')` in the console — it should return `true`.
+- [ ] Release the key and run it again — it should return `false`.
+
+### 10. Player ship rendering
+- [ ] *(Requires game-loop integration card to wire in player.draw — see that card's checklist.)*
+- [ ] Once wired: a green ship shape (hull rectangle + dome arc + wing nubs) is visible near the bottom of the canvas.
+- [ ] No external image files are loaded; the ship is drawn entirely with Canvas 2D calls.
+
+### 11. Horizontal movement
+- [ ] Hold **ArrowLeft** — the ship moves left smoothly.
+- [ ] Hold **KeyA** — the ship also moves left.
+- [ ] Hold **ArrowRight** — the ship moves right smoothly.
+- [ ] Hold **KeyD** — the ship also moves right.
+- [ ] The ship never moves outside the canvas edges (left edge ≥ 0, right edge ≤ 768).
+
+### 12. Single-bullet constraint
+- [ ] Press **Space** once — a yellow rectangle travels upward from the ship.
+- [ ] While that bullet is in flight, pressing **Space** again fires no additional bullet.
+- [ ] When the bullet exits the top of the canvas, pressing **Space** fires a new bullet.
+
+### 13. Lives counter
+- [ ] In DevTools console, after importing player.js:
+  ```js
+  import('./player.js').then(m => {
+    const p = new m.Player();
+    console.log(p.lives); // should print 3
+    p.lives = 2;
+    console.log(p.lives); // should print 2
+  });
+  ```
+- [ ] `p.lives` reads as `3` initially (from `STARTING_LIVES`).
+- [ ] `p.lives` can be decremented by external code.
