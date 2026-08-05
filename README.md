@@ -127,9 +127,9 @@ import('./invaders.js').then(m => {
 
 **How to verify:**
 - Shoot all 55 invaders.
-- **Expected:** The game transitions away from the playing scene.
-- A `LEVEL CLEAR!` screen appears with the message `Level 2 coming soon…`.
-- No further invader movement or player input is processed.
+- **Expected:** The game transitions directly to Level 2 (no level-select screen).
+- The HUD shows `LEVEL 2` at the top centre.
+- The invader formation resets and begins moving faster.
 
 ---
 
@@ -142,6 +142,151 @@ import('./invaders.js').then(m => {
 
 ---
 
+## Level 2 — Manual Verification Checklist
+
+All steps below begin from Level 2, which is reached by clearing Level 1
+(destroying all 55 invaders). No level-select screen appears — the transition
+is automatic.
+
+---
+
+### L2-1. Auto-advance from Level 1 with no life reset
+
+**How to verify:**
+- Start a game and note your current lives count.
+- Shoot all 55 invaders in Level 1.
+- **Expected:**
+  - The scene transitions immediately to Level 2 with no level-select screen.
+  - The HUD shows `LEVEL 2`.
+  - The `LIVES` counter is **identical** to what it was the moment the last
+    Level 1 invader was destroyed — no reset.
+  - The score carries over.
+
+---
+
+### L2-2. Formation speed (≈ 1.5× faster than Level 1)
+
+**How to verify:**
+- At the start of Level 2 (all 55 alive), the step interval should be
+  approximately **536 ms** (800 ms × 0.67).
+- Time 5 formation steps with a stopwatch: total ≈ 2.7 seconds.
+- Compare: Level 1 at 55 alive is ≈ 4 seconds for 5 steps.
+- **Expected:** Level 2 is visibly and measurably faster than Level 1 at the
+  same invader count.
+
+---
+
+### L2-3. Enemy fire — invaders shoot back
+
+**How to verify:**
+- Enter Level 2 and do not shoot any invaders.
+- Wait 1–3 seconds.
+- **Expected:**
+  - A red bullet appears from one of the bottom-row invaders and travels
+    downward at a noticeable speed.
+  - Multiple bullets may be in flight simultaneously.
+  - The shooter is always from the bottom-most alive invader in its column
+    (not from the top rows while lower invaders are still alive).
+
+---
+
+### L2-4. Player hit — life loss and respawn
+
+**How to verify:**
+- Allow an enemy bullet to hit the player ship.
+- **Expected:**
+  - The LIVES counter decrements by exactly 1.
+  - The player ship immediately reappears at its default starting position
+    (horizontally centred, near the bottom of the canvas).
+  - The ship begins flashing (alternating visible/invisible every 200 ms).
+  - Flashing lasts for exactly 2 seconds, then the ship renders solid.
+
+---
+
+### L2-5. Invulnerability window
+
+**How to verify:**
+- Allow the player to be hit by an enemy bullet (ship starts flashing).
+- During the 2-second flash window, position the ship so another enemy bullet
+  would hit it.
+- **Expected:**
+  - The second bullet passes through (or simply disappears on contact) without
+    decrementing lives.
+  - Lives remain unchanged; no additional respawn occurs.
+  - After 2 seconds, the ship is solid again and `onHit` resumes normally.
+
+---
+
+### L2-6. Game over when lives reach 0
+
+**How to verify:**
+- Allow enemy bullets to deplete all remaining lives (let hits occur until
+  LIVES shows 0).
+- **Expected:**
+  - The red `GAME OVER` screen appears immediately.
+  - No further gameplay occurs.
+  - Pressing ENTER returns to the title screen.
+
+---
+
+### L2-7. UFO — appearance and timing
+
+**How to verify:**
+- Start Level 2 and wait (do not shoot invaders to keep the level alive).
+- After approximately **20 seconds**, a red saucer-shaped UFO should appear
+  at the top of the play field (above the invader formation).
+- **Expected:**
+  - The UFO enters from the **left edge** on its first appearance, travelling
+    rightward.
+  - It moves horizontally at a steady pace (120 px/s — takes about 6.4 s to
+    cross the 768 px canvas).
+  - If not shot, it exits the right edge silently and disappears.
+  - After another 20 seconds, a second UFO appears from the **right edge**,
+    travelling left.
+  - Subsequent UFOs alternate sides.
+
+---
+
+### L2-8. UFO scoring — deterministic by shot count
+
+**How to verify:**
+- The UFO score depends on `totalShotsFired % 4` at the moment of the hit:
+  - `% 4 === 0` → **50 pts**
+  - `% 4 === 1` → **100 pts**
+  - `% 4 === 2` → **150 pts**
+  - `% 4 === 3` → **300 pts**
+- To test a specific tier: count your shots carefully (each Space press when
+  no bullet is in flight increments the counter).
+- Shoot the UFO and verify the score increase in the HUD matches the expected
+  tier value.
+- **Expected:** The score jumps by exactly the tier amount the instant the UFO
+  is hit.
+
+---
+
+### L2-9. UFO — no penalty for missing
+
+**How to verify:**
+- Allow the UFO to cross the screen without shooting it.
+- **Expected:**
+  - UFO exits the opposite edge with no score change.
+  - No explosion or visual effect on exit.
+  - The 20-second timer resets; the next UFO appears 20 seconds later from the
+    opposite side.
+
+---
+
+### L2-10. Enemy bullet speed
+
+**How to verify (visual):**
+- Watch enemy bullets travel downward.
+- They should take approximately **3 seconds** to travel the full 896 px canvas
+  height (900 px ÷ 300 px/s ≈ 3 s).
+- **Expected:** Bullets travel at a moderate, fair speed — faster than the
+  player bullet (500 px/s) but clearly slower.
+
+---
+
 ## File Structure
 
 ```
@@ -151,6 +296,7 @@ gameConfig.js   — shared constants
 player.js       — player ship
 invaders.js     — 11×5 invader grid, draw
 level1.js       — Level 1 logic (movement, edge-detect, life-loss, level-clear)
+level2.js       — Level 2 logic (enemy fire, UFO, invulnerability)
 collision.js    — AABB collision detection
 explosion.js    — explosion effects
 input.js        — keyboard input
@@ -166,5 +312,7 @@ score.js        — score state
 - `level1.js` owns the timer-based step logic for Level 1. It does **not**
   call `updateInvaders()` from `invaders.js` (which was a per-tick px model).
   Level 1 drives movement through `updateLevel1(dt)` called by the game loop.
+- `level2.js` follows the plain-object level protocol `{ init, update, draw }`
+  and is driven by `game.js` when `currentScene === 'level2'`.
 - `game.js` exports `transitionTo`, `resetGame`, `checkGameOver`, `renderGameOver`,
   and `drawHUD` so future level modules can call them without circular imports.
