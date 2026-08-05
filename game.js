@@ -32,8 +32,10 @@ import { runCollisionPass } from './collision.js';
 import {
   initLevel1,
   updateLevel1,
-  LEVEL_NUMBER,
+  LEVEL_NUMBER as LEVEL1_NUMBER,
 } from './level1.js';
+
+import { Level2 } from './level2.js';
 
 // ---------------------------------------------------------------------------
 // Canvas setup
@@ -69,18 +71,23 @@ export const hudState = {
 // Scenes: 'title' | 'playing' | 'levelcomplete' | 'gameover'
 let currentScene = 'title';
 
+/** Which level is active: 1 or 2. Used for HUD label and update dispatch. */
+let currentLevel = 1;
+
+/** Level2 instance — created once, reused per game. */
+let level2Instance = null;
+
 function setScene(sceneName) {
   currentScene = sceneName;
 }
 
 // ---------------------------------------------------------------------------
-// Level-1 callbacks (defined here; passed into initLevel1)
+// Level-1 callbacks
 // ---------------------------------------------------------------------------
 
 /**
  * Called by level1.js when the formation's bottom edge reaches the player row.
  * Decrements lives, then either restarts the level or triggers game-over.
- * level1.js must NOT decrement lives or restart itself.
  */
 function onPlayerReached() {
   hudState.lives -= 1;
@@ -88,17 +95,35 @@ function onPlayerReached() {
   if (hudState.lives <= 0) {
     triggerGameOver();
   } else {
-    // Restart Level 1: formation + timers reset, breach flag cleared.
     initLevel1(player, { onPlayerReached, onLevelComplete });
   }
 }
 
 /**
- * Called by level1.js with the next level number when all invaders are cleared.
- * Level 2 is out of scope; show a level-complete holding screen for now.
+ * Called by level1.js when all invaders are cleared.
+ * Transitions immediately to Level 2 — no intermediate screen.
+ * Lives and score are preserved.
  * @param {number} _nextLevel  Always 2 from level1.js.
  */
 function onLevelComplete(_nextLevel) {
+  // Transition to Level 2 immediately — no intermediate screen.
+  currentLevel = 2;
+  clearExplosions();
+
+  if (level2Instance === null) {
+    level2Instance = new Level2(player, {
+      onLevelComplete: onLevel2Complete,
+    });
+  }
+  level2Instance.init();
+  // Stay in 'playing' scene — no scene change needed.
+}
+
+/**
+ * Called by Level2 when all its invaders are cleared.
+ * For now, show a level-complete holding screen (Level 3 is out of scope).
+ */
+function onLevel2Complete(_nextLevel) {
   setScene('levelcomplete');
 }
 
@@ -109,9 +134,11 @@ window.addEventListener('keydown', function onKey(event) {
   if (event.code !== 'Enter') return;
 
   if (currentScene === 'title') {
-    // Title → Playing
+    // Title → Playing (Level 1)
     hudState.score = 0;
     hudState.lives = STARTING_LIVES;
+    currentLevel   = 1;
+    level2Instance = null;
     clearExplosions();
     initLevel1(player, { onPlayerReached, onLevelComplete });
     setScene('playing');
@@ -120,6 +147,8 @@ window.addEventListener('keydown', function onKey(event) {
     // Game Over / Level Complete → Title
     hudState.score = 0;
     hudState.lives = STARTING_LIVES;
+    currentLevel   = 1;
+    level2Instance = null;
     setScene('title');
   }
 });
@@ -141,13 +170,26 @@ function update(dt) {
   if (currentScene !== 'playing') return;
 
   player.update(dt);
-  runCollisionPass(player);
-  updateLevel1(dt);       // step timer, formation march, breach + complete checks
-  updateExplosions();
 
-  // Safety net: catch any lives depletion not already handled by onPlayerReached.
-  if (hudState.lives <= 0 && currentScene === 'playing') {
-    triggerGameOver();
+  if (currentLevel === 1) {
+    runCollisionPass(player);
+    updateLevel1(dt);
+    updateExplosions();
+
+    // Safety net: catch lives depletion not handled by onPlayerReached.
+    if (hudState.lives <= 0 && currentScene === 'playing') {
+      triggerGameOver();
+    }
+  } else if (currentLevel === 2 && level2Instance !== null) {
+    // In Level 2 the collision pass for player bullets vs invaders still
+    // runs via runCollisionPass (which also increments score).
+    runCollisionPass(player);
+    level2Instance.update(dt);
+    updateExplosions();
+
+    if (hudState.lives <= 0 && currentScene === 'playing') {
+      triggerGameOver();
+    }
   }
 }
 
@@ -189,7 +231,18 @@ function renderPlaying() {
 
   drawInvaders(ctx);
   drawExplosions(ctx);
-  player.draw(ctx);
+
+  // In Level 2, respect the flash visibility flag for invulnerability effect.
+  const drawPlayer = (currentLevel !== 2 || level2Instance === null || level2Instance.playerVisible);
+  if (drawPlayer) {
+    player.draw(ctx);
+  }
+
+  // Level 2 draws enemy bullets and UFO.
+  if (currentLevel === 2 && level2Instance !== null) {
+    level2Instance.draw(ctx);
+  }
+
   renderHUD();
 }
 
@@ -247,7 +300,7 @@ function renderHUD() {
 
   // LEVEL — left of centre (~30 % across)
   ctx.textAlign = 'center';
-  ctx.fillText('LEVEL ' + LEVEL_NUMBER, Math.round(CANVAS_WIDTH * 0.30), lineY);
+  ctx.fillText('LEVEL ' + currentLevel, Math.round(CANVAS_WIDTH * 0.30), lineY);
 
   // BEST — centre
   ctx.fillText('BEST ' + hudState.hiScore, CANVAS_WIDTH / 2, lineY);
