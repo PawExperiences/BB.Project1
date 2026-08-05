@@ -3,8 +3,8 @@
 import { CANVAS_WIDTH, CANVAS_HEIGHT, STARTING_LIVES } from './gameConfig.js';
 import { initInput } from './input.js';         // Input card
 import { initLevel1, updateLevel1, renderLevel1 } from './level1.js'; // Level 1 card
+import { initLevel2, updateLevel2, renderLevel2 } from './level2.js'; // Level 2 card
 // Future card imports:
-// import { loadLevel2 } from './level2.js';                              // Added by: Level 2 card
 // import { loadLevel3 } from './level3.js';                              // Added by: Level 3 card
 // import { createBoss, updateBoss, renderBoss } from './boss.js';        // Added by: Boss card
 
@@ -46,11 +46,7 @@ export function transitionTo(scene) {
     initPlayingScene();
   }
   if (scene === 'level2') {
-    // Level 2 is not yet implemented — placeholder: show a "coming soon" screen
-    // or fall back to gameover. The transition call fires correctly as required.
-    // When level2.js is implemented, replace this block.
-    currentScene = 'level2';
-    return;
+    initLevel2Scene();
   }
   currentScene = scene;
 }
@@ -64,6 +60,15 @@ function initPlayingScene() {
   hudState.lives = STARTING_LIVES;
   hudState.level = 1;
   initLevel1();
+}
+
+/**
+ * Initialise Level 2 scene.
+ * Lives and score carry over from Level 1 — do not reset them here.
+ */
+function initLevel2Scene() {
+  initInput();
+  initLevel2();
 }
 
 // ---------------------------------------------------------------------------
@@ -141,7 +146,7 @@ function update(dt) {
       updateGameOver(dt);
       break;
     case 'level2':
-      updateLevel2Placeholder(dt);
+      updateLevel2Scene(dt);
       break;
   }
 }
@@ -162,11 +167,8 @@ function updateGameOver(_dt) {
   }
 }
 
-function updateLevel2Placeholder(_dt) {
-  // Level 2 not yet implemented — pressing ENTER returns to title
-  if (enterJustPressed()) {
-    transitionTo('title');
-  }
+function updateLevel2Scene(dt) {
+  updateLevel2(dt);
 }
 
 // ---------------------------------------------------------------------------
@@ -188,7 +190,7 @@ function render() {
       renderGameOver();
       break;
     case 'level2':
-      renderLevel2Placeholder();
+      renderLevel2Scene();
       break;
   }
 }
@@ -219,6 +221,11 @@ function renderPlaying() {
   renderLevel1(ctx);
 }
 
+function renderLevel2Scene() {
+  drawHUD();
+  renderLevel2(ctx);
+}
+
 function renderGameOver() {
   ctx.textAlign    = 'center';
   ctx.textBaseline = 'middle';
@@ -236,25 +243,6 @@ function renderGameOver() {
   // Restart prompt
   ctx.font = '24px monospace';
   ctx.fillText('Press ENTER to restart', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 70);
-}
-
-function renderLevel2Placeholder() {
-  ctx.textAlign    = 'center';
-  ctx.textBaseline = 'middle';
-
-  ctx.fillStyle = '#0f0';
-  ctx.font      = 'bold 48px monospace';
-  ctx.fillText('LEVEL 2', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 - 60);
-
-  ctx.fillStyle = '#fff';
-  ctx.font      = '28px monospace';
-  ctx.fillText('Coming Soon!', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2);
-
-  ctx.font = '22px monospace';
-  ctx.fillText('Score: ' + hudState.score, CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 50);
-
-  ctx.font = '20px monospace';
-  ctx.fillText('Press ENTER to return to title', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 90);
 }
 
 // ---------------------------------------------------------------------------
