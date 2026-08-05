@@ -1,5 +1,9 @@
 // game.js — Main module: fixed-timestep loop, scene state machine, HUD
 import { CANVAS_WIDTH, CANVAS_HEIGHT, STARTING_LIVES } from './gameConfig.js';
+import { initInvaders, updateInvaders, drawInvaders } from './invaders.js';
+import { checkBulletInvaderCollisions, checkInvaderBulletPlayerCollisions } from './collision.js';
+import { Player } from './player.js';
+import { initInput } from './input.js';
 
 // ---------------------------------------------------------------------------
 // Scene identifiers
@@ -25,17 +29,34 @@ export const hudState = {
 let currentScene = SCENES.TITLE;
 
 // Fixed-timestep constants
-const UPDATE_STEP = 1000 / 60;          // ~16.67 ms
+const UPDATE_STEP = 1000 / 60;           // ~16.67 ms
 const MAX_ACCUMULATOR = UPDATE_STEP * 5; // ~83 ms — delta cap
 
-let lastTimestamp  = null;
-let accumulator    = 0;
+let lastTimestamp = null;
+let accumulator   = 0;
 
 // ---------------------------------------------------------------------------
 // Canvas setup
 // ---------------------------------------------------------------------------
 const canvas = document.getElementById('gameCanvas');
 const ctx    = canvas.getContext('2d');
+
+// ---------------------------------------------------------------------------
+// Player
+// ---------------------------------------------------------------------------
+let player = null;
+
+function createPlayer() {
+  // Centre horizontally, near the bottom of the canvas
+  const startX = (CANVAS_WIDTH - 40) / 2;  // 40 = SHIP_WIDTH from player.js
+  const startY = CANVAS_HEIGHT - 80;
+  player = new Player(startX, startY);
+}
+
+// ---------------------------------------------------------------------------
+// Input init
+// ---------------------------------------------------------------------------
+initInput();
 
 // ---------------------------------------------------------------------------
 // Keyboard handling (Enter key for scene transitions; G key for game-over stub)
@@ -46,7 +67,6 @@ window.addEventListener('keydown', (e) => {
   }
 
   // Temporary hotkey: press G while PLAYING to simulate a game-over
-  // (allows manual verification per acceptance criteria)
   if (e.key === 'g' || e.key === 'G') {
     if (currentScene === SCENES.PLAYING) {
       triggerGameOver();
@@ -60,6 +80,9 @@ function handleEnterKey() {
     hudState.score = 0;
     hudState.lives = STARTING_LIVES;
     currentScene   = SCENES.PLAYING;
+    // Initialise game objects
+    createPlayer();
+    initInvaders();
   } else if (currentScene === SCENES.GAME_OVER) {
     // Return to title; hi-score already updated in triggerGameOver()
     currentScene = SCENES.TITLE;
@@ -75,11 +98,45 @@ function triggerGameOver() {
 }
 
 // ---------------------------------------------------------------------------
+// Build the bullet list the collision module needs from the player's bullet
+// ---------------------------------------------------------------------------
+function getPlayerBullets() {
+  if (!player || !player.bullet) return [];
+  const b = player.bullet;
+  // Augment with the fields collision.js expects
+  if (!('active' in b))     b.active     = true;
+  if (!('fromPlayer' in b)) b.fromPlayer = true;
+  if (!('width' in b))      b.width      = 4;   // BULLET_WIDTH from player.js
+  if (!('height' in b))     b.height     = 12;  // BULLET_HEIGHT from player.js
+  return [b];
+}
+
+// ---------------------------------------------------------------------------
 // Update — pure logic, no drawing
 // ---------------------------------------------------------------------------
-function update(/* dt */) {
-  // Placeholder: sibling cards (player, invaders, collision) will hook in here.
-  // Game-over condition will be detected here and call triggerGameOver().
+function update(dt) {
+  if (currentScene !== SCENES.PLAYING) return;
+
+  // 1. Update player (movement + bullet)
+  if (player) player.update(dt / 1000); // player.update expects seconds
+
+  // 2. Update invaders (movement + explosion timers)
+  updateInvaders(dt); // invaders.update expects ms
+
+  // 3. Collision pass — BEFORE render
+  const playerBullets = getPlayerBullets();
+  checkBulletInvaderCollisions(playerBullets, hudState);
+
+  // Deactivate player bullet if the collision pass marked it inactive
+  if (player && player.bullet && player.bullet.active === false) {
+    // Force the bullet off-screen so player.js clears it next tick
+    player.bullet.y = -9999;
+  }
+
+  // Invader-bullet-vs-player stub (no invader firing yet; called with empty list)
+  if (player) {
+    checkInvaderBulletPlayerCollisions([], player, hudState);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -116,7 +173,10 @@ function renderTitle() {
 
 function renderPlaying() {
   renderHUD();
-  // Placeholder: player.render(ctx) and invaders.render(ctx) called by sibling cards
+  // Draw invaders (includes explosion effects)
+  drawInvaders(ctx);
+  // Draw player
+  if (player) player.draw(ctx);
 }
 
 function renderGameOver() {
@@ -135,8 +195,7 @@ function renderGameOver() {
 }
 
 function renderHUD() {
-  const PAD  = 16;
-  const TOP  = PAD + 16; // baseline position from top
+  const PAD = 16;
 
   ctx.font = '20px monospace';
   ctx.textBaseline = 'top';

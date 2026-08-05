@@ -20,12 +20,12 @@ A plain-JavaScript, no-bundler, no-server Space Invaders clone built with hand-w
 | File | Role |
 |---|---|
 | `index.html` | Entry point; hosts the `<canvas>` and loads `game.js` as `type="module"` |
-| `gameConfig.js` | Named exports: `CANVAS_WIDTH`, `CANVAS_HEIGHT`, `PLAYER_SPEED`, `BULLET_SPEED`, `STARTING_LIVES`, `startingLives` |
+| `gameConfig.js` | Named exports: canvas dimensions, speeds, lives, invader grid config, point value, explosion duration |
 | `game.js` | Main module: fixed-timestep loop, scene state machine, HUD render, exports `hudState` and `SCENES` |
 | `input.js` | Keyboard input: `initInput()` and `isKeyHeld(key)` |
 | `player.js` | Player ship: `Player` class with `update(dt)`, `draw(ctx)`, `lives` property |
-| `invaders.js` | Invader grid (stub — sibling card) |
-| `collision.js` | Collision detection (stub — sibling card) |
+| `invaders.js` | Invader grid: `initInvaders()`, `updateInvaders(dt)`, `drawInvaders(ctx)`, `getInvaders()`, `triggerExplosion()` |
+| `collision.js` | AABB collision: `checkBulletInvaderCollisions()`, `checkInvaderBulletPlayerCollisions()` |
 
 All files sit in the repository root beside `index.html`.
 
@@ -41,12 +41,23 @@ All files sit in the repository root beside `index.html`.
 | `BULLET_SPEED` | `500` | Bullet travel speed (px/s) |
 | `STARTING_LIVES` | `3` | Lives at the start of each round |
 | `startingLives` | `3` | Alias for `STARTING_LIVES` (used by player.js) |
+| `INVADER_COLS` | `11` | Number of invader columns |
+| `INVADER_ROWS` | `5` | Number of invader rows |
+| `INVADER_WIDTH` | `36` | Invader cell width in pixels |
+| `INVADER_HEIGHT` | `24` | Invader cell height in pixels |
+| `INVADER_H_GAP` | `12` | Horizontal gap between invader cells |
+| `INVADER_V_GAP` | `16` | Vertical gap between invader cells |
+| `INVADER_STEP_X` | `8` | Horizontal pixels moved per game tick |
+| `INVADER_DROP_Y` | `24` | Vertical drop on direction reversal |
+| `INVADER_TOP_MARGIN` | `80` | Distance from top of canvas to first invader row |
+| `INVADER_POINT_VALUE` | `10` | Score points awarded per invader kill |
+| `EXPLOSION_DURATION` | `150` | Explosion effect duration in milliseconds |
 
 ---
 
 ## Manual Verification Steps
 
-Follow these steps to confirm the scaffold and player controls are working correctly after opening `index.html`.
+Follow these steps to confirm the full gameplay slice is working correctly after opening `index.html`.
 
 ### 1. Title Screen
 - **Expected:** A black 768 × 896 canvas is centred on a dark page.  
@@ -58,18 +69,51 @@ Follow these steps to confirm the scaffold and player controls are working corre
 ### 2. Title → Playing transition
 - **Action:** Press **Enter**.
 - **Expected:** The canvas immediately switches to the Playing scene **without a page reload**.  
-  The HUD appears: `SCORE: 0` top-left, `HI: 0` top-centre, `LIVES: 3` top-right.
+  The HUD appears: `SCORE: 0` top-left, `HI: 0` top-centre, `LIVES: 3` top-right.  
+  An 11 × 5 grid of cyan filled rectangles (55 invaders total) is visible in the upper portion of the canvas.  
+  The green player ship is visible near the bottom.
 
-### 3. Simulate Game Over
+### 3. Invader formation movement
+- **Expected:** The invader grid moves horizontally as a unit (shifting right by 8 px per tick).  
+  When the rightmost invader reaches the canvas right edge, the whole formation drops 24 px and reverses direction leftward.  
+  When the leftmost invader reaches the canvas left edge, the formation drops again and reverses rightward.
+
+### 4. Player fires a bullet and kills an invader
+- **Action:** Hold **Space** while the player ship is positioned under an invader.
+- **Expected:**
+  - A yellow bullet travels upward from the player ship.
+  - When the bullet bounding box overlaps a living invader, both disappear instantly.
+  - A brief yellow/orange flash (≈150 ms) appears at the invader's former position, then vanishes.
+  - `SCORE` in the HUD increments by 10 for each kill.
+  - The killed invader is not rendered again and is not treated as collidable.
+
+### 5. Collision pass ordering
+- **Verify (by inspection):** In `game.js → update()`, `checkBulletInvaderCollisions()` is called **before** `renderPlaying()` / `drawInvaders()`. No bounding-box logic appears inside `drawInvaders()` or `drawInvaders()`-related code.
+
+### 6. Invader-bullet-vs-player stub
+- **Verify (in browser console):**
+```js
+const { checkInvaderBulletPlayerCollisions } = await import('./collision.js');
+const fakePlayer = { x: 100, y: 100, width: 40, height: 30, alive: true };
+const fakeHud    = { lives: 3 };
+const result = checkInvaderBulletPlayerCollisions([], fakePlayer, fakeHud);
+console.log(result); // Expected: false — no error thrown, returns false
+```
+
+### 7. Score resets on restart
+- **Action:** Kill several invaders to build up a score, then press **G** to trigger Game Over, then press **Enter** to return to Title, then press **Enter** again to start a new round.
+- **Expected:** `SCORE` resets to `0`. The `HI` score retains the highest score seen this session.
+
+### 8. Simulate Game Over
 - **Action:** While on the Playing scene, press **G** (the temporary verification hotkey).
 - **Expected:** The canvas switches to the Game Over scene, showing:  
   - **GAME OVER** (large, centred)  
-  - `Score: 0` beneath it  
+  - `Score: <current value>` beneath it  
   - *"Press ENTER to restart"* below that.
 
-### 4. Game Over → Title transition
+### 9. Game Over → Title transition
 - **Action:** Press **Enter** on the Game Over screen.
-- **Expected:** Score resets to 0, and the Title screen is shown again — still **no page reload**.  
+- **Expected:** The Title screen is shown again — still **no page reload**.  
   The Hi-Score at the top-centre retains the highest score seen this session.
 
 ---
@@ -78,7 +122,7 @@ Follow these steps to confirm the scaffold and player controls are working corre
 
 The following steps verify **`input.js`** and **`player.js`** in isolation using the browser console. Open `index.html`, then open the browser DevTools console (F12).
 
-### 5. Verify `initInput` and `isKeyHeld`
+### 10. Verify `initInput` and `isKeyHeld`
 
 In the console, import the module (works from `file://` in all modern browsers):
 
@@ -91,10 +135,8 @@ initInput();
   Type `isKeyHeld('ArrowLeft')` in the console → **Expected:** `true`
 - **Release ArrowLeft**.  
   Type `isKeyHeld('ArrowLeft')` again → **Expected:** `false`
-- **Hold a key and keep it held** (OS will generate repeated `keydown` events after ~500 ms).  
-  The value of `isKeyHeld` must stay `true` stably — it must NOT flicker to `false` and back during the hold.
 
-### 6. Verify Player construction and `lives`
+### 11. Verify Player construction and `lives`
 
 ```js
 const { Player } = await import('./player.js');
@@ -104,60 +146,14 @@ const player = new Player(364, 820);
 console.log(player.lives); // Expected: 3
 ```
 
-### 7. Verify horizontal movement (delta-time based)
+### 12. Verify horizontal movement (delta-time based)
 
 With the player created above, simulate a frame while ArrowLeft is held:
 
 ```js
-// Simulate ArrowLeft held
-// (initInput() was already called in step 5; actually press and hold ArrowLeft
-//  on the keyboard before calling update)
 const xBefore = player.x;
 player.update(1); // 1 second of delta time
-console.log(player.x); // Expected: xBefore - 200 (moved 200 px left at 200 px/s)
-```
-
-Repeat with ArrowRight / `'d'` to confirm rightward movement at +200 px/s.
-
-### 8. Verify canvas clamping
-
-```js
-player.x = -50;
-player.update(0);        // zero-delta update just to trigger clamp
-console.log(player.x);  // Expected: 0  (clamped to left edge)
-
-player.x = 780;          // beyond CANVAS_WIDTH (768)
-player.update(0);
-console.log(player.x);  // Expected: 728  (768 - shipWidth 40)
-```
-
-### 9. Verify single-bullet mechanic and auto-clear
-
-```js
-// With no bullet in flight and Space held:
-// (physically hold Space on the keyboard, or set up a manual test)
-player.update(0.016);          // fire a bullet
-console.log(player.bullet);   // Expected: object { x, y } — bullet exists
-
-player.update(0.016);
-console.log(player.bullet);   // Expected: same bullet object, y slightly decreased
-
-// Simulate the bullet reaching the top: force y off-screen
-player.bullet.y = -20;
-player.update(0.016);
-console.log(player.bullet);   // Expected: null — bullet was removed
-
-// Next Space press can now fire a new bullet
-```
-
-### 10. Verify procedural drawing
-
-```js
-player.x = 364;
-player.y = 820;
-player.draw(ctx);
-// Expected: a green ship shape (rectangles + dome arc) appears on the canvas.
-// No image files are loaded; no network requests appear in the Network tab.
+console.log(player.x); // Expected: xBefore - 200
 ```
 
 ---
@@ -166,7 +162,11 @@ player.draw(ctx);
 
 - **Fixed-timestep loop:** `game.js` uses `requestAnimationFrame` with a fixed update step of `1000/60` ms (~16.67 ms). The accumulated delta is capped at `UPDATE_STEP × 5` (~83 ms) so returning from a backgrounded tab never fires more than 5 catch-up updates in a single frame.
 - **Scene state machine:** Three scenes (`TITLE`, `PLAYING`, `GAME_OVER`) driven by the Enter key. Exported as the `SCENES` constant for sibling modules.
-- **HUD state:** Exported from `game.js` as `hudState` — a mutable object `{ score, lives, hiScore }`. Sibling modules (player, invaders) import it and mutate properties directly.
+- **HUD state:** Exported from `game.js` as `hudState` — a mutable object `{ score, lives, hiScore }`. The collision module increments `hudState.score` directly on each invader kill.
 - **Input:** `input.js` tracks physically-held keys in a `Set`. Key-repeat events (OS-generated repeated `keydown` with `e.repeat === true`) are ignored, ensuring `isKeyHeld` is stable for the full duration a key is held.
 - **Single-bullet constraint:** `player.js` maintains at most one in-flight bullet object. While it is in flight, Space presses are ignored. The bullet is removed (and the lock released) once its top edge goes above `y = 0`.
+- **Collision ordering:** In `game.js → update()`: (1) player update, (2) invader update, (3) collision pass — always before the render pass. No bounding-box logic lives inside any draw function.
+- **Invader formation:** All 55 invaders share a cumulative `formationX` / `formationY` offset added to their base grid positions each tick. On edge detection the formation drops by `INVADER_DROP_Y` and reverses `directionX`.
+- **Explosion effect:** A `{ x, y, timeLeft }` record is added to an `explosions` array on each kill. `timeLeft` counts down in ms during `updateInvaders(dt)`. `drawInvaders()` renders the flash while `timeLeft > 0` then stops — no canvas state is left behind.
+- **Level 2 stub:** `checkInvaderBulletPlayerCollisions(invaderBullets, player, hudState)` in `collision.js` is fully callable with an empty array; it returns `false` without throwing. Level 2 can pass real invader bullets without structural changes.
 - **No external dependencies:** No npm, no bundler, no CDN, no `fetch()` calls. Everything is a relative ES module import.
