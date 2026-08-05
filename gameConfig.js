@@ -21,3 +21,43 @@ export const INVADER_DROP_Y      = 24;   // px — vertical drop on direction re
 export const INVADER_TOP_MARGIN  = 80;   // px — distance from top of canvas to first row
 export const INVADER_POINT_VALUE = 10;   // score points awarded per invader kill
 export const EXPLOSION_DURATION  = 150;  // ms — how long the kill flash is shown
+
+// ---------------------------------------------------------------------------
+// Level 2 — new mechanics
+// ---------------------------------------------------------------------------
+
+/** Formation marches this many times faster than Level 1 (verifiable via console). */
+export const LEVEL2_SPEED_MULTIPLIER   = 1.4;
+
+/** Downward travel speed of invader-fired bullets (px/s). */
+export const INVADER_BULLET_SPEED      = 260;
+/** Width of an invader bullet (px). */
+export const INVADER_BULLET_WIDTH      = 3;
+/** Height of an invader bullet (px). */
+export const INVADER_BULLET_HEIGHT     = 14;
+
+/** Minimum time between invader shots (ms). */
+export const INVADER_FIRE_INTERVAL_MIN = 600;
+/** Maximum time between invader shots (ms). */
+export const INVADER_FIRE_INTERVAL_MAX = 1500;
+
+/** UFO horizontal crossing speed (px/s). */
+export const UFO_SPEED           = 120;
+/** UFO sprite width (px). */
+export const UFO_WIDTH           = 52;
+/** UFO sprite height (px). */
+export const UFO_HEIGHT          = 22;
+/** Y position of the UFO row from the canvas top (px). */
+export const UFO_Y               = 70;
+/** Milliseconds between successive UFO appearances. */
+export const UFO_SPAWN_INTERVAL  = 14000;
+/**
+ * Score awarded for shooting the UFO, indexed by (playerShotCount % 4).
+ * [50, 100, 150, 300]
+ */
+export const UFO_SCORE_TABLE     = [50, 100, 150, 300];
+
+/** Duration of the post-respawn invulnerability window (ms). */
+export const INVULNERABILITY_DURATION = 2000;
+/** Ship sprite on/off toggle period during the invulnerability blink (ms). */
+export const BLINK_INTERVAL          = 150;

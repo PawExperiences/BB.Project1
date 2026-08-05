@@ -3,7 +3,7 @@ import { INVADER_WIDTH, INVADER_HEIGHT, INVADER_POINT_VALUE } from './gameConfig
 import { getInvaders, triggerExplosion } from './invaders.js';
 
 // ---------------------------------------------------------------------------
-// AABB primitive
+// AABB primitive — exported so level2.js and game.js can reuse it
 // ---------------------------------------------------------------------------
 
 /**
@@ -13,7 +13,7 @@ import { getInvaders, triggerExplosion } from './invaders.js';
  * @param {{ x:number, y:number, width:number, height:number }} b
  * @returns {boolean}
  */
-function aabbOverlap(a, b) {
+export function aabbOverlap(a, b) {
   return (
     a.x < b.x + b.width  &&
     a.x + a.width  > b.x &&
@@ -61,17 +61,17 @@ export function checkBulletInvaderCollisions(bullets, hudState) {
 }
 
 // ---------------------------------------------------------------------------
-// Invader-bullet-vs-player collision (stub for Level 2)
+// Invader-bullet-vs-player collision (stub — game.js handles Level 2 variant
+// that respects the invulnerability window; this is retained for API compat)
 // ---------------------------------------------------------------------------
 
 /**
  * Check every invader bullet against the player.
- * Called every tick; safe to call with an empty bullet array.
- * Level 2 wires up actual invader firing; this stub provides the structural
- * contract so no changes to call-sites are needed later.
+ * NOTE: game.js uses its own handler in Level 2 to support the invulnerability
+ * window.  This function is kept for backward compatibility / future use.
  *
- * @param {Array<{x:number, y:number, width:number, height:number, active:boolean, fromPlayer:boolean}>} invaderBullets
- * @param {{ x:number, y:number, width:number, height:number, alive:boolean }} player
+ * @param {Array<{x:number, y:number, width:number, height:number, active:boolean}>} invaderBullets
+ * @param {{ x:number, y:number, width:number, height:number }} player
  * @param {{ lives: number }} hudState
  * @returns {boolean} true if the player was hit this tick
  */
