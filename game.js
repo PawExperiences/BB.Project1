@@ -1,10 +1,18 @@
 // game.js — Main module: fixed-timestep loop, scene state machine, HUD
-import { CANVAS_WIDTH, CANVAS_HEIGHT, STARTING_LIVES } from './gameConfig.js';
+import {
+  CANVAS_WIDTH,
+  CANVAS_HEIGHT,
+  STARTING_LIVES,
+  INVULNERABILITY_DURATION,
+  UFO_WIDTH,
+  UFO_HEIGHT,
+} from './gameConfig.js';
 import { drawInvaders, getLivingCount } from './invaders.js';
-import { checkBulletInvaderCollisions, checkInvaderBulletPlayerCollisions } from './collision.js';
+import { checkBulletInvaderCollisions, aabbOverlap } from './collision.js';
 import { Player } from './player.js';
 import { initInput } from './input.js';
 import { startLevel1, updateLevel1 } from './level1.js';
+import { startLevel2, updateLevel2, getInvaderBullets, getUFOState } from './level2.js';
 
 // ---------------------------------------------------------------------------
 // Scene identifiers
@@ -31,8 +39,8 @@ export const hudState = {
 let currentScene = SCENES.TITLE;
 
 // Fixed-timestep constants
-const UPDATE_STEP    = 1000 / 60;       // ~16.67 ms
-const MAX_ACCUMULATOR = UPDATE_STEP * 5; // ~83 ms — delta cap
+const UPDATE_STEP     = 1000 / 60;        // ~16.67 ms
+const MAX_ACCUMULATOR = UPDATE_STEP * 5;  // ~83 ms — delta cap
 
 let lastTimestamp = null;
 let accumulator   = 0;
@@ -48,30 +56,43 @@ const ctx    = canvas.getContext('2d');
 // ---------------------------------------------------------------------------
 let player = null;
 
+// Default spawn position (reused for respawn after invader-bullet hits)
+const PLAYER_START_X = (CANVAS_WIDTH - 40) / 2; // 40 = SHIP_WIDTH
+const PLAYER_START_Y = CANVAS_HEIGHT - 80;
+
 function createPlayer() {
-  const startX = (CANVAS_WIDTH - 40) / 2; // 40 = SHIP_WIDTH from player.js
-  const startY = CANVAS_HEIGHT - 80;
-  player = new Player(startX, startY);
+  player = new Player(PLAYER_START_X, PLAYER_START_Y);
 }
 
 // ---------------------------------------------------------------------------
-// Level dispatcher — globally exported so level modules can call startLevel(n)
+// Level dispatcher
 // ---------------------------------------------------------------------------
 
 /**
  * Transition to the given level number.
- * Level 1 is fully implemented; higher levels are stubs (return to title).
- * @param {number} n - Level number to start
+ * Lives and score are preserved across level transitions.
+ * Level 1 is fully implemented; Level 2 is implemented here.
+ * Levels beyond 2 log a stub message and return to the title screen.
+ * @param {number} n
  */
 export function startLevel(n) {
   hudState.level = n;
+
   if (n === 1) {
     startLevel1();
     currentScene = SCENES.PLAYING;
+
+  } else if (n === 2) {
+    startLevel2();
+    // Keep the existing player (lives carry over); reset position + invulnerability
+    if (player) player.resetForLevel(PLAYER_START_X);
+    currentScene = SCENES.PLAYING;
+
   } else {
-    // Levels beyond 1 are not yet implemented.
-    // Preserve hi-score and return to title as a graceful fallback.
-    console.info(`startLevel(${n}) called — Level ${n} not yet implemented. Returning to title.`);
+    // Level not yet implemented — log intent and gracefully return to title
+    console.info(
+      `startLevel(${n}) called — Level ${n} not yet implemented. Returning to title.`
+    );
     if (hudState.score > hudState.hiScore) {
       hudState.hiScore = hudState.score;
     }
@@ -89,14 +110,10 @@ initInput();
 // Keyboard handling
 // ---------------------------------------------------------------------------
 window.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') {
-    handleEnterKey();
-  }
-  // Temporary hotkey: press G while PLAYING to simulate a game-over
-  if (e.key === 'g' || e.key === 'G') {
-    if (currentScene === SCENES.PLAYING) {
-      triggerGameOver();
-    }
+  if (e.key === 'Enter') handleEnterKey();
+  // Debug hotkey: G while PLAYING simulates a game-over
+  if ((e.key === 'g' || e.key === 'G') && currentScene === SCENES.PLAYING) {
+    triggerGameOver();
   }
 });
 
@@ -105,9 +122,9 @@ function handleEnterKey() {
     // Reset per-round state
     hudState.score = 0;
     hudState.lives = STARTING_LIVES;
-    // Create a fresh player ship
+    // Fresh player ship
     createPlayer();
-    // Start Level 1 (sets hudState.level = 1, inits invaders, sets PLAYING)
+    // Start Level 1
     startLevel(1);
   } else if (currentScene === SCENES.GAME_OVER) {
     currentScene   = SCENES.TITLE;
@@ -124,7 +141,7 @@ function triggerGameOver() {
 }
 
 // ---------------------------------------------------------------------------
-// Build the bullet list the collision module needs from the player's bullet
+// Build the wrapped bullet array the collision module needs
 // ---------------------------------------------------------------------------
 function getPlayerBullets() {
   if (!player || !player.bullet) return [];
@@ -137,46 +154,104 @@ function getPlayerBullets() {
 }
 
 // ---------------------------------------------------------------------------
+// Level 2: invader-bullet vs player collision (respects invulnerability)
+// ---------------------------------------------------------------------------
+
+/**
+ * Check each active invader bullet against the player.
+ * - Immune (isInvulnerable): bullet deactivates but no life is lost.
+ * - Vulnerable: life decremented; if lives reach 0 → game over;
+ *   otherwise player respawns at default X with invulnerability window.
+ * @param {Array} invBullets
+ */
+function handleInvaderBulletHit(invBullets) {
+  if (!player || !invBullets || invBullets.length === 0) return;
+
+  const playerRect = {
+    x: player.x, y: player.y,
+    width: player.width, height: player.height,
+  };
+
+  for (const bullet of invBullets) {
+    if (!bullet.active) continue;
+
+    const bulletRect = {
+      x: bullet.x, y: bullet.y,
+      width: bullet.width, height: bullet.height,
+    };
+
+    if (aabbOverlap(bulletRect, playerRect)) {
+      bullet.active = false; // bullet always deactivates on contact
+
+      if (player.isInvulnerable) {
+        // Immune — bullet passes through, no life loss
+        continue;
+      }
+
+      hudState.lives -= 1;
+
+      if (hudState.lives <= 0) {
+        triggerGameOver();
+        return; // exit early — game is over
+      }
+
+      // Respawn at default X and grant temporary immunity
+      player.respawn(PLAYER_START_X);
+      player.startInvulnerability(INVULNERABILITY_DURATION);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Update — pure logic, no drawing
 // ---------------------------------------------------------------------------
 function update(dt) {
   if (currentScene !== SCENES.PLAYING) return;
 
-  // 1. Update player (movement + bullet)
-  if (player) player.update(dt / 1000); // player.update expects seconds
+  // 1. Update player (movement + bullet + invulnerability timer)
+  if (player) player.update(dt / 1000);
 
-  // 2. Level 1 update: explosion timers, formation stepping, lose-condition check
-  const levelResult = player ? updateLevel1(dt, player) : null;
+  // 2. Level-specific logic
+  let levelResult = null;
+  if (hudState.level === 1 && player) {
+    levelResult = updateLevel1(dt, player);
+  } else if (hudState.level === 2 && player) {
+    levelResult = updateLevel2(dt, player, hudState);
+  }
 
-  // 3. Collision pass — always before render
+  // 3. Player bullet vs invaders
   const playerBullets = getPlayerBullets();
   checkBulletInvaderCollisions(playerBullets, hudState);
 
-  // Deactivate player bullet if the collision pass marked it inactive
+  // Deactivate player bullet visually if the collision pass marked it inactive
   if (player && player.bullet && player.bullet.active === false) {
     player.bullet.y = -9999;
   }
 
-  // Invader-bullet-vs-player stub (no invader firing in Level 1)
-  if (player) {
-    checkInvaderBulletPlayerCollisions([], player, hudState);
+  // 4. Level 2: invader bullets vs player (with invulnerability support)
+  if (hudState.level === 2 && player) {
+    handleInvaderBulletHit(getInvaderBullets());
   }
 
-  // 4. Handle lose condition (invaders reached the player)
+  // Guard: a collision above may have triggered game-over mid-tick
+  if (currentScene !== SCENES.PLAYING) return;
+
+  // 5. Lose condition: formation reached the player
   if (levelResult === 'lose') {
     hudState.lives -= 1;
     if (hudState.lives <= 0) {
       triggerGameOver();
     } else {
-      // Reset formation; preserve score and lives
-      startLevel1();
+      // Reset the level formation, preserve score + lives
+      if (hudState.level === 1) startLevel1();
+      else if (hudState.level === 2) startLevel2();
     }
     return;
   }
 
-  // 5. Win condition: all invaders destroyed
+  // 6. Win condition: all invaders destroyed → advance to next level
   if (getLivingCount() === 0) {
-    startLevel(2); // Level 2 internals are out of scope; startLevel stubs gracefully
+    startLevel(hudState.level + 1);
     return;
   }
 }
@@ -209,6 +284,13 @@ function renderTitle() {
 function renderPlaying() {
   renderHUD();
   drawInvaders(ctx);
+
+  // Level-2 extras: invader bullets and UFO
+  if (hudState.level === 2) {
+    drawInvaderBullets(ctx);
+    drawUFO(ctx);
+  }
+
   if (player) player.draw(ctx);
 }
 
@@ -246,9 +328,42 @@ function renderHUD() {
   ctx.textAlign = 'right';
   ctx.fillText(`LIVES: ${hudState.lives}`, CANVAS_WIDTH - PAD, PAD);
 
-  // Level — second row, top-left (sourced from hudState.level, not hardcoded)
+  // Level — second row, top-left
   ctx.textAlign = 'left';
   ctx.fillText(`LEVEL: ${hudState.level}`, PAD, PAD + 28);
+}
+
+/** Draw all active invader bullets (red/orange). */
+function drawInvaderBullets(ctx) {
+  const bullets = getInvaderBullets();
+  ctx.fillStyle = '#f60';
+  for (const b of bullets) {
+    if (!b.active) continue;
+    ctx.fillRect(Math.round(b.x), Math.round(b.y), b.width, b.height);
+  }
+}
+
+/** Draw the UFO sprite when active. */
+function drawUFO(ctx) {
+  const state = getUFOState();
+  if (!state.active) return;
+
+  const ux = Math.round(state.x);
+  const uy = Math.round(state.y);
+
+  // Body
+  ctx.fillStyle = '#f0f';
+  ctx.fillRect(ux, uy + UFO_HEIGHT / 2, UFO_WIDTH, UFO_HEIGHT / 2);
+
+  // Dome / top half (lighter)
+  ctx.fillStyle = '#f8f';
+  ctx.fillRect(ux + 8, uy, UFO_WIDTH - 16, UFO_HEIGHT / 2);
+
+  // Port-holes
+  ctx.fillStyle = '#000';
+  ctx.fillRect(ux + 10, uy + 5, 6, 6);
+  ctx.fillRect(ux + UFO_WIDTH / 2 - 3, uy + 5, 6, 6);
+  ctx.fillRect(ux + UFO_WIDTH - 16, uy + 5, 6, 6);
 }
 
 // ---------------------------------------------------------------------------
@@ -262,9 +377,7 @@ function loop(timestamp) {
   let delta = timestamp - lastTimestamp;
   lastTimestamp = timestamp;
 
-  if (delta > MAX_ACCUMULATOR) {
-    delta = MAX_ACCUMULATOR;
-  }
+  if (delta > MAX_ACCUMULATOR) delta = MAX_ACCUMULATOR;
 
   accumulator += delta;
 
