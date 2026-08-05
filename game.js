@@ -2,13 +2,8 @@
 
 import { CANVAS_WIDTH, CANVAS_HEIGHT, STARTING_LIVES } from './gameConfig.js';
 import { initInput } from './input.js';         // Input card
-import { Player }    from './player.js';         // Player card
-import { InvaderGrid } from './invaders.js';     // Invaders card
-import { ExplosionPool } from './explosions.js'; // Explosions
-import { collide }   from './collisions.js';     // Collision card
-
-// Future card imports (do NOT create these files here — they are added by later cards):
-// import { loadLevel1 } from './level1.js';                              // Added by: Level 1 card
+import { initLevel1, updateLevel1, renderLevel1 } from './level1.js'; // Level 1 card
+// Future card imports:
 // import { loadLevel2 } from './level2.js';                              // Added by: Level 2 card
 // import { loadLevel3 } from './level3.js';                              // Added by: Level 3 card
 // import { createBoss, updateBoss, renderBoss } from './boss.js';        // Added by: Boss card
@@ -26,40 +21,49 @@ export const hudState = {
   score:   0,
   lives:   STARTING_LIVES,
   hiScore: 0,
+  level:   1,
 };
 
 // ---------------------------------------------------------------------------
-// Playing-scene entities (created fresh each time the Playing scene starts)
-// ---------------------------------------------------------------------------
-let player      = null;
-let invaderGrid = null;
-let explosions  = null;
-
-function initPlayingScene() {
-  initInput(); // safe to call multiple times — listeners accumulate but are idempotent
-  player      = new Player(CANVAS_WIDTH / 2, ctx);
-  invaderGrid = new InvaderGrid();
-  explosions  = new ExplosionPool();
-  hudState.score = 0;
-  hudState.lives = STARTING_LIVES;
-}
-
-// ---------------------------------------------------------------------------
 // Scene state machine
-// Scenes: 'title' | 'playing' | 'gameover'
+// Scenes: 'title' | 'playing' | 'level2' | 'gameover'
 // ---------------------------------------------------------------------------
 let currentScene = 'title';
 
-function transitionTo(scene) {
+/**
+ * Transition to a new scene.
+ * Exported so level modules can call it directly.
+ * @param {string} scene
+ */
+export function transitionTo(scene) {
   if (scene === 'title') {
     // Reset game state when returning to title
     hudState.score = 0;
     hudState.lives = STARTING_LIVES;
+    hudState.level = 1;
   }
   if (scene === 'playing') {
     initPlayingScene();
   }
+  if (scene === 'level2') {
+    // Level 2 is not yet implemented — placeholder: show a "coming soon" screen
+    // or fall back to gameover. The transition call fires correctly as required.
+    // When level2.js is implemented, replace this block.
+    currentScene = 'level2';
+    return;
+  }
   currentScene = scene;
+}
+
+// ---------------------------------------------------------------------------
+// Playing-scene initialisation
+// ---------------------------------------------------------------------------
+function initPlayingScene() {
+  initInput(); // safe to call multiple times — listeners are idempotent
+  hudState.score = 0;
+  hudState.lives = STARTING_LIVES;
+  hudState.level = 1;
+  initLevel1();
 }
 
 // ---------------------------------------------------------------------------
@@ -85,21 +89,6 @@ function enterJustPressed() {
   }
   if (!keysDown['Enter']) {
     enterConsumed = false;
-  }
-  return false;
-}
-
-// Placeholder: pressing 'G' in the Playing scene triggers Game Over
-// (the real condition will be owned by later cards — collision / invaders).
-let goConsumed = false;
-
-function goKeyJustPressed() {
-  if (keysDown['KeyG'] && !goConsumed) {
-    goConsumed = true;
-    return true;
-  }
-  if (!keysDown['KeyG']) {
-    goConsumed = false;
   }
   return false;
 }
@@ -151,6 +140,9 @@ function update(dt) {
     case 'gameover':
       updateGameOver(dt);
       break;
+    case 'level2':
+      updateLevel2Placeholder(dt);
+      break;
   }
 }
 
@@ -161,28 +153,17 @@ function updateTitle(_dt) {
 }
 
 function updatePlaying(dt) {
-  // --- Player update (movement + shooting) ---
-  player.update(dt);
-
-  // --- Invader march ---
-  invaderGrid.update();
-
-  // --- Collision pass (MUST run before draw) ---
-  collide(player, invaderGrid, explosions, hudState);
-
-  // --- Explosion tick (decrement frame counters, remove expired) ---
-  explosions.tick();
-
-  // Placeholder game-over trigger: press G to simulate game over
-  if (goKeyJustPressed()) {
-    if (hudState.score > hudState.hiScore) {
-      hudState.hiScore = hudState.score;
-    }
-    transitionTo('gameover');
-  }
+  updateLevel1(dt);
 }
 
 function updateGameOver(_dt) {
+  if (enterJustPressed()) {
+    transitionTo('title');
+  }
+}
+
+function updateLevel2Placeholder(_dt) {
+  // Level 2 not yet implemented — pressing ENTER returns to title
   if (enterJustPressed()) {
     transitionTo('title');
   }
@@ -205,6 +186,9 @@ function render() {
       break;
     case 'gameover':
       renderGameOver();
+      break;
+    case 'level2':
+      renderLevel2Placeholder();
       break;
   }
 }
@@ -230,13 +214,9 @@ function renderTitle() {
 function renderPlaying() {
   // Draw order (back to front):
   //  1. HUD
-  //  2. Invader formation
-  //  3. Explosions
-  //  4. Player ship (+ bullet)
+  //  2. Level 1 entities (invaders, explosions, player)
   drawHUD();
-  invaderGrid.draw(ctx);
-  explosions.draw(ctx);
-  player.draw(ctx);
+  renderLevel1(ctx);
 }
 
 function renderGameOver() {
@@ -256,6 +236,25 @@ function renderGameOver() {
   // Restart prompt
   ctx.font = '24px monospace';
   ctx.fillText('Press ENTER to restart', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 70);
+}
+
+function renderLevel2Placeholder() {
+  ctx.textAlign    = 'center';
+  ctx.textBaseline = 'middle';
+
+  ctx.fillStyle = '#0f0';
+  ctx.font      = 'bold 48px monospace';
+  ctx.fillText('LEVEL 2', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 - 60);
+
+  ctx.fillStyle = '#fff';
+  ctx.font      = '28px monospace';
+  ctx.fillText('Coming Soon!', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2);
+
+  ctx.font = '22px monospace';
+  ctx.fillText('Score: ' + hudState.score, CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 50);
+
+  ctx.font = '20px monospace';
+  ctx.fillText('Press ENTER to return to title', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 90);
 }
 
 // ---------------------------------------------------------------------------
@@ -281,6 +280,11 @@ function drawHUD() {
   ctx.fillStyle = '#0f0';
   ctx.fillText('LIVES: ' + hudState.lives, CANVAS_WIDTH - PAD, PAD);
 
+  // Level number — displayed below lives on the right
+  ctx.textAlign = 'right';
+  ctx.fillStyle = '#ff0';
+  ctx.fillText('LEVEL ' + hudState.level, CANVAS_WIDTH - PAD, PAD + 24);
+
   // Reset alignment for subsequent draws
   ctx.textAlign    = 'left';
   ctx.textBaseline = 'alphabetic';
@@ -289,4 +293,5 @@ function drawHUD() {
 // ---------------------------------------------------------------------------
 // Kick off the loop
 // ---------------------------------------------------------------------------
+initInput();
 requestAnimationFrame(gameLoop);
