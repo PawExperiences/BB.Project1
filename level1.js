@@ -25,8 +25,19 @@ const INITIAL_OFFSET_Y = GRID_TARGET_TOP_Y - GRID_INTERNAL_START_Y; // -32
 const TOTAL_INVADERS = 55;
 
 // Step interval formula: interval = 100 + (liveCount / 55) * 700 ms
-const INTERVAL_MIN_MS = 100;
-const INTERVAL_MAX_MS = 800;
+export const INTERVAL_MIN_MS = 100;
+export const INTERVAL_MAX_MS = 800;
+export const INTERVAL_TOTAL_INVADERS = 55;
+
+/**
+ * Compute step interval in milliseconds for a given live invader count.
+ * Exported so Level 2 can import and apply the 0.67× multiplier.
+ * @param {number} liveCount
+ * @returns {number} interval in ms
+ */
+export function computeStepInterval(liveCount) {
+  return INTERVAL_MIN_MS + (liveCount / INTERVAL_TOTAL_INVADERS) * (INTERVAL_MAX_MS - INTERVAL_MIN_MS);
+}
 
 // Player row: where the player lives (top edge of player ship)
 // From player.js: y = CANVAS_HEIGHT - SHIP_HEIGHT - 24 = 896 - 32 - 24 = 840
@@ -35,9 +46,6 @@ const INTERVAL_MAX_MS = 800;
 const SHIP_HEIGHT = 32; // must match player.js SHIP_HEIGHT
 const FLOOR_MARGIN = 24; // must match player.js hardcoded margin
 const PLAYER_ROW_Y = CANVAS_HEIGHT - SHIP_HEIGHT - FLOOR_MARGIN; // 840
-
-// The invader cell height (for drop reference in comments)
-const CELL_H = INVADER_H + GAP; // 24 px — InvaderGrid drops 16 px internally
 
 // ---------------------------------------------------------------------------
 // Module-level state — no globals; all encapsulated here
@@ -58,18 +66,15 @@ let stepTimer = 0;
 // Whether the level has been won (prevents further updating)
 let levelCleared = false;
 
+// Cumulative shots fired across Level 1 (and carried into Level 2)
+let _totalShotsFired = 0;
+
+// Track previous bullet state to detect new shots
+let _prevBulletActive = false;
+
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
-
-/**
- * Compute the current step interval in milliseconds based on live invader count.
- * @returns {number} interval in ms
- */
-function currentStepInterval() {
-  const liveCount = invaderGrid.liveInvaders().length;
-  return INTERVAL_MIN_MS + (liveCount / TOTAL_INVADERS) * (INTERVAL_MAX_MS - INTERVAL_MIN_MS);
-}
 
 /**
  * Compute the canvas-space bottom edge of the lowest live invader.
@@ -116,6 +121,10 @@ export function initLevel1() {
   hudState.score = 0;
   hudState.lives = STARTING_LIVES;
 
+  // Reset cumulative shot counter at game start
+  _totalShotsFired = 0;
+  _prevBulletActive = false;
+
   resetFormation();
 }
 
@@ -129,13 +138,20 @@ export function updateLevel1(dt) {
   // --- Player update ---
   player.update(dt);
 
+  // --- Track shots fired ---
+  const bulletNow = player.bulletActive;
+  if (bulletNow && !_prevBulletActive) {
+    _totalShotsFired++;
+  }
+  _prevBulletActive = bulletNow;
+
   // --- Level-controlled step timing ---
   // We accumulate real time and only call invaderGrid.update() when the
   // dynamic interval has elapsed. This replaces InvaderGrid's internal
   // 30-tick counter; we still call update() to trigger InvaderGrid's
   // step logic (including edge detection and drop).
   stepTimer += dt * 1000; // convert seconds to ms
-  const interval = currentStepInterval();
+  const interval = computeStepInterval(invaderGrid.liveInvaders().length);
   if (stepTimer >= interval) {
     stepTimer -= interval;
     // Drain InvaderGrid's internal tick counter so that calling update() once
@@ -214,4 +230,13 @@ export function renderLevel1(ctx) {
  */
 export function getLevel1Player() {
   return player;
+}
+
+/**
+ * Return the cumulative total shots fired since game start.
+ * Called by Level 2 on transition to carry the counter forward.
+ * @returns {number}
+ */
+export function getTotalShotsFired() {
+  return _totalShotsFired;
 }

@@ -1,269 +1,120 @@
-# Space Invaders — BB.Project1
+# Space Invaders — Hand-Written ES Modules
 
-## Planned File Layout
+A classic Space Invaders clone built with plain HTML, CSS and ES modules.
+No framework, no bundler, no npm. Open `index.html` directly in your browser
+(file:// URL works).
 
-| File | Status | Card |
-|------|--------|------|
-| `index.html` | ✅ Implemented | Game Loop & Canvas Framework |
-| `game.js` | ✅ Implemented | Game Loop & Canvas Framework |
-| `gameConfig.js` | ✅ Implemented | Game Loop & Canvas Framework |
-| `input.js` | ✅ Implemented | Input card |
-| `player.js` | ✅ Implemented | Player card |
-| `invaders.js` | ✅ Implemented | Invaders card |
-| `collisions.js` | ✅ Implemented | Collision card |
-| `explosions.js` | ✅ Implemented | Collision card |
-| `level1.js` | ✅ Implemented | Level 1 card |
-| `level2.js` | ⏳ Future | Level 2 card |
-| `level3.js` | ⏳ Future | Level 3 card |
-| `boss.js` | ⏳ Future | Boss card |
+## How to Play
+
+1. Open `index.html` in a modern browser (Chrome, Firefox, Edge).
+2. Press **Enter** on the title screen to start.
+3. **Arrow Left / A** — move left  
+   **Arrow Right / D** — move right  
+   **Space** — fire
+4. Destroy all invaders to advance to Level 2.
+5. Survive as long as possible. Your hi-score persists until the page is refreshed.
 
 ---
 
-## Architecture Overview
+## Manual Verification Steps
 
-### `gameConfig.js`
-Pure ES module — named constants only, no logic:
-- `CANVAS_WIDTH = 768`
-- `CANVAS_HEIGHT = 896`
-- `PLAYER_SPEED = 200` (px/s)
-- `BULLET_SPEED = 500` (px/s)
-- `STARTING_LIVES = 3`
+Run through every item below in a plain browser tab (file:// URL).
+No test runner is required; these are human play-through checks.
 
-### `index.html`
-- Single `768 × 896` canvas centred on a black background.
-- Loads `game.js` as an ES module (`type="module"`).
-- Works from a `file://` URL — no server needed.
+### Level 1 — Baseline
 
-### `game.js`
-- **Fixed-timestep loop**: 60 update steps/second; accumulated delta capped at 0.25 s.
-- **Scene state machine**: `title` → `playing` → `gameover` → `title`; also handles `level2` placeholder.
-- **HUD**: drawn on-canvas; exports `hudState { score, lives, hiScore, level }` for level cards.
-- **Playing scene**: delegates all entity management and update/render to `level1.js`.
-- **Exports**: `hudState` and `transitionTo` for use by level modules.
-
-### `input.js`
-- `initInput()` — attaches `keydown`/`keyup` listeners to `window`. Call once at startup.
-- `isKeyHeld(code)` — returns `true` while a key (identified by `KeyboardEvent.code`, e.g. `'ArrowLeft'`, `'Space'`, `'KeyA'`) is physically held; returns `false` once released. Does **not** rely on browser key-repeat.
-
-### `player.js`
-- Exports `Player` class.
-- Constructor: `new Player(startX, ctx)` — `startX` is the horizontal centre of the ship.
-- Movement: `ArrowLeft`/`KeyA` and `ArrowRight`/`KeyD`, at 200 px/s, delta-time scaled.
-- Position clamped so ship never exits the canvas horizontally.
-- Shooting: `Space` fires one bullet (4 × 14 px yellow rectangle) upward at 500 px/s. Only one bullet in flight at a time; slot re-opens when bullet exits the top.
-- `draw(ctx)` renders a procedural green spaceship (rectangles + arcs) and the active bullet.
-- `player.lives` initialised to `STARTING_LIVES` (3); readable and writable by level cards.
-
-### `invaders.js`
-- Exports `InvaderGrid` class and `INVADER_W`, `INVADER_H`, `GAP` constants.
-- **Formation**: 11 columns × 5 rows = 55 invaders, each 24 × 16 px, filled `#00FF00`, with 8 px gaps.
-- **Centred**: formation starts horizontally centred on the 768 px canvas.
-- **March**: moves 8 px sideways every 30 game-loop ticks (~0.5 s at 60 fps). Level 1 overrides this with a dynamic timer.
-- **Edge detection**: when rightmost live invader's right edge reaches 768 px, or leftmost live invader's left edge reaches 0 px — drop 16 px downward and reverse direction.
-- **`invaderRect(inv)`**: returns `{x, y, w, h}` for a given invader in canvas space.
-- **`liveInvaders()`**: returns only invaders with `alive === true`.
-
-### `explosions.js`
-- Exports `ExplosionPool` class.
-- **`spawn(x, y)`**: adds an explosion entry `{ x, y, framesLeft: 8 }` at the dead invader's position.
-- **`tick()`**: decrements all `framesLeft` counters; removes entries that reach 0. Call before draw.
-- **`draw(ctx)`**: renders each active explosion as a 24 × 16 px filled rectangle in `#FFFF00` (yellow).
-
-### `collisions.js`
-- Exports `collide(player, invaderGrid, explosions, hudState)`.
-- **Runs before the draw pass** every tick (enforced in `level1.js`).
-- **Bullet-vs-Invader**: for every live player bullet, AABB-tests against every live invader. On hit: marks invader dead, consumes bullet, spawns explosion, awards 10 points.
-- **Invader-Bullet-vs-Player**: clearly commented stub for Level 2 — no implementation.
-
-### `level1.js`
-- Exports `initLevel1()`, `updateLevel1(dt)`, `renderLevel1(ctx)`.
-- **Formation**: 11 × 5 invader grid with top edge at y = 48 px (achieved by setting `invaderGrid.offsetY = -32`).
-- **Dynamic step interval**: `interval = 100 + (liveCount / 55) * 700` ms — scales from 800 ms (55 alive) to 100 ms (1 alive), updating continuously.
-- **Edge detection & drop**: handled by `InvaderGrid.update()` — drops 16 px on wall contact.
-- **Win condition**: all 55 invaders destroyed → calls `transitionTo('level2')`.
-- **Lose condition**: formation bottom reaches player row (y = 840) → decrement life, restart formation. If no lives remain → `transitionTo('gameover')`.
-- **HUD**: sets `hudState.level = 1`; `drawHUD()` in `game.js` renders `LEVEL 1` in yellow.
-- **Encapsulation**: all state (`player`, `invaderGrid`, `explosions`, `stepTimer`, `levelCleared`) is module-scoped; no global variables introduced.
+| # | Action | Expected result |
+|---|--------|-----------------|
+| L1-1 | Open `index.html`, press Enter | Title screen appears; pressing Enter starts Level 1 with 3 lives, score 0. |
+| L1-2 | Let the invader formation march | Formation moves side-to-side, drops one row on each edge bounce. |
+| L1-3 | Fire with Space | Yellow bullet travels upward; hit invader disappears with yellow flash; score increments by 10. |
+| L1-4 | Let the formation reach the player row without firing | One life is lost; formation resets; score is preserved. |
+| L1-5 | Lose all 3 lives | GAME OVER screen appears showing final score; pressing Enter returns to title. |
+| L1-6 | Destroy every invader | **GAME OVER screen appears and score/hi-score are preserved — auto-advance to Level 2 begins (see L2 tests).** |
 
 ---
 
-## Running
+### Level 2 — Auto-Advance from Level 1
 
-No build step, no server, no npm required.
+| # | Action | Expected result |
+|---|--------|-----------------|
+| L2-ADV-1 | Clear all 55 invaders in Level 1 | Scene switches directly to Level 2 with **no level-select or transition screen**. |
+| L2-ADV-2 | Observe HUD immediately after advance | **Score and lives are unchanged** from the end of Level 1 (neither is reset to 0 or 3). Level counter shows "LEVEL 2". |
+
+---
+
+### Level 2 — Enemy Fire
+
+| # | Action | Expected result |
+|---|--------|-----------------|
+| L2-FIRE-1 | Enter Level 2 and observe the invaders | After 0.8–2.0 s, a light-red bullet drops from one of the bottom-row invaders. |
+| L2-FIRE-2 | Watch multiple shots over 30 s | Each shot comes from the **lowest living invader in its column**; interval between shots is visibly random (0.8–2.0 s). |
+| L2-FIRE-3 | Let an enemy bullet reach the bottom edge | Bullet disappears silently — no sound, no explosion, no life loss. |
+| L2-FIRE-4 | Kill all but one column of invaders | Only that column fires; only its lowest invader fires. |
+| L2-FIRE-5 | Destroy the last invader | Enemy fire stops immediately; level transitions (game over screen for now). |
+
+---
+
+### Level 2 — UFO Bonus
+
+> **UFO side note:** The first UFO always enters from the **left**. Subsequent UFOs alternate (right, left, right, …).
+
+| # | Action | Expected result |
+|---|--------|-----------------|
+| L2-UFO-1 | Wait ~20 s after Level 2 starts | A magenta UFO appears from the **left** side, near the top of the canvas. |
+| L2-UFO-2 | Let the UFO cross without shooting it | UFO exits the right edge and disappears — **score does not change**. |
+| L2-UFO-3 | Wait another ~20 s | Second UFO enters from the **right**; subsequent UFOs alternate sides. |
+| L2-UFO-4 | Shoot the UFO — **scoring tier test** (repeat for each tier): | |
+| | Fire exactly **0 shots** before hitting UFO (totalShotsFired % 4 = 0) | Score += **50** |
+| | Fire such that **totalShotsFired % 4 = 1** before hit | Score += **100** |
+| | Fire such that **totalShotsFired % 4 = 2** before hit | Score += **150** |
+| | Fire such that **totalShotsFired % 4 = 3** before hit | Score += **300** |
+| L2-UFO-5 | Confirm `totalShotsFired` is cumulative | Shots fired during Level 1 **count** toward the modulo — fire 3 shots in Level 1, then immediately hit the UFO → tier index = 3 → 300 pts. |
+
+---
+
+### Level 2 — Player Hit and Invulnerability
+
+| # | Action | Expected result |
+|---|--------|-----------------|
+| L2-HIT-1 | Stand still and let an enemy bullet hit you | Lives decrements by exactly 1; ship reappears at bottom-centre (same start position as Level 1 start). |
+| L2-HIT-2 | Observe the ship immediately after respawn | Ship **flashes** (alternates visible/invisible rapidly) for ~2 seconds. |
+| L2-HIT-3 | During the flashing window, let a second bullet pass through the ship | **No life is lost**; invulnerability is not re-triggered; flashing continues from where it was. |
+| L2-HIT-4 | After the 2-second flash window ends | Ship renders solidly; the next bullet hit **does** cost a life normally. |
+| L2-HIT-5 | Lose all lives from enemy fire | Standard GAME OVER screen appears; pressing Enter returns to title. |
+
+---
+
+### Level 2 — Formation Speed
+
+| # | Action | Expected result |
+|---|--------|-----------------|
+| L2-SPD-1 | Compare march speed at 55 invaders alive | Level 2 formation visibly steps **faster** than Level 1 at the same density (≈1.5× faster). |
+| L2-SPD-2 | Kill invaders and watch speed increase | Formation still accelerates as invaders die, same curve shape as Level 1 but shifted faster overall. |
+
+---
+
+## File Structure
 
 ```
-# Simply open the file:
-open index.html          # macOS
-start index.html         # Windows
-xdg-open index.html      # Linux
+index.html        — entry point
+game.js           — game loop, scene state machine, HUD
+gameConfig.js     — shared constants (canvas size, speeds, lives)
+input.js          — keyboard input manager
+player.js         — player ship: movement, shooting, drawing
+invaders.js       — InvaderGrid: march logic, geometry, draw
+collisions.js     — collision detection pass (bullet vs invader)
+explosions.js     — explosion flash pool
+level1.js         — Level 1 logic (classic grid, step interval curve)
+level2.js         — Level 2 logic (enemy fire, UFO, invulnerability)
+README.md         — this file
 ```
 
-Or drag `index.html` into any modern browser (Chrome, Firefox, Edge, Safari).
+## Architecture Notes
 
----
-
-## Manual Verification Checklist
-
-Open `index.html` by double-clicking it (or dragging it into a browser) so the URL begins with `file://`.
-
-### 1 — Initial load
-- [ ] No console errors appear in DevTools (`F12 → Console`).
-- [ ] A **768 × 896** canvas is visible, centred on a black page.
-
-### 2 — Title scene
-- [ ] **"SPACE INVADERS"** appears in large green text, centred on the canvas.
-- [ ] **"Press ENTER to start"** appears below it in white.
-
-### 3 — ENTER transition (Title → Playing)
-- [ ] Pressing **ENTER** switches immediately to the Playing scene **without** a page reload.
-- [ ] The title text disappears.
-
-### 4 — Playing scene / HUD
-- [ ] The HUD is visible at the top of the canvas:
-  - **SCORE: 0** on the left.
-  - **HI: 0** centred.
-  - **LIVES: 3** on the right (in green).
-  - **LEVEL 1** below LIVES on the right (in yellow).
-
-### 5 — Invader formation visible
-- [ ] An **11-column × 5-row** grid of green filled rectangles is visible on the canvas.
-- [ ] Each rectangle is approximately **24 × 16 px**.
-- [ ] The formation is **horizontally centred** on the 768 px canvas.
-- [ ] The **top edge of the formation is at y = 48 px**.
-- [ ] There are **8 px gaps** between invaders both horizontally and vertically.
-- [ ] The player ship is visible near the bottom of the canvas.
-
-### 6 — Formation march & dynamic speed
-- [ ] Watch the formation — it steps sideways discretely.
-- [ ] With all 55 invaders alive, steps occur approximately every **800 ms**.
-- [ ] As invaders are destroyed, the step interval decreases smoothly.
-- [ ] With only 1 invader alive, steps occur approximately every **100 ms**.
-
-### 7 — Edge detection and drop
-- [ ] When the formation's right edge reaches the canvas right edge (768 px), the formation **drops downward** and begins moving **left**.
-- [ ] When the formation's left edge reaches 0 px, it **drops** again and reverses to the **right**.
-- [ ] This repeats indefinitely.
-
-### 8 — Bullet fires (Space)
-- [ ] Press **Space** — a small **yellow bullet** appears above the player ship and travels upward.
-- [ ] Holding **Space** does not fire a second bullet while one is in flight.
-
-### 9 — Bullet kills invader (collision)
-- [ ] Manoeuvre the player ship under any live invader using **ArrowLeft / ArrowRight** (or **A / D**).
-- [ ] Fire with **Space**.
-- [ ] When the bullet overlaps the invader:
-  - The **invader disappears** from the canvas.
-  - The **bullet disappears** (consumed).
-  - A **yellow flash rectangle** (24 × 16 px) appears at the invader's last position.
-
-### 10 — Explosion flash duration
-- [ ] The yellow flash rectangle is visible for **approximately 8 game frames** (~0.13 s at 60 fps), then vanishes.
-
-### 11 — Score increments
-- [ ] After killing one invader the HUD shows **SCORE: 10**.
-- [ ] Score increments by exactly **10** for each kill.
-
-### 12 — Win condition (Level 1 → Level 2)
-- [ ] Destroy all 55 invaders.
-- [ ] The game transitions to a **Level 2** screen (placeholder "Coming Soon" screen until Level 2 is implemented).
-- [ ] The score is preserved on the Level 2 screen.
-- [ ] Pressing **ENTER** on the Level 2 screen returns to the Title.
-
-### 13 — Lose condition (formation breach)
-- [ ] Wait for the invader formation to descend until its bottom edge reaches the player's row (y ≈ 840).
-- [ ] The player **loses one life** (LIVES decrements by 1).
-- [ ] The formation **resets to y = 48 px** with a full 11 × 5 grid.
-- [ ] If LIVES reaches 0, the **Game Over** scene appears.
-
-### 14 — Game Over transition
-- [ ] When lives reach 0 (either by formation breach or future invader bullets), the Game Over scene appears showing the current score.
-- [ ] Press **ENTER** — returns to the Title scene; score resets to 0.
-
-### 15 — No server required
-- [ ] Close the browser, re-open `index.html` by double-clicking it from the file system.
-- [ ] All of the above steps still work with a `file://` URL (no "blocked by CORS" errors).
-
----
-
-## Manual Verification — Keyboard Input & Player Ship
-
-> These steps verify `input.js` and `player.js` in isolation using a small
-> inline test page. No bundler or server is required.
-
-### Setup: Temporary test page
-
-Create a file called `player-test.html` **next to `index.html`** (do not commit
-it; it is a scratch file) with the content below, then open it from a
-`file://` URL:
-
-```html
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Player / Input Test</title>
-  <style>
-    body { margin: 0; background: #111; }
-    canvas { display: block; }
-    #log { color: #0f0; font: 14px monospace; padding: 8px; }
-  </style>
-</head>
-<body>
-  <canvas id="c" width="768" height="896"></canvas>
-  <div id="log">Hold arrow keys / A / D to move. Space to shoot.</div>
-  <script type="module">
-    import { initInput, isKeyHeld } from './input.js';
-    import { Player } from './player.js';
-
-    initInput();
-
-    const canvas = document.getElementById('c');
-    const ctx = canvas.getContext('2d');
-    const player = new Player(384, ctx); // start centred
-    const log = document.getElementById('log');
-
-    let last = null;
-    function loop(ts) {
-      const dt = last === null ? 0 : Math.min((ts - last) / 1000, 0.25);
-      last = ts;
-
-      player.update(dt);
-
-      ctx.fillStyle = '#000';
-      ctx.fillRect(0, 0, 768, 896);
-      player.draw(ctx);
-
-      // HUD
-      ctx.fillStyle = '#0f0';
-      ctx.font = '16px monospace';
-      ctx.fillText(`x=${player.x.toFixed(1)}  lives=${player.lives}  bullet=${player.bulletActive}`, 10, 20);
-      ctx.fillText(`ArrowLeft=${isKeyHeld('ArrowLeft')} ArrowRight=${isKeyHeld('ArrowRight')} Space=${isKeyHeld('Space')}`, 10, 40);
-
-      requestAnimationFrame(loop);
-    }
-    requestAnimationFrame(loop);
-  </script>
-</body>
-</html>
-```
-
-### 16 — `initInput()` / `isKeyHeld()`
-- [ ] Open `player-test.html` from a `file://` URL. No console errors.
-- [ ] Hold **ArrowLeft** — the on-screen label shows `ArrowLeft=true`.
-- [ ] Release **ArrowLeft** — label immediately shows `ArrowLeft=false` (no key-repeat lag).
-- [ ] Same check for **ArrowRight** and **Space**.
-
-### 17 — Ship renders
-- [ ] A **green spaceship shape** is visible near the bottom of the canvas.
-- [ ] The shape is built from arcs and rectangles (no external image).
-
-### 18 — Movement
-- [ ] Holding **ArrowLeft** moves the ship left; releasing stops it.
-- [ ] Holding **ArrowRight** moves the ship right; releasing stops it.
-- [ ] **A** and **D** produce the same result as the arrow keys.
-- [ ] The ship cannot be moved off the left or right edge.
-
-### 19 — Shooting
-- [ ] Press **Space** — a small **yellow rectangle** (bullet) appears above the ship and travels upward.
-- [ ] Only **one** bullet exists at a time.
-- [ ] The bullet disappears once it exits the top of the canvas; a new one can then be fired.
+- **No bundler, no server required.** All imports use relative sibling paths.
+- **Fixed timestep** (60 Hz update, uncapped render) prevents speed variation across machines.
+- **`computeStepInterval(liveCount)`** in `level1.js` is the single source of truth for the formation speed curve. Level 2 imports it and multiplies by 0.67.
+- **`getTotalShotsFired()`** in `level1.js` is read by Level 2 on init to carry the shot counter forward.
+- UFO scoring uses `totalShotsFired % 4` mapped to `[50, 100, 150, 300]`.
+- Invulnerability is tracked in `level2.js`; the player sprite is simply skipped in the render pass during flash-off half-cycles.
