@@ -19,7 +19,7 @@ ES module; there is no npm, no build step, and no server required.
 | `collision.js` | ✅ Created | Sprite rendering and collision detection |
 | `explosion.js` | ✅ Created | Sprite rendering and collision detection |
 | `level1.js` | ✅ Created | Level 1 wave definition |
-| `level2.js` | ⏳ Deferred | Level 2 wave definition |
+| `level2.js` | ✅ Created | Level 2 wave definition |
 | `level3.js` | ⏳ Deferred | Level 3 wave definition |
 | `boss.js` | ⏳ Deferred | Boss enemy |
 
@@ -33,7 +33,7 @@ ES module; there is no npm, no build step, and no server required.
 - **`game.js`** — Entry point. Owns the `requestAnimationFrame` loop
   (fixed 1/60 s timestep, 250 ms delta cap), the four-scene state machine
   (`title` / `playing` / `levelcomplete` / `gameover`), canvas HUD rendering,
-  and the exported `hudState` object. Wires Level-1 callbacks.
+  and the exported `hudState` object. Wires Level-1 and Level-2 callbacks.
 - **`index.html`** — Minimal host page. Loads `game.js` as
   `type="module"` and centres the 768 × 896 canvas on a dark background.
 - **`input.js`** — Keyboard state module. `initInput()` attaches
@@ -57,6 +57,9 @@ ES module; there is no npm, no build step, and no server required.
   down to ~113 ms at 1 alive), edge-drop by exactly one cell height (24 px),
   life-breach callback, and level-complete callback. Exports `LEVEL_NUMBER = 1`
   for the HUD, plus `initLevel1()` and `updateLevel1()`.
+- **`level2.js`** — Level 2 wave definition. `Level2` class with 1.5× formation
+  speed (0.67× interval), invader return fire, player invulnerability, and
+  bonus UFO mechanic. Wired automatically from `game.js` on Level 1 clear.
 
 ---
 
@@ -162,30 +165,108 @@ build tool or test runner.
    `GAME OVER` (red), `Score: <current>` (white), and
    `Press ENTER to restart` (white).
 
-### 16 — All invaders cleared — Level Complete
-1. Destroy all 55 invaders.
-2. **Expected:** The scene transitions to `LEVEL COMPLETE!` (green) with
-   the current score and `Press ENTER to continue`. Pressing ENTER returns
-   to the Title screen. (Level 2 is a future card.)
+### 16 — All Level 1 invaders cleared — auto-advance to Level 2
+1. Destroy all 55 invaders in Level 1.
+2. **Expected:** The game immediately continues in `playing` mode with no
+   intermediate screen. The HUD now reads `LEVEL 2`. The player's life count
+   and score are identical to their values at the moment the last Level 1
+   invader was destroyed. A fresh 11×5 invader formation appears.
 
-### 17 — Game Over transition
+### 17 — Level 2: formation moves faster
+1. After advancing to Level 2, watch the formation march.
+2. **Expected:** The step interval is visibly shorter than Level 1 — roughly
+   1.5× faster at equivalent formation fill. With all 55 alive the interval
+   is ~536 ms (800 ms × 0.67); with 1 alive it is ~75 ms.
+
+### 18 — Level 2: invaders fire back
+1. Stand still and observe Level 2.
+2. **Expected:** At random intervals (between 0.8 s and 2 s) a small red
+   bullet appears beneath an invader in the formation and travels downward
+   at 300 px/s. Only one bullet is spawned per fire event.
+
+### 19 — Level 2: enemy bullet hits player
+1. Let an enemy bullet reach the player ship.
+2. **Expected:**
+   - One life is deducted (LIVES decrements by 1, if lives > 0).
+   - The player ship respawns at the horizontal centre of the canvas.
+   - The ship flashes (visible toggling at ~9 Hz) for 2 seconds.
+   - During those 2 seconds a second enemy bullet hitting the ship does NOT
+     deduct another life.
+3. After 2 seconds the ship stops flashing and becomes vulnerable again.
+
+### 20 — Level 2: enemy bullet despawns at bottom
+1. Move the player ship out of the path of an incoming enemy bullet.
+2. **Expected:** The bullet disappears when it reaches the bottom edge of
+   the canvas (896 px). No score change, no life loss.
+
+### 21 — Level 2: UFO appears within 20 seconds
+1. Enter Level 2 and watch the top of the play area.
+2. **Expected:** Within 20 seconds of Level 2 start, a red UFO shape
+   enters from the left edge, travels rightward at 120 px/s, and exits the
+   right edge. The HUD label in this area is above the top invader row.
+
+### 22 — Level 2: UFO alternates entry side
+1. Allow the first UFO to cross the screen and exit.
+2. **Expected:** The 20-second timer resets. The second UFO enters from the
+   **right** edge and travels leftward. The third enters from the left again.
+
+### 23 — Level 2: no simultaneous UFOs
+1. While a UFO is on screen, observe that no second UFO appears.
+2. **Expected:** The 20-second timer does not fire while a UFO is active;
+   a new UFO only spawns after the current one exits or is destroyed.
+
+### 24 — Level 2: shooting the UFO — score tiers
+For each of the four cases, note how many shots you have fired total
+(shown is `totalShots % 4`):
+
+| `totalShots % 4` | Expected UFO score |
+|---|---|
+| 0 | 50 |
+| 1 | 100 |
+| 2 | 150 |
+| 3 | 300 |
+
+1. Fire your first shot at the UFO (totalShots = 1, so index = 1 → **100 pts**).
+   Verify SCORE increases by exactly 100.
+2. Reset and fire the UFO on your 4th total shot (index = 3 → **300 pts**).
+   Verify SCORE increases by exactly 300.
+3. Reset and fire the UFO on your 3rd total shot (index = 2 → **150 pts**).
+   Verify SCORE increases by exactly 150.
+4. Reset and fire the UFO on a multiple-of-4 shot (index = 0 → **50 pts**).
+   Verify SCORE increases by exactly 50.
+
+*Tip: count your space-bar presses carefully. The shot counter includes
+shots that miss and shots that hit invaders.*
+
+### 25 — Level 2: score carries over from Level 1
+1. Accumulate a score in Level 1 (e.g. destroy 10 invaders → SCORE 100).
+2. Clear all Level 1 invaders to advance to Level 2.
+3. **Expected:** SCORE in the HUD is unchanged after the transition (still
+   100, or whatever value it was). Subsequent kills in Level 2 add to it.
+
+### 26 — Level 2: game over at 0 lives
+1. In Level 2, allow enough enemy hits to reduce lives to 0.
+2. **Expected:** `triggerGameOver()` is called; the game-over screen
+   appears with the final score. Pressing ENTER returns to the title screen.
+
+### 27 — Game Over transition
 1. Open the browser DevTools console (`F12`).
 2. Run: `import('./game.js').then(m => { m.triggerGameOver(); })`
 3. **Expected:** The scene switches to Game Over.
 
-### 18 — Game Over → Title transition
+### 28 — Game Over → Title transition
 1. While on the Game Over screen, press **Enter**.
 2. **Expected:** Returns to the Title screen.
 
-### 19 — No console errors
+### 29 — No console errors
 1. Open DevTools → Console.
 2. Hard-reload the page with **Ctrl+Shift+R**.
 3. **Expected:** Zero red error messages.
 
-### 20 — Scope note: HUD / Score display gap
+### 30 — Scope note: HUD / Score display gap
 The score integer is incremented by `collision.js` (SCORE_PER_KILL = 10)
 and displayed by the HUD renderer in `game.js`. No separate HUD card is needed.
 
-### 21 — Scope note: Invader shooting
-Invader bullets are out of scope for this card (Level 2 card). The
-`rectsOverlap(a, b)` helper in `collision.js` is reusable for future cards.
+### 31 — Scope note: Invader shooting
+Invader bullets are active from Level 2 onwards. The `rectsOverlap(a, b)`
+helper in `collision.js` is reused for enemy-bullet/player collision.
