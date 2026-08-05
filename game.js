@@ -37,6 +37,13 @@ import {
 
 import { Level2 } from './level2.js';
 
+import {
+  start    as level3Start,
+  setPlayer as level3SetPlayer,
+  updateLevel3,
+  drawLevel3,
+} from './level3.js';
+
 // ---------------------------------------------------------------------------
 // Canvas setup
 // ---------------------------------------------------------------------------
@@ -71,11 +78,14 @@ export const hudState = {
 // Scenes: 'title' | 'playing' | 'levelcomplete' | 'gameover'
 let currentScene = 'title';
 
-/** Which level is active: 1 or 2. Used for HUD label and update dispatch. */
+/** Which level is active: 1, 2, or 3. Used for HUD label and update dispatch. */
 let currentLevel = 1;
 
 /** Level2 instance — created once, reused per game. */
 let level2Instance = null;
+
+/** Whether level3 has been initialised this game run. */
+let level3Active = false;
 
 function setScene(sceneName) {
   currentScene = sceneName;
@@ -121,9 +131,22 @@ function onLevelComplete(_nextLevel) {
 
 /**
  * Called by Level2 when all its invaders are cleared.
- * For now, show a level-complete holding screen (Level 3 is out of scope).
+ * Transitions to Level 3.
  */
 function onLevel2Complete(_nextLevel) {
+  currentLevel = 3;
+  clearExplosions();
+  level3Active = true;
+  level3Start(canvas, ctx, onLevel3Complete);
+  level3SetPlayer(player);
+  // Stay in 'playing' scene.
+}
+
+/**
+ * Called by Level 3 when all invaders are cleared.
+ * Show level-complete holding screen.
+ */
+function onLevel3Complete() {
   setScene('levelcomplete');
 }
 
@@ -139,6 +162,7 @@ window.addEventListener('keydown', function onKey(event) {
     hudState.lives = STARTING_LIVES;
     currentLevel   = 1;
     level2Instance = null;
+    level3Active   = false;
     clearExplosions();
     initLevel1(player, { onPlayerReached, onLevelComplete });
     setScene('playing');
@@ -149,6 +173,7 @@ window.addEventListener('keydown', function onKey(event) {
     hudState.lives = STARTING_LIVES;
     currentLevel   = 1;
     level2Instance = null;
+    level3Active   = false;
     setScene('title');
   }
 });
@@ -185,6 +210,14 @@ function update(dt) {
     // runs via runCollisionPass (which also increments score).
     runCollisionPass(player);
     level2Instance.update(dt);
+    updateExplosions();
+
+    if (hudState.lives <= 0 && currentScene === 'playing') {
+      triggerGameOver();
+    }
+  } else if (currentLevel === 3 && level3Active) {
+    // Level 3 manages its own collision detection internally.
+    updateLevel3(dt);
     updateExplosions();
 
     if (hudState.lives <= 0 && currentScene === 'playing') {
@@ -229,18 +262,25 @@ function renderPlaying() {
   ctx.fillStyle = '#000000';
   ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
-  drawInvaders(ctx);
-  drawExplosions(ctx);
-
-  // In Level 2, respect the flash visibility flag for invulnerability effect.
-  const drawPlayer = (currentLevel !== 2 || level2Instance === null || level2Instance.playerVisible);
-  if (drawPlayer) {
+  if (currentLevel === 3) {
+    // Level 3 draws its own invaders, bunkers, and bullets.
+    drawLevel3(ctx);
+    drawExplosions(ctx);
     player.draw(ctx);
-  }
+  } else {
+    drawInvaders(ctx);
+    drawExplosions(ctx);
 
-  // Level 2 draws enemy bullets and UFO.
-  if (currentLevel === 2 && level2Instance !== null) {
-    level2Instance.draw(ctx);
+    // In Level 2, respect the flash visibility flag for invulnerability effect.
+    const drawPlayer = (currentLevel !== 2 || level2Instance === null || level2Instance.playerVisible);
+    if (drawPlayer) {
+      player.draw(ctx);
+    }
+
+    // Level 2 draws enemy bullets and UFO.
+    if (currentLevel === 2 && level2Instance !== null) {
+      level2Instance.draw(ctx);
+    }
   }
 
   renderHUD();
