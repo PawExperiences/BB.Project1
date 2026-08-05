@@ -23,6 +23,7 @@ Reset by BuildBoard.
 | `invaders.js`   | "Sprite rendering and collision detection"       |
 | `collision.js`  | "Sprite rendering and collision detection"       |
 | `explosion.js`  | "Sprite rendering and collision detection"       |
+| `level1.js`     | "Level 1: the classic grid"                      |
 | `level2.js`     | "Level 2: they shoot back"                       |
 | `level3.js`     | "Level 3: shields and formations"                |
 | `boss.js`       | "Boss level: multi-phase finale"                 |
@@ -164,3 +165,66 @@ Open `index.html` from the filesystem, press **Enter** to enter the Playing scen
 
 ### 22. file:// compatibility
 - [ ] The game runs with no errors in the browser console when opened directly from the filesystem (no server, no npm, no bundler).
+
+---
+
+## Manual Verification — Level 1: The Classic Grid
+
+Open `index.html` from the filesystem and press **Enter** to enter the Playing scene. `level1.js` loads automatically.
+
+### 23. Formation renders on level load
+- [ ] Exactly 55 lime-green (`#00FF00`) rectangles are visible, arranged in **11 columns × 5 rows**.
+- [ ] The formation is horizontally centred on the canvas, starting near the top.
+- [ ] **`LEVEL: 1`** is displayed in the HUD (below the score line, top-left area).
+
+### 24. Formation movement and speed scaling
+- [ ] The formation moves horizontally (left/right) as a unit, stepping at a timed interval.
+- [ ] With all 55 invaders alive, observe the step timing — steps should occur approximately **every 800 ms** (roughly 1.25 steps per second).
+- [ ] Shoot invaders until only a few remain. The formation should noticeably speed up — with 1 invader left, steps occur approximately **every 100 ms** (about 10 steps per second).
+- [ ] Intermediate counts interpolate: ~450 ms at 28 invaders.
+
+### 25. Edge-drop behaviour
+- [ ] Watch the formation reach the right canvas boundary.
+- [ ] On contact: the entire formation **drops downward by exactly 20 px** (one `INVADER_HEIGHT`) and **reverses direction** (begins moving left) in the same step.
+- [ ] The same happens when it reaches the left boundary — drops 20 px and begins moving right.
+- [ ] The formation does **not** drift past the canvas edge before reversing.
+
+### 26. Bullet-vs-invader collision (Level 1 path)
+- [ ] Move the ship under an invader and press **Space**.
+- [ ] The bullet travels upward; on contact, the invader disappears.
+- [ ] `SCORE` increments by 10 per kill.
+- [ ] The step interval visibly increases speed as fewer invaders remain.
+
+### 27. Loss condition — formation reaches player
+- [ ] Let the formation descend repeatedly (by allowing it to bounce many times without shooting).
+- [ ] When any invader's **bottom edge** reaches the **top edge of the player ship**, observe:
+  - [ ] `LIVES` counter decrements by 1.
+  - [ ] The formation **resets** to full 55 invaders at the initial position.
+  - [ ] The level restarts (formation speed resets to ~800 ms interval).
+  - [ ] **`LEVEL: 1`** remains in the HUD after restart.
+
+### 28. Win condition — all invaders destroyed
+- [ ] Destroy all 55 invaders.
+- [ ] `transitionTo('level2')` is called exactly once.
+- [ ] Currently transitions to the Game Over screen (Level 2 not yet implemented) — this is expected behaviour.
+- [ ] No duplicate transition calls (no repeated scene changes).
+
+### 29. HUD level number persistence
+- [ ] `LEVEL: 1` is shown throughout the entire level, including:
+  - [ ] Immediately after the Playing scene starts.
+  - [ ] After a life-loss restart (formation reset).
+  - [ ] While the last invader is being destroyed (before transition).
+
+### 30. No out-of-scope side-effects
+- [ ] No invader shooting occurs in Level 1 (bullets only come from the player).
+- [ ] No shields are rendered.
+- [ ] Score increments only on kills, not at level load or restart.
+- [ ] The browser console shows no errors during normal play.
+
+---
+
+## Notes
+
+- **Score module**: Score increments are handled directly via `hudState.score` in both `game.js` (legacy collision path) and `level1.js`. A dedicated shared score module is not yet present; if one is introduced in a later card, both call sites should be updated.
+- **`INVADER_HEIGHT`**: The actual exported value from `invaders.js` is `20` px. The task description mentions 32 px, but `level1.js` imports and uses the live `INVADER_HEIGHT` constant from `invaders.js` (20 px) — this is the single source of truth.
+- **Level 2 transition**: When all invaders are cleared, `transitionTo('level2')` is called. Until `level2.js` is implemented, this falls back to the Game Over screen.

@@ -17,6 +17,18 @@ export function aabbOverlap(a, b) {
 }
 
 /**
+ * checkHit(a, b)
+ * Alias for aabbOverlap — named interface used by level modules.
+ * Returns true if the two axis-aligned bounding boxes overlap.
+ * @param {{ x:number, y:number, width:number, height:number }} a
+ * @param {{ x:number, y:number, width:number, height:number }} b
+ * @returns {boolean}
+ */
+export function checkHit(a, b) {
+  return aabbOverlap(a, b);
+}
+
+/**
  * onPlayerHit()
  * Stub — called when an enemy bullet overlaps the player AABB.
  * Level 2 card will add real lives/game-over logic here.
