@@ -2,10 +2,16 @@
 import { CANVAS_WIDTH, CANVAS_HEIGHT, STARTING_LIVES } from './gameConfig.js';
 import { initInput, isKeyHeld } from './input.js';
 import { Player } from './player.js';
-import { invaders, updateInvaders, drawInvaders } from './invaders.js';
+import { invaders, drawInvaders } from './invaders.js';
 import { runCollisionPass } from './collision.js';
 import { updateExplosions, drawExplosions } from './explosion.js';
 import { getScore, addScore, resetScore } from './score.js';
+import {
+  initLevel1,
+  updateLevel1,
+  resetFormation,
+  getCurrentLevel,
+} from './level1.js';
 
 // ---------------------------------------------------------------------------
 // HUD state — exported so sibling modules can read it
@@ -41,8 +47,39 @@ let player = new Player();
 // ---------------------------------------------------------------------------
 initInput();
 
-// Track ENTER key for scene transitions (game.js handles this independently
-// from the player ship fire key so we do not interfere with isKeyHeld('Space')).
+// ---------------------------------------------------------------------------
+// Level 1 — wire up callbacks
+// ---------------------------------------------------------------------------
+function wireLevel1() {
+  initLevel1({
+    level:       1,
+    getPlayerY:  () => player.y,
+    getLives:    () => hudState.lives,
+    onLoseLife:  () => {
+      hudState.lives -= 1;
+      // Reset formation and player position.
+      resetFormation();
+      player = new Player();
+    },
+    onGameOver:  () => {
+      if (hudState.score > hudState.hiScore) {
+        hudState.hiScore = hudState.score;
+      }
+      transitionTo(SCENE_GAME_OVER);
+    },
+    onLevelClear: () => {
+      // Transition to Level 2 (future card).
+      transitionTo('level2');
+    },
+  });
+}
+
+// Initialise Level 1 wiring at start-up.
+wireLevel1();
+
+// ---------------------------------------------------------------------------
+// Track ENTER key for scene transitions
+// ---------------------------------------------------------------------------
 const _enterKeys = {};
 window.addEventListener('keydown', (e) => {
   if (!_enterKeys[e.code] && e.code === 'Enter') {
@@ -68,45 +105,21 @@ function handleEnter() {
   }
 }
 
-function transitionTo(scene) {
+export function transitionTo(scene) {
   currentScene = scene;
 }
 
-function resetGame() {
+export function resetGame() {
   hudState.score = 0;
   hudState.lives = STARTING_LIVES;
   resetScore();
   // Rebuild the player instance so position and bullet are fresh.
   player = new Player();
-  // Reset invader formation.
-  resetInvaders();
+  // Re-wire Level 1 (resets formation to starting position).
+  wireLevel1();
 }
 
-/**
- * resetInvaders — mark all invaders alive again and restore starting positions.
- * Kept here to avoid circular imports; invaders.js owns the array.
- */
-function resetInvaders() {
-  const COLS           = 11;
-  const ROWS           = 5;
-  const INVADER_WIDTH  = 24;
-  const INVADER_HEIGHT = 16;
-  const INVADER_GAP_X  = 12;
-  const INVADER_GAP_Y  = 8;
-  const START_X        = 208;
-  const START_Y        = 60;
-  let i = 0;
-  for (let row = 0; row < ROWS; row++) {
-    for (let col = 0; col < COLS; col++) {
-      invaders[i].x     = START_X + col * (INVADER_WIDTH  + INVADER_GAP_X);
-      invaders[i].y     = START_Y + row * (INVADER_HEIGHT + INVADER_GAP_Y);
-      invaders[i].alive = true;
-      i++;
-    }
-  }
-}
-
-function checkGameOver() {
+export function checkGameOver() {
   if (currentScene === SCENE_PLAYING && hudState.lives <= 0) {
     if (hudState.score > hudState.hiScore) {
       hudState.hiScore = hudState.score;
@@ -155,8 +168,8 @@ function update(dt) {
   // Player update.
   player.update(dt);
 
-  // Invader movement.
-  updateInvaders();
+  // Level 1 movement (timer-based, handles edge detection, life-loss, level-clear).
+  updateLevel1(dt);
 
   // Explosion timers.
   updateExplosions();
@@ -183,6 +196,10 @@ function render() {
       break;
     case SCENE_GAME_OVER:
       renderGameOver();
+      break;
+    default:
+      // Future scenes (level2, etc.) — show a placeholder.
+      renderLevelTransition();
       break;
   }
 }
@@ -223,7 +240,7 @@ function renderPlaying() {
   drawHUD();
 }
 
-function renderGameOver() {
+export function renderGameOver() {
   ctx.fillStyle = '#000';
   ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
@@ -246,10 +263,26 @@ function renderGameOver() {
   ctx.fillText('Press ENTER to restart', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 110);
 }
 
+function renderLevelTransition() {
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+  ctx.textAlign    = 'center';
+  ctx.textBaseline = 'middle';
+
+  ctx.fillStyle = '#0f0';
+  ctx.font      = 'bold 48px monospace';
+  ctx.fillText('LEVEL CLEAR!', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 - 40);
+
+  ctx.fillStyle = '#fff';
+  ctx.font      = '28px monospace';
+  ctx.fillText('Level 2 coming soon…', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 30);
+}
+
 // ---------------------------------------------------------------------------
-// HUD
+// HUD — extended to show current level number
 // ---------------------------------------------------------------------------
-function drawHUD() {
+export function drawHUD() {
   const PAD = 16;
 
   ctx.textAlign    = 'left';
@@ -258,6 +291,11 @@ function drawHUD() {
   ctx.font         = '20px monospace';
   ctx.fillText('SCORE  ' + hudState.score,   PAD, PAD);
   ctx.fillText('HI     ' + hudState.hiScore, CANVAS_WIDTH / 2 - 80, PAD);
+
+  // Level number — centred below the score line.
+  const levelNum = getCurrentLevel();
+  ctx.textAlign = 'center';
+  ctx.fillText('LEVEL ' + levelNum, CANVAS_WIDTH / 2, PAD + 28);
 
   ctx.textAlign = 'right';
   ctx.fillText('LIVES  ' + hudState.lives, CANVAS_WIDTH - PAD, PAD);
