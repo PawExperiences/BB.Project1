@@ -20,6 +20,7 @@ A hand-written, dependency-free Space Invaders clone built with plain HTML, CSS,
 | 1     | Classic 11 × 5 invader grid. Sweep-and-drop formation. |
 | 2     | Same grid with invader return fire and a bonus UFO. |
 | 3     | Destructible shield bunkers + formation split at half-kills. |
+| Boss  | Multi-phase boss fight. Two firing phases. Sudden-death if hit. |
 
 ---
 
@@ -77,10 +78,33 @@ A hand-written, dependency-free Space Invaders clone built with plain HTML, CSS,
 
 ### Level 3 — Win / Lose Conditions
 
-- **Win:** destroy all 55 invaders → HUD shows "LEVEL COMPLETE!" screen.
+- **Win:** destroy all 55 invaders → boss fight begins automatically (no screen transition).
 - **Lose (breach):** allow the invader formation (or either post-split group) to descend to
   the bunker line (≈ 80% canvas height) → GAME OVER screen appears.
 - **Lose (player death):** let invader bullets deplete all lives → GAME OVER screen appears.
+
+### Boss Fight
+
+1. Complete all three levels — the boss fight starts automatically after the last Level 3
+   invader is destroyed (HUD shows "BOSS").
+2. Confirm the boss is rendered entirely with canvas 2D primitives and is visually much
+   larger than any regular invader.
+3. Confirm a **health bar** is visible below the boss, showing HP from 10 down to 0.
+4. Confirm the boss **sweeps horizontally** back and forth across the top of the screen
+   continuously throughout the fight.
+5. **Phase 1 (HP 10 → 6):** Observe single projectiles fired straight downward at roughly
+   one shot every 1.5 seconds.
+6. **Phase 2 (HP 5 → 0):** Shoot the boss until its HP reaches 5. Confirm the fire rate
+   immediately increases noticeably (roughly one shot every 0.6 seconds — at least 2× faster).
+   The health bar turns red/orange in Phase 2 as a visual cue.
+7. Shoot the boss with player bullets — each hit reduces HP by exactly 1. Confirm the boss
+   is always damageable (no immunity windows).
+8. **Sudden-death test:** Let a boss projectile reach and overlap the player sprite.
+   - **Expected:** the run ends immediately, score resets to 0, and the game returns to Level 1.
+9. **Win condition:** Reduce boss HP to 0.
+   - **Expected:** a win screen appears showing "EARTH SAVED!" / "YOU WIN", the final
+     accumulated score, and a "Press ENTER to play again" prompt.
+10. Press ENTER on the win screen — confirm the game resets to Level 1 with score 0.
 
 ---
 
@@ -98,4 +122,5 @@ input.js         — Keyboard input
 level1.js        — Level 1 logic
 level2.js        — Level 2 logic (invader fire, UFO)
 level3.js        — Level 3 logic (shields, formation split)
+boss.js          — Boss fight: multi-phase finale
 ```
