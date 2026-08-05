@@ -1,28 +1,28 @@
-# run.ps1 - Serves the Space Invaders game on http://localhost:8080.
-# NOTE: The game is also fully playable by opening index.html directly
-# from the filesystem (file:// URL) - no server is required.
+# run.ps1 - Serve e2e Space Invaders locally and open it in the browser.
+# Run from the repository root.
+# Starts Python's built-in HTTP server on port 8080.
+# Press Ctrl+C to stop.
+
 $ErrorActionPreference = 'Stop'
-
 $PORT = 8080
-$ROOT = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
+$URL = "http://localhost:$PORT/index.html"
 
-Write-Host "[run] Serving '$ROOT' at http://localhost:$PORT"
-Write-Host "[run] Open http://localhost:$PORT/index.html in your browser."
-Write-Host '[run] Press Ctrl+C to stop.'
+# Change to repo root (two levels up from release/scripts/)
+$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+Set-Location (Join-Path $scriptDir '../..')
 
-Set-Location $ROOT
+Write-Host "[run] Serving at $URL"
+Write-Host "[run] Press Ctrl+C to stop."
 
-$python = $null
-foreach ($candidate in @('python3', 'python')) {
-    if (Get-Command $candidate -ErrorAction SilentlyContinue) {
-        $python = $candidate
-        break
-    }
+# Open browser after 1 second in background
+$job = Start-Job -ScriptBlock {
+    Start-Sleep 1
+    Start-Process $using:URL
 }
 
-if ($python) {
-    & $python -m http.server $PORT
-} else {
-    Write-Host '[run] ERROR: python3 or python not found. Install Python 3 and retry.' -ForegroundColor Red
-    exit 1
+try {
+    & python3 -m http.server $PORT
+} finally {
+    Remove-Job $job -Force -ErrorAction SilentlyContinue
+    Write-Host "[run] Server stopped."
 }

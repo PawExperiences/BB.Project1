@@ -1,41 +1,37 @@
 #!/usr/bin/env python3
-"""run.py — Serves the Space Invaders game on http://localhost:8080.
-Useful for browsers that restrict ES module imports over file://.
-NOTE: The game is also fully playable by opening index.html directly
-from the filesystem (file:// URL) — no server is required."""
+"""run.py – Serve e2e Space Invaders locally and open it in the browser.
+
+Run from the repository root.
+Starts Python's built-in HTTP server on port 8080 and opens
+http://localhost:8080/index.html in the default browser.
+Press Ctrl+C to stop.
+"""
 import http.server
 import os
-import sys
+import threading
 import webbrowser
 
 PORT = 8080
-ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-
-class Handler(http.server.SimpleHTTPRequestHandler):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, directory=ROOT, **kwargs)
-
-    def log_message(self, fmt, *args):
-        print(f"[run] {self.address_string()} - {fmt % args}")
+URL = f"http://localhost:{PORT}/index.html"
 
 
 def main():
-    os.chdir(ROOT)
-    print(f"[run] Serving '{ROOT}' at http://localhost:{PORT}")
-    print(f"[run] Open http://localhost:{PORT}/index.html in your browser.")
-    print("[run] Press Ctrl+C to stop.")
-    url = f"http://localhost:{PORT}/index.html"
-    try:
-        webbrowser.open(url)
-    except Exception:
-        pass
-    with http.server.HTTPServer(("localhost", PORT), Handler) as httpd:
+    os.chdir(os.path.dirname(os.path.abspath(__file__)) + "/../..")
+    handler = http.server.SimpleHTTPRequestHandler
+    # Suppress request logs to keep output clean
+    handler.log_message = lambda *a: None
+
+    with http.server.HTTPServer(("", PORT), handler) as httpd:
+        print(f"[run] Serving at {URL}")
+        print("[run] Press Ctrl+C to stop.")
+        # Open browser after a short delay
+        timer = threading.Timer(0.5, webbrowser.open, [URL])
+        timer.start()
         try:
             httpd.serve_forever()
         except KeyboardInterrupt:
+            timer.cancel()
             print("\n[run] Server stopped.")
-            sys.exit(0)
 
 
 if __name__ == "__main__":

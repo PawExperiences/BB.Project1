@@ -1,25 +1,29 @@
 #!/usr/bin/env sh
-# run.sh — Serves the Space Invaders game on http://localhost:8080.
-# NOTE: The game is also fully playable by opening index.html directly
-# from the filesystem (file:// URL) — no server is required.
-set -eu
+# run.sh – Serve e2e Space Invaders locally and open it in the browser.
+# Run from the repository root.
+# Starts Python's built-in HTTP server on port 8080.
+# Press Ctrl+C to stop.
+set -e
 
 PORT=8080
-ROOT=$(cd "$(dirname "$0")/../.." && pwd)
+URL="http://localhost:${PORT}/index.html"
 
-echo "[run] Serving '$ROOT' at http://localhost:$PORT"
-echo "[run] Open http://localhost:$PORT/index.html in your browser."
+# Change to repo root (two levels up from release/scripts/)
+cd "$(dirname "$0")/../.."
+
+echo "[run] Serving at ${URL}"
 echo "[run] Press Ctrl+C to stop."
 
-cd "$ROOT"
+# Open browser in background after 1s
+(
+  sleep 1
+  if command -v xdg-open > /dev/null 2>&1; then
+    xdg-open "${URL}"
+  elif command -v open > /dev/null 2>&1; then
+    open "${URL}"
+  else
+    echo "[run] Open ${URL} in your browser."
+  fi
+) &
 
-if command -v python3 > /dev/null 2>&1; then
-  python3 -m http.server $PORT
-elif command -v python > /dev/null 2>&1; then
-  python -m SimpleHTTPServer $PORT
-elif command -v npx > /dev/null 2>&1; then
-  npx --yes serve -l $PORT .
-else
-  echo "[run] ERROR: no suitable HTTP server found (python3, python, or npx required)." >&2
-  exit 1
-fi
+python3 -m http.server "${PORT}"
