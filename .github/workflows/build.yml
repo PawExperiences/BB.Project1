@@ -1,4 +1,4 @@
-# Managed by BuildBoard -- edit via the Releaser or a CI-fix task.
+# Managed by BuildBoard (re-registered) -- edit via the Releaser or a CI-fix task.
 name: BuildBoard CI
 
 on:
