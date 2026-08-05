@@ -206,7 +206,7 @@ Open `index.html` from the filesystem and press **Enter** to enter the Playing s
 ### 28. Win condition — all invaders destroyed
 - [ ] Destroy all 55 invaders.
 - [ ] `transitionTo('level2')` is called exactly once.
-- [ ] Currently transitions to the Game Over screen (Level 2 not yet implemented) — this is expected behaviour.
+- [ ] Level 2 loads automatically (see Level 2 checks below).
 - [ ] No duplicate transition calls (no repeated scene changes).
 
 ### 29. HUD level number persistence
@@ -223,8 +223,94 @@ Open `index.html` from the filesystem and press **Enter** to enter the Playing s
 
 ---
 
+## Manual Verification — Level 2: They Shoot Back
+
+Complete Level 1 (destroy all 55 invaders) to enter Level 2 automatically, then verify:
+
+### 31. Automatic transition from Level 1
+- [ ] After destroying all invaders in Level 1, the game immediately transitions to Level 2 — **no level-select screen**.
+- [ ] **`LEVEL: 2`** appears in the HUD.
+- [ ] The lives counter is **unchanged** from the end of Level 1 (no reset).
+- [ ] The score carries over as well.
+
+### 32. Formation layout
+- [ ] A fresh 5 rows × 11 columns invader grid appears, arranged identically to Level 1.
+- [ ] The formation is horizontally centred on the canvas, starting near the top.
+
+### 33. Formation speed (1.5× Level 1)
+- [ ] Observe the step interval with all 55 invaders alive — steps should occur approximately **every 536 ms** (800 ms × 0.67).
+- [ ] With 1 invader remaining, steps should occur approximately **every 67 ms** (100 ms × 0.67).
+- [ ] The formation is noticeably faster than Level 1 at every invader count.
+
+### 34. Invader shooting — random timer
+- [ ] After entering Level 2, observe invader bullets (red rectangles) appearing periodically.
+- [ ] Bullets fire at random intervals between approximately **0.8 s and 2.0 s**.
+- [ ] Each interval is independently re-randomised after the previous shot.
+
+### 35. Invader shooting — lowest in column
+- [ ] Verify that bullets always originate from the **bottom-most living invader** in a column.
+- [ ] Kill all invaders in a column except one — the surviving invader fires bullets.
+- [ ] Bullets travel **straight down** at 300 px/s.
+
+### 36. Player hit and respawn
+- [ ] Allow an invader bullet to hit the player ship.
+- [ ] The **`LIVES`** counter decrements by 1.
+- [ ] The player ship **immediately reappears** at the fixed bottom-centre position.
+- [ ] The formation and enemy bullets are unaffected by the respawn.
+
+### 37. Invulnerability flash
+- [ ] For exactly **2 seconds** after respawn, the ship **flashes** visibly (rapidly alternating visible/invisible).
+- [ ] Invader bullets that would hit the ship during this window are **ignored** (ship not destroyed, no life lost).
+- [ ] After 2 seconds, the ship stops flashing and is collidable again.
+
+### 38. Game Over on last life
+- [ ] Reduce lives to 1 (by taking hits), then allow another invader bullet to hit the ship.
+- [ ] A **static Game Over screen** is displayed immediately.
+- [ ] The screen shows **GAME OVER** and the current score.
+- [ ] **No auto-restart occurs** — the game remains on this screen.
+- [ ] A **page reload** returns to the Title screen.
+
+### 39. UFO spawn — timing and alternating sides
+- [ ] Wait approximately 20 seconds after entering Level 2.
+- [ ] A **magenta UFO** appears and travels across the **top** of the play field.
+- [ ] The **first UFO** enters from the **left**.
+- [ ] If the UFO is not shot and disappears, wait another 20 seconds — the next UFO enters from the **right**.
+- [ ] Subsequent UFOs continue to alternate sides.
+
+### 40. UFO speed and silent disappearance
+- [ ] The UFO travels at approximately **120 px/s**.
+- [ ] If not shot, the UFO **disappears silently** upon reaching the far edge (no explosion, no score change).
+
+### 41. UFO scoring tiers
+- [ ] Shoot the UFO and observe the score increment.
+- [ ] The score increases by one of: **50, 100, 150, or 300**.
+- [ ] The score tier is determined by `cumulativeShotCount % 4`:
+  - 0 → **100**
+  - 1 → **50**
+  - 2 → **150**
+  - 3 → **300**
+- [ ] `cumulativeShotCount` is the total player shots (bullets fired) across the entire session, never reset between levels.
+- [ ] Shooting invaders increments this counter; shooting the UFO also increments it.
+
+### 42. Win condition — clear Level 2
+- [ ] Destroy all 55 invaders in Level 2.
+- [ ] `transitionTo('level3')` is called exactly once.
+- [ ] Currently transitions to the Game Over screen (Level 3 not yet implemented) — this is expected behaviour.
+- [ ] **`LEVEL: 2`** is shown throughout the entire level until transition.
+
+### 43. No out-of-scope side-effects
+- [ ] No shields are rendered.
+- [ ] Level 2 does not affect or reset the score from Level 1.
+- [ ] The browser console shows no errors during normal Level 2 play.
+- [ ] The game runs correctly when opened directly from the filesystem (`file://` URL).
+
+---
+
 ## Notes
 
-- **Score module**: Score increments are handled directly via `hudState.score` in both `game.js` (legacy collision path) and `level1.js`. A dedicated shared score module is not yet present; if one is introduced in a later card, both call sites should be updated.
-- **`INVADER_HEIGHT`**: The actual exported value from `invaders.js` is `20` px. The task description mentions 32 px, but `level1.js` imports and uses the live `INVADER_HEIGHT` constant from `invaders.js` (20 px) — this is the single source of truth.
-- **Level 2 transition**: When all invaders are cleared, `transitionTo('level2')` is called. Until `level2.js` is implemented, this falls back to the Game Over screen.
+- **Score module**: Score increments are handled directly via `hudState.score` in both `game.js` (legacy collision path) and `level1.js` / `level2.js`. A dedicated shared score module is not yet present; if one is introduced in a later card, all call sites should be updated.
+- **`INVADER_HEIGHT`**: The actual exported value from `invaders.js` is `20` px. The task description mentions 32 px, but level modules import and use the live `INVADER_HEIGHT` constant from `invaders.js` (20 px) — this is the single source of truth.
+- **Level 2 transition**: When all invaders are cleared, `transitionTo('level3')` is called. Until `level3.js` is implemented, this falls back to the Game Over screen.
+- **UFO score tiers**: The mapping is fixed as `[100, 50, 150, 300]` indexed by `cumulativeShotCount % 4`. This is documented here and in `level2.js` as the authoritative reference.
+- **Cumulative shot count**: `cumulativeShotCount` in `level2.js` counts player shots (invader kills + UFO hits) from level 2 entry onward, as level 1 does not export this counter. If a future card introduces a shared session counter, `level2.js` should import it instead.
+- **Player draw patching**: `level2.js` monkey-patches `player.draw` on the live player instance to implement the invulnerability flash. This patch is local to the instance and does not affect Level 1 or other levels.

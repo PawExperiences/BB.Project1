@@ -56,15 +56,21 @@ export function registerLevel(hooks) {
 /**
  * transitionTo(levelId)
  * Transitions to the named level or scene.
- * Currently supports: 'level1', 'level2', 'gameover'
+ * Currently supports: 'level1', 'level2', 'level3', 'gameover'
  */
 export function transitionTo(levelId) {
+  if (levelId === 'level3') {
+    // Level 3 not yet implemented — go to game over as placeholder
+    registeredLevel = null;
+    hudState.level = 3;
+    import('./level3.js').catch(() => {
+      enterGameOver();
+    });
+    return;
+  }
   if (levelId === 'level2') {
-    // Level 2 not yet implemented — go to game over as placeholder
-    // When level2.js is created it will call registerLevel and handle itself
     registeredLevel = null;
     hudState.level = 2;
-    // Import level2 dynamically if available, otherwise go to gameover
     import('./level2.js').catch(() => {
       enterGameOver();
     });
@@ -113,7 +119,7 @@ function enterPlaying() {
   });
 }
 
-function enterGameOver() {
+export function enterGameOver() {
   if (hudState.score > hudState.hiScore) {
     hudState.hiScore = hudState.score;
   }
@@ -122,7 +128,7 @@ function enterGameOver() {
 }
 
 // Expose transition helpers so later cards can trigger Game Over
-export { enterTitle, enterPlaying, enterGameOver };
+export { enterTitle, enterPlaying };
 
 // Export canvas context for level modules
 export { ctx, canvas };
