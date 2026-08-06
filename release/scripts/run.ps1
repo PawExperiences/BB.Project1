@@ -1,47 +1,28 @@
-# run.ps1 -- Build (if needed) and run the e2e prime tester console app.
-# Usage: .\release\scripts\run.ps1 [args to pass to the binary]
-# Example: .\release\scripts\run.ps1 97
+# run.ps1 — build (if needed) and launch the prime_tester executable.
 $ErrorActionPreference = 'Stop'
 
-$BUILD_DIR = 'build'
-$BINARY_NAME = 'prime_tester'
-
-$RepoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
-Set-Location $RepoRoot
-Write-Host "[run.ps1] Working directory: $RepoRoot"
-
-# Locate binary
-$BinaryPath = $null
-$Candidates = @(
-    "$BUILD_DIR\$BINARY_NAME.exe",
-    "$BUILD_DIR\Release\$BINARY_NAME.exe",
-    "$BUILD_DIR\$BINARY_NAME",
-    "$BUILD_DIR\Release\$BINARY_NAME"
+$BuildDir = 'build'
+$ExeCandidates = @(
+    Join-Path $BuildDir 'Release\prime_tester.exe',
+    Join-Path $BuildDir 'prime_tester.exe'
 )
-foreach ($c in $Candidates) {
-    if (Test-Path $c) {
-        $BinaryPath = $c
-        break
-    }
+
+$Exe = $ExeCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+
+if (-not $Exe) {
+    Write-Host 'Executable not found -- building now...'
+    if (-not (Test-Path $BuildDir)) { New-Item -ItemType Directory -Path $BuildDir | Out-Null }
+    cmake -B $BuildDir
+    cmake --build $BuildDir --config Release
+    $Exe = $ExeCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
 }
 
-if ($null -eq $BinaryPath) {
-    Write-Host "[run.ps1] Binary not found -- building with CMake..."
-    cmake -B $BUILD_DIR -S . -DCMAKE_BUILD_TYPE=Release
-    cmake --build $BUILD_DIR --config Release
-    foreach ($c in $Candidates) {
-        if (Test-Path $c) {
-            $BinaryPath = $c
-            break
-        }
-    }
-}
-
-if ($null -eq $BinaryPath) {
-    Write-Host "[run.ps1] ERROR: Could not locate binary '$BINARY_NAME' after build."
+if (-not $Exe) {
+    Write-Error 'ERROR: could not locate prime_tester.exe after build.'
     exit 1
 }
 
-Write-Host "[run.ps1] Running: $BinaryPath $args"
-& $BinaryPath @args
+$PassArgs = $args
+Write-Host "+ $Exe $PassArgs"
+& $Exe @PassArgs
 exit $LASTEXITCODE

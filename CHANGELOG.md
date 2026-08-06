@@ -1,3 +1,25 @@
+## 0.3.0 -- e2e prime tester 0.3.0
+
+# Changelog
+
+## [0.3.0] - Initial Release
+
+### Added
+- **Prime Tester Console App** (`prime_tester` executable)
+  - `src/prime.h`: Declares `bool is_prime(long long n);` with include guard.
+  - `src/prime.cpp`: Implements trial-division primality test with 6k±1 optimisation; correct edge-cases for n < 2, n = 2, n = 3, and even n > 2.
+  - `src/main.cpp`: Dual-mode entry point — argv mode (each CLI argument tested) and stdin mode (whitespace-delimited tokens read until EOF); invalid/overflow tokens reported to stderr with exit code 1.
+  - `CMakeLists.txt`: Root-level CMake build file; `cmake_minimum_required(VERSION 3.16)`, project `prime_tester`, C++17, single executable target from `src/main.cpp` and `src/prime.cpp`.
+  - `README.md`: Project description, build instructions, argv/stdin usage examples, edge-case notes.
+- **Sieve of Eratosthenes — Range Primes + `--upto` Benchmark Mode**
+  - `src/sieve.h`: Declares `std::vector<long long> primes_up_to(long long n);`.
+  - `src/sieve.cpp`: Implements standard Sieve of Eratosthenes using `std::vector<bool>`; correct up to n = 10⁸ (5,761,455 primes); returns empty vector for n < 2.
+  - `src/main.cpp` extended: `--upto N` mode calls `primes_up_to(N)` and prints each prime on its own line; missing/invalid N exits 1 with usage message.
+  - `CMakeLists.txt` updated: `src/sieve.cpp` added to the `prime_tester` source list.
+- **CI / Build workflow** (`.github/workflows/build.yml`): BuildBoard-managed CMake build workflow scaffolded/updated.
+- **Repository documentation**: `CHANGELOG.md`, `CONTRIBUTING.md`, `RELEASING.md` created.
+- **Release helper scripts**: `release/scripts/release.{py,sh,ps1}`, `release/scripts/run.{py,sh,ps1}`.
+
 # Changelog
 
 All notable changes to this project will be documented in this file.

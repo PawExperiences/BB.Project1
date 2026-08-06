@@ -1,53 +1,50 @@
-# release.ps1 -- Tag, build, and publish GitHub release for e2e prime tester 0.3.0.
-# Run ONCE after CI is green on main. Requires: git, cmake, gh (GitHub CLI) on PATH.
+# release.ps1 — tag, build, package, and publish prime_tester 0.3.0 to GitHub Releases.
 $ErrorActionPreference = 'Stop'
 
-$TAG = 'v0.3.0'
-$RELEASE_TITLE = 'e2e prime tester 0.3.0'
-$NOTES_FILE = 'docs/releases/0-3-0.md'
-$BUILD_DIR = 'build'
-$BINARY_NAME = 'prime_tester'
+$Version   = '0.3.0'
+$Tag       = "v$Version"
+$Repo      = 'PawExperiences/BB.Project1'
+$BuildDir  = 'build'
+$DistDir   = 'dist'
+$Archive   = "prime_tester-$Version-windows.zip"
 
-$RepoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
-Set-Location $RepoRoot
-Write-Host "[release.ps1] Working directory: $RepoRoot"
-
-# Tag (idempotent)
-$existingTags = git tag --list
-if ($existingTags -contains $TAG) {
-    Write-Host "[release.ps1] Tag $TAG already exists -- skipping tag creation."
+Write-Host '=== 1. Tag ==='
+git fetch --tags
+$tagExists = git tag -l $Tag
+if ($tagExists) {
+    Write-Host "Tag $Tag already exists -- skipping."
 } else {
-    git tag -a $TAG -m "Release $RELEASE_TITLE"
-    Write-Host "[release.ps1] Tag $TAG created."
-    git push origin $TAG
-    Write-Host "[release.ps1] Tag pushed to origin."
+    git tag -a $Tag -m "Release e2e prime tester $Version"
+    git push origin $Tag
 }
 
-# Build
-cmake -B $BUILD_DIR -S . -DCMAKE_BUILD_TYPE=Release
-cmake --build $BUILD_DIR --config Release
+Write-Host '=== 2. Build ==='
+if (-not (Test-Path $BuildDir)) { New-Item -ItemType Directory -Path $BuildDir | Out-Null }
+cmake -B $BuildDir -DCMAKE_BUILD_TYPE=Release
+cmake --build $BuildDir --config Release
 
-# Locate binary
-$BinaryPath = $null
-$Candidates = @(
-    "$BUILD_DIR\$BINARY_NAME.exe",
-    "$BUILD_DIR\Release\$BINARY_NAME.exe",
-    "$BUILD_DIR\$BINARY_NAME",
-    "$BUILD_DIR\Release\$BINARY_NAME"
+Write-Host '=== 3. Locate executable ==='
+$ExeCandidates = @(
+    Join-Path $BuildDir 'Release\prime_tester.exe',
+    Join-Path $BuildDir 'prime_tester.exe'
 )
-foreach ($c in $Candidates) {
-    if (Test-Path $c) {
-        $BinaryPath = $c
-        break
-    }
+$Exe = $ExeCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+if (-not $Exe) {
+    Write-Error 'ERROR: built executable not found.'
+    exit 1
 }
+Write-Host "Found: $Exe"
 
-if ($null -eq $BinaryPath) {
-    Write-Host "[release.ps1] WARNING: binary '$BINARY_NAME' not found in $BUILD_DIR. Proceeding without artifact."
-    gh release create $TAG --title $RELEASE_TITLE --notes-file $NOTES_FILE
-} else {
-    Write-Host "[release.ps1] Binary found: $BinaryPath"
-    gh release create $TAG --title $RELEASE_TITLE --notes-file $NOTES_FILE $BinaryPath
-}
+Write-Host '=== 4. Package ==='
+if (-not (Test-Path $DistDir)) { New-Item -ItemType Directory -Path $DistDir | Out-Null }
+$ArchivePath = Join-Path $DistDir $Archive
+Compress-Archive -Path $Exe -DestinationPath $ArchivePath -Force
+Write-Host "Packaged: $ArchivePath"
 
-Write-Host "[release.ps1] Done."
+Write-Host '=== 5. Publish GitHub Release ==='
+gh release create $Tag `
+    --repo $Repo `
+    --title "e2e prime tester $Version" `
+    --notes "Release $Version of the e2e prime tester project." `
+    $ArchivePath
+Write-Host 'Done.'

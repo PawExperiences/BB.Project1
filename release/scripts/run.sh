@@ -1,48 +1,21 @@
 #!/usr/bin/env sh
-# run.sh -- Build (if needed) and run the e2e prime tester console app.
-# Usage: sh release/scripts/run.sh [args to pass to the binary]
-# Example: sh release/scripts/run.sh 97
-set -e
+# run.sh — build (if needed) and launch the prime_tester executable.
+set -eu
 
 BUILD_DIR="build"
-BINARY_NAME="prime_tester"
+EXE="${BUILD_DIR}/prime_tester"
 
-cd "$(dirname "$0")/../.."
-echo "[run.sh] Working directory: $(pwd)"
-
-# Locate or build binary
-BINARY=""
-for CANDIDATE in \
-  "$BUILD_DIR/$BINARY_NAME" \
-  "$BUILD_DIR/Release/$BINARY_NAME" \
-  "$BUILD_DIR/${BINARY_NAME}.exe" \
-  "$BUILD_DIR/Release/${BINARY_NAME}.exe"; do
-  if [ -f "$CANDIDATE" ]; then
-    BINARY="$CANDIDATE"
-    break
-  fi
-done
-
-if [ -z "$BINARY" ]; then
-  echo "[run.sh] Binary not found -- building with CMake..."
-  cmake -B "$BUILD_DIR" -S . -DCMAKE_BUILD_TYPE=Release
-  cmake --build "$BUILD_DIR" --config Release
-  for CANDIDATE in \
-    "$BUILD_DIR/$BINARY_NAME" \
-    "$BUILD_DIR/Release/$BINARY_NAME" \
-    "$BUILD_DIR/${BINARY_NAME}.exe" \
-    "$BUILD_DIR/Release/${BINARY_NAME}.exe"; do
-    if [ -f "$CANDIDATE" ]; then
-      BINARY="$CANDIDATE"
-      break
-    fi
-  done
+if [ ! -f "${EXE}" ]; then
+  echo "Executable not found — building now..."
+  mkdir -p "${BUILD_DIR}"
+  cmake -B "${BUILD_DIR}"
+  cmake --build "${BUILD_DIR}" --config Release
 fi
 
-if [ -z "$BINARY" ]; then
-  echo "[run.sh] ERROR: Could not locate binary '$BINARY_NAME' after build."
+if [ ! -f "${EXE}" ]; then
+  echo "ERROR: could not locate ${EXE} after build." >&2
   exit 1
 fi
 
-echo "[run.sh] Running: $BINARY $*"
-exec "$BINARY" "$@"
+echo "+ ${EXE} $*"
+exec "${EXE}" "$@"
