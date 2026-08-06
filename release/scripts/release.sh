@@ -1,28 +1,50 @@
 #!/usr/bin/env sh
-# release.sh – Build prime_tester, tag v0.3.0, push tag to origin.
-# Run from the repository root after all 0.3.0 changes are merged to main.
-set -eu
+# release.sh -- Tag, build, and publish GitHub release for e2e prime tester 0.3.0.
+# Run ONCE after CI is green on main. Requires: git, cmake, gh (GitHub CLI) on PATH.
+set -e
 
-VERSION="0.3.0"
-TAG="v${VERSION}"
+TAG="v0.3.0"
+RELEASE_TITLE="e2e prime tester 0.3.0"
+NOTES_FILE="docs/releases/0-3-0.md"
 BUILD_DIR="build"
+BINARY_NAME="prime_tester"
 
-echo ">>> cmake -S . -B ${BUILD_DIR} -DCMAKE_BUILD_TYPE=Release"
-cmake -S . -B "${BUILD_DIR}" -DCMAKE_BUILD_TYPE=Release
+cd "$(dirname "$0")/../.."
+echo "[release.sh] Working directory: $(pwd)"
 
-echo ">>> cmake --build ${BUILD_DIR}"
-cmake --build "${BUILD_DIR}"
-echo "Build complete. Artifact: ${BUILD_DIR}/prime_tester"
-
-# Check tag does not already exist remotely
-if git ls-remote --tags origin | grep -q "refs/tags/${TAG}$"; then
-  echo "ERROR: tag ${TAG} already exists on origin. Aborting." >&2
-  exit 1
+# Tag (idempotent)
+if git tag --list | grep -qx "$TAG"; then
+  echo "[release.sh] Tag $TAG already exists -- skipping tag creation."
+else
+  git tag -a "$TAG" -m "Release $RELEASE_TITLE"
+  echo "[release.sh] Tag $TAG created."
+  git push origin "$TAG"
+  echo "[release.sh] Tag pushed to origin."
 fi
 
-echo ">>> git tag -a ${TAG} -m 'Release e2e prime tester ${VERSION}'"
-git tag -a "${TAG}" -m "Release e2e prime tester ${VERSION}"
+# Build
+cmake -B "$BUILD_DIR" -S . -DCMAKE_BUILD_TYPE=Release
+cmake --build "$BUILD_DIR" --config Release
 
-echo ">>> git push origin ${TAG}"
-git push origin "${TAG}"
-echo "Tag ${TAG} pushed to origin. Upload the artifact to the GitHub release manually."
+# Locate binary
+BINARY=""
+for CANDIDATE in \
+  "$BUILD_DIR/$BINARY_NAME" \
+  "$BUILD_DIR/Release/$BINARY_NAME" \
+  "$BUILD_DIR/${BINARY_NAME}.exe" \
+  "$BUILD_DIR/Release/${BINARY_NAME}.exe"; do
+  if [ -f "$CANDIDATE" ]; then
+    BINARY="$CANDIDATE"
+    break
+  fi
+done
+
+if [ -z "$BINARY" ]; then
+  echo "[release.sh] WARNING: binary '$BINARY_NAME' not found in $BUILD_DIR. Proceeding without artifact."
+  gh release create "$TAG" --title "$RELEASE_TITLE" --notes-file "$NOTES_FILE" || echo "[release.sh] GitHub release may already exist."
+else
+  echo "[release.sh] Binary found: $BINARY"
+  gh release create "$TAG" --title "$RELEASE_TITLE" --notes-file "$NOTES_FILE" "$BINARY" || echo "[release.sh] GitHub release may already exist."
+fi
+
+echo "[release.sh] Done."
