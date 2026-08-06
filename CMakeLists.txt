@@ -10,6 +10,14 @@ add_executable(prime_tester
     src/sieve.cpp
 )
 
+target_include_directories(prime_tester PRIVATE src)
+
+if(MSVC)
+    target_compile_options(prime_tester PRIVATE /W3)
+else()
+    target_compile_options(prime_tester PRIVATE -Wall -Wextra)
+endif()
+
 enable_testing()
 
 add_test(
@@ -17,7 +25,11 @@ add_test(
     COMMAND prime_tester --upto 10
 )
 set_tests_properties(upto_10 PROPERTIES
-    PASS_REGULAR_EXPRESSION "^2\n3\n5\n7\n$"
+    PASS_REGULAR_EXPRESSION "^2
+3
+5
+7
+$"
 )
 
 add_test(
@@ -42,4 +54,36 @@ add_test(
 )
 set_tests_properties(upto_29 PROPERTIES
     PASS_REGULAR_EXPRESSION "29"
+)
+
+add_test(
+    NAME upto_20
+    COMMAND prime_tester --upto 20
+)
+set_tests_properties(upto_20 PROPERTIES
+    PASS_REGULAR_EXPRESSION "^2
+3
+5
+7
+11
+13
+17
+19
+$"
+)
+
+add_test(
+    NAME upto_negative
+    COMMAND prime_tester --upto -1
+)
+set_tests_properties(upto_negative PROPERTIES
+    PASS_REGULAR_EXPRESSION "^$"
+)
+
+add_test(
+    NAME single_number_17
+    COMMAND prime_tester 17
+)
+set_tests_properties(single_number_17 PROPERTIES
+    PASS_REGULAR_EXPRESSION "17 is prime"
 )

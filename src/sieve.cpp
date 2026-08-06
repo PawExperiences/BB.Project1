@@ -2,13 +2,12 @@
 
 #include <vector>
 
-std::vector<long long> primes_up_to(long long n)
-{
+std::vector<long long> primes_up_to(long long n) {
     if (n < 2) {
         return {};
     }
 
-    // is_composite[i] == true means i is not prime
+    // is_composite[i] == true means i is NOT prime
     std::vector<bool> is_composite(static_cast<std::size_t>(n + 1), false);
     is_composite[0] = true;
     is_composite[1] = true;
