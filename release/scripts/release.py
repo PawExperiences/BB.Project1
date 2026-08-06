@@ -1,75 +1,69 @@
 #!/usr/bin/env python3
-"""release.py -- Tag, build, and publish GitHub release for e2e prime tester 0.3.0.
-Run ONCE after CI is green on main. Requires: git, cmake, gh (GitHub CLI) on PATH.
-"""
-import subprocess
-import sys
-import os
-import pathlib
+"""release.py — tag, build, package, and publish prime_tester 0.3.0 to GitHub Releases."""
+import subprocess, sys, os, platform, shutil, tarfile, zipfile
 
-TAG = "v0.3.0"
-RELEASE_TITLE = "e2e prime tester 0.3.0"
-NOTES_FILE = "docs/releases/0-3-0.md"
+VERSION = "0.3.0"
+TAG = f"v{VERSION}"
+REPO = "PawExperiences/BB.Project1"
 BUILD_DIR = "build"
-# Update BINARY_NAME to match the executable CMake produces
-BINARY_NAME = "prime_tester"
+DIST_DIR = "dist"
 
-def run(cmd, **kwargs):
-    print(f"[release.py] Running: {' '.join(cmd)}")
-    result = subprocess.run(cmd, **kwargs)
+def run(cmd, **kw):
+    print(f"+ {' '.join(cmd)}")
+    result = subprocess.run(cmd, **kw)
     if result.returncode != 0:
-        print(f"[release.py] ERROR: command failed with exit code {result.returncode}")
         sys.exit(result.returncode)
     return result
 
 def main():
-    repo_root = pathlib.Path(__file__).resolve().parents[2]
-    os.chdir(repo_root)
-    print(f"[release.py] Working directory: {repo_root}")
-
-    # Check tag does not already exist
-    existing = subprocess.run(["git", "tag", "--list", TAG], capture_output=True, text=True)
-    if TAG in existing.stdout.split():
-        print(f"[release.py] Tag {TAG} already exists -- skipping tag creation (idempotent).")
-    else:
-        run(["git", "tag", "-a", TAG, "-m", f"Release {RELEASE_TITLE}"])
-        print(f"[release.py] Tag {TAG} created.")
+    # 1. Ensure working tree is clean enough (tag step is additive only)
+    run(["git", "fetch", "--tags"])
+    tags = subprocess.run(["git", "tag", "-l", TAG], capture_output=True, text=True).stdout.strip()
+    if not tags:
+        run(["git", "tag", "-a", TAG, "-m", f"Release e2e prime tester {VERSION}"])
         run(["git", "push", "origin", TAG])
-        print(f"[release.py] Tag pushed to origin.")
+    else:
+        print(f"Tag {TAG} already exists — skipping tag creation.")
 
-    # Build
-    run(["cmake", "-B", BUILD_DIR, "-S", ".", "-DCMAKE_BUILD_TYPE=Release"])
+    # 2. Build
+    os.makedirs(BUILD_DIR, exist_ok=True)
+    run(["cmake", "-B", BUILD_DIR, "-DCMAKE_BUILD_TYPE=Release"])
     run(["cmake", "--build", BUILD_DIR, "--config", "Release"])
 
-    # Locate binary (search common subdirs)
-    binary = None
-    for candidate in [
-        pathlib.Path(BUILD_DIR) / BINARY_NAME,
-        pathlib.Path(BUILD_DIR) / "Release" / BINARY_NAME,
-        pathlib.Path(BUILD_DIR) / f"{BINARY_NAME}.exe",
-        pathlib.Path(BUILD_DIR) / "Release" / f"{BINARY_NAME}.exe",
-    ]:
-        if candidate.exists():
-            binary = str(candidate)
-            break
-    if binary is None:
-        print(f"[release.py] WARNING: binary '{BINARY_NAME}' not found in {BUILD_DIR}. Proceeding without artifact.")
-        artifact_args = []
-    else:
-        print(f"[release.py] Binary found: {binary}")
-        artifact_args = [binary]
+    # 3. Locate executable
+    exe = os.path.join(BUILD_DIR, "prime_tester")
+    if platform.system() == "Windows":
+        exe_candidates = [
+            os.path.join(BUILD_DIR, "Release", "prime_tester.exe"),
+            os.path.join(BUILD_DIR, "prime_tester.exe"),
+        ]
+        exe = next((c for c in exe_candidates if os.path.isfile(c)), None)
+    if not exe or not os.path.isfile(exe):
+        print("ERROR: built executable not found.", file=sys.stderr)
+        sys.exit(1)
 
-    # Publish GitHub release (idempotent: fails gracefully if already exists)
-    gh_cmd = [
-        "gh", "release", "create", TAG,
-        "--title", RELEASE_TITLE,
-        "--notes-file", NOTES_FILE,
-    ] + artifact_args
-    result = subprocess.run(gh_cmd)
-    if result.returncode != 0:
-        print("[release.py] GitHub release may already exist or gh CLI failed. Check manually.")
+    # 4. Package
+    os.makedirs(DIST_DIR, exist_ok=True)
+    system_tag = platform.system().lower()
+    if platform.system() == "Windows":
+        archive_name = f"prime_tester-{VERSION}-{system_tag}.zip"
+        archive_path = os.path.join(DIST_DIR, archive_name)
+        with zipfile.ZipFile(archive_path, "w", zipfile.ZIP_DEFLATED) as zf:
+            zf.write(exe, os.path.basename(exe))
     else:
-        print(f"[release.py] GitHub release {TAG} published successfully.")
+        archive_name = f"prime_tester-{VERSION}-{system_tag}.tar.gz"
+        archive_path = os.path.join(DIST_DIR, archive_name)
+        with tarfile.open(archive_path, "w:gz") as tf:
+            tf.add(exe, arcname=os.path.basename(exe))
+    print(f"Packaged: {archive_path}")
+
+    # 5. Upload to GitHub Release (requires gh CLI)
+    run(["gh", "release", "create", TAG,
+         "--repo", REPO,
+         "--title", f"e2e prime tester {VERSION}",
+         "--notes", f"Release {VERSION} of the e2e prime tester project.",
+         archive_path])
+    print("Release published successfully.")
 
 if __name__ == "__main__":
     main()

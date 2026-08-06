@@ -1,50 +1,45 @@
 #!/usr/bin/env sh
-# release.sh -- Tag, build, and publish GitHub release for e2e prime tester 0.3.0.
-# Run ONCE after CI is green on main. Requires: git, cmake, gh (GitHub CLI) on PATH.
-set -e
+# release.sh — tag, build, package, and publish prime_tester 0.3.0 to GitHub Releases.
+set -eu
 
-TAG="v0.3.0"
-RELEASE_TITLE="e2e prime tester 0.3.0"
-NOTES_FILE="docs/releases/0-3-0.md"
+VERSION="0.3.0"
+TAG="v${VERSION}"
+REPO="PawExperiences/BB.Project1"
 BUILD_DIR="build"
-BINARY_NAME="prime_tester"
+DIST_DIR="dist"
+SYSTEM=$(uname -s | tr '[:upper:]' '[:lower:]')
+ARCHIVE="prime_tester-${VERSION}-${SYSTEM}.tar.gz"
 
-cd "$(dirname "$0")/../.."
-echo "[release.sh] Working directory: $(pwd)"
-
-# Tag (idempotent)
-if git tag --list | grep -qx "$TAG"; then
-  echo "[release.sh] Tag $TAG already exists -- skipping tag creation."
+echo "=== 1. Tag ==="
+git fetch --tags
+if git rev-parse "${TAG}" >/dev/null 2>&1; then
+  echo "Tag ${TAG} already exists — skipping."
 else
-  git tag -a "$TAG" -m "Release $RELEASE_TITLE"
-  echo "[release.sh] Tag $TAG created."
-  git push origin "$TAG"
-  echo "[release.sh] Tag pushed to origin."
+  git tag -a "${TAG}" -m "Release e2e prime tester ${VERSION}"
+  git push origin "${TAG}"
 fi
 
-# Build
-cmake -B "$BUILD_DIR" -S . -DCMAKE_BUILD_TYPE=Release
-cmake --build "$BUILD_DIR" --config Release
+echo "=== 2. Build ==="
+mkdir -p "${BUILD_DIR}"
+cmake -B "${BUILD_DIR}" -DCMAKE_BUILD_TYPE=Release
+cmake --build "${BUILD_DIR}" --config Release
 
-# Locate binary
-BINARY=""
-for CANDIDATE in \
-  "$BUILD_DIR/$BINARY_NAME" \
-  "$BUILD_DIR/Release/$BINARY_NAME" \
-  "$BUILD_DIR/${BINARY_NAME}.exe" \
-  "$BUILD_DIR/Release/${BINARY_NAME}.exe"; do
-  if [ -f "$CANDIDATE" ]; then
-    BINARY="$CANDIDATE"
-    break
-  fi
-done
-
-if [ -z "$BINARY" ]; then
-  echo "[release.sh] WARNING: binary '$BINARY_NAME' not found in $BUILD_DIR. Proceeding without artifact."
-  gh release create "$TAG" --title "$RELEASE_TITLE" --notes-file "$NOTES_FILE" || echo "[release.sh] GitHub release may already exist."
-else
-  echo "[release.sh] Binary found: $BINARY"
-  gh release create "$TAG" --title "$RELEASE_TITLE" --notes-file "$NOTES_FILE" "$BINARY" || echo "[release.sh] GitHub release may already exist."
+echo "=== 3. Locate executable ==="
+EXE="${BUILD_DIR}/prime_tester"
+if [ ! -f "${EXE}" ]; then
+  echo "ERROR: executable not found at ${EXE}" >&2
+  exit 1
 fi
 
-echo "[release.sh] Done."
+echo "=== 4. Package ==="
+mkdir -p "${DIST_DIR}"
+tar czf "${DIST_DIR}/${ARCHIVE}" -C "${BUILD_DIR}" prime_tester
+echo "Packaged: ${DIST_DIR}/${ARCHIVE}"
+
+echo "=== 5. Publish GitHub Release ==="
+gh release create "${TAG}" \
+  --repo "${REPO}" \
+  --title "e2e prime tester ${VERSION}" \
+  --notes "Release ${VERSION} of the e2e prime tester project." \
+  "${DIST_DIR}/${ARCHIVE}"
+echo "Done."
