@@ -10,30 +10,31 @@ The only topic covered here is changelog authorship. For code style, pull-reques
 
 **Every changelog entry must describe the observable effect on the user — not the internal action you took as a developer.**
 
-### What it means
-
 When you write a changelog entry, imagine you are telling a user what is different about the software they are running today compared with yesterday. They cannot see your commit, your function name, or your refactor. They can only see what the software does.
-
-### Why it matters
-
-A changelog written from the commit's perspective reads like a diff summary and is useful only to the developer who made the change. A changelog written from the user's perspective tells every reader — including non-technical stakeholders, testers, and future contributors — what actually changed about the product they are using. It also makes release notes directly publishable without rewriting.
-
-### How to distinguish user-facing phrasing from commit-log phrasing
-
-| ❌ Commit-log phrasing (avoid) | ✅ User-facing phrasing (use this) |
-|---|---|
-| Added `dateFilter` parameter to `queryResults()` | You can now filter results by date on the results screen |
-| Refactored health-bar renderer to guard on `winScreenActive` | The boss health bar no longer appears on the win screen |
-| Extracted `_detachWinListeners` helper and called it on scene exit | Restarting after the boss fight no longer triggers duplicate callbacks |
-| Deleted legacy `singleLevel` entry point | The game now loads correctly through the level-selection menu |
 
 **Self-test:** Before submitting an entry, ask: _"Does this sentence make sense to someone who has never read the source code?"_ If the answer is no, rewrite it.
 
 ---
 
+## Wording Guidance
+
+Every entry should read as if you are describing a change in the product to the person using it.
+
+| ✅ DO — user-facing phrasing | ❌ DON'T — commit-log phrasing |
+|---|---|
+| You can now filter results by date on the results screen. | Added `dateFilter` parameter to `queryResults()`. |
+| The boss health bar no longer appears on the win screen. | Refactored health-bar renderer to guard on `winScreenActive`. |
+| Restarting after the boss fight no longer triggers duplicate sound effects. | Extracted `_detachWinListeners` helper and called it on scene exit. |
+| The game now loads correctly through the level-selection menu. | Deleted legacy `singleLevel` entry point. |
+
+**Prefer:** "You can now…", "The X screen no longer…", "Selecting Y now…", "Players can…"  
+**Avoid:** "Refactored…", "Fixed bug in…", "Added method…", "Updated module…"
+
+---
+
 ## Changelog Sections
 
-`CHANGELOG.md` uses the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format. Changes go under the `[Unreleased]` section at the top of the file, grouped under one of the six headings below.
+`CHANGELOG.md` uses the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format. Changes go under the `[Unreleased]` section at the top of the file, grouped under one of the six headings below. The headings must appear in this order.
 
 For each section you will find:
 - **What belongs here** — the kinds of changes that go under this heading.
@@ -113,11 +114,11 @@ For each section you will find:
 
 ---
 
-## Quick Checklist
+## Quick Reference
 
-Before opening a pull request that includes a changelog entry, confirm:
+Before adding a changelog entry, confirm:
 
-- [ ] The entry appears under the correct section heading (one of: `Added`, `Changed`, `Deprecated`, `Removed`, `Fixed`, `Security`).
-- [ ] The entry is placed in the `[Unreleased]` section at the top of `CHANGELOG.md`.
-- [ ] The entry describes what the user can now do, see, or no longer encounters — not what you changed in the code.
-- [ ] The entry is a single bullet point beginning with a capital letter, written as a complete thought.
+- The entry appears under the correct section heading (one of: `Added`, `Changed`, `Deprecated`, `Removed`, `Fixed`, `Security`).
+- The entry is placed in the `[Unreleased]` section at the top of `CHANGELOG.md`.
+- The entry describes what the user can now do, see, or no longer encounters — not what you changed in the code.
+- The entry is a single bullet point beginning with a capital letter, written as a complete thought.
