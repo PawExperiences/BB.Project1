@@ -1,23 +1,30 @@
 #!/usr/bin/env python3
-"""run.py — starts a local HTTP server on port 8080 serving the repo root.
-Use when testing over http:// (e.g. DevTools profiling); file:// still works without this."""
+"""run.py – Build (if needed) and run the prime_tester console app.
+Usage: python release/scripts/run.py [prime_tester args...]
+Example: python release/scripts/run.py --range 1 100"""
+import subprocess
+import sys
 import os
-import http.server
-import socketserver
+import platform
 
-PORT = 8080
+BUILD_DIR = "build"
+BINARY = os.path.join(BUILD_DIR, "prime_tester" + (".exe" if platform.system() == "Windows" else ""))
+
+def run(cmd):
+    print(f">>> {' '.join(cmd)}")
+    result = subprocess.run(cmd)
+    if result.returncode != 0:
+        sys.exit(result.returncode)
 
 def main():
-    root = os.path.dirname(os.path.abspath(__file__))
-    repo_root = os.path.normpath(os.path.join(root, "..", ".."))
-    os.chdir(repo_root)
-    print(f"Serving e2e space invaders from: {repo_root}")
-    print(f"Open http://localhost:{PORT}/index.html in your browser.")
-    print("Press Ctrl+C to stop.")
-    handler = http.server.SimpleHTTPRequestHandler
-    handler.log_message = lambda self, fmt, *args: None  # suppress request noise
-    with socketserver.TCPServer(("", PORT), handler) as httpd:
-        httpd.serve_forever()
+    if not os.path.isfile(BINARY):
+        print("Binary not found – building first...")
+        run(["cmake", "-S", ".", "-B", BUILD_DIR, "-DCMAKE_BUILD_TYPE=Release"])
+        run(["cmake", "--build", BUILD_DIR])
+    else:
+        print(f"Using existing binary: {BINARY}")
+    args = sys.argv[1:]
+    run([BINARY] + args)
 
 if __name__ == "__main__":
     main()

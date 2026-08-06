@@ -1,50 +1,28 @@
-#!/bin/sh
-# release.sh — packages game files, creates git tag v0.1.0, pushes tag to origin.
-# Run from the repository root after all manual checks pass.
+#!/usr/bin/env sh
+# release.sh – Build prime_tester, tag v0.3.0, push tag to origin.
+# Run from the repository root after all 0.3.0 changes are merged to main.
 set -eu
 
-VERSION="0.1.0"
+VERSION="0.3.0"
 TAG="v${VERSION}"
-ZIP_NAME="e2e-space-invaders-${VERSION}.zip"
-FILES="index.html game.js gameConfig.js input.js player.js invaders.js collision.js explosion.js level1.js level2.js level3.js boss.js README.md"
+BUILD_DIR="build"
 
-# Move to repo root (script lives in release/scripts/)
-cd "$(dirname "$0")/../.."
-echo "Working in: $(pwd)"
+echo ">>> cmake -S . -B ${BUILD_DIR} -DCMAKE_BUILD_TYPE=Release"
+cmake -S . -B "${BUILD_DIR}" -DCMAKE_BUILD_TYPE=Release
 
-# 1. Clean working tree check
-if [ -n "$(git status --porcelain)" ]; then
-  echo "ERROR: Working tree is not clean. Commit or stash changes first." >&2
+echo ">>> cmake --build ${BUILD_DIR}"
+cmake --build "${BUILD_DIR}"
+echo "Build complete. Artifact: ${BUILD_DIR}/prime_tester"
+
+# Check tag does not already exist remotely
+if git ls-remote --tags origin | grep -q "refs/tags/${TAG}$"; then
+  echo "ERROR: tag ${TAG} already exists on origin. Aborting." >&2
   exit 1
 fi
-echo "Working tree is clean."
 
-# 2. Check required files
-for f in $FILES; do
-  if [ ! -f "$f" ]; then
-    echo "ERROR: Missing file: $f" >&2
-    exit 1
-  fi
-done
-echo "All source files present."
+echo ">>> git tag -a ${TAG} -m 'Release e2e prime tester ${VERSION}'"
+git tag -a "${TAG}" -m "Release e2e prime tester ${VERSION}"
 
-# 3. Create zip artefact (idempotent: overwrite)
-OUT="release/scripts/${ZIP_NAME}"
-mkdir -p release/scripts
-rm -f "$OUT"
-zip -j "$OUT" $FILES
-echo "Artefact created: $OUT"
-
-# 4. Create annotated tag (idempotent)
-if git tag -l "$TAG" | grep -q "^${TAG}$"; then
-  echo "Tag $TAG already exists, skipping tag creation."
-else
-  git tag -a "$TAG" -m "Release $TAG - initial four-level Space Invaders"
-  echo "Tag $TAG created."
-fi
-
-# 5. Push tag
-git push origin "$TAG"
-echo "Tag $TAG pushed to origin."
-echo ""
-echo "Done. Upload $OUT to the GitHub Release for $TAG."
+echo ">>> git push origin ${TAG}"
+git push origin "${TAG}"
+echo "Tag ${TAG} pushed to origin. Upload the artifact to the GitHub release manually."
