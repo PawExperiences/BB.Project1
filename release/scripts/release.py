@@ -1,71 +1,41 @@
 #!/usr/bin/env python3
-"""release.py — packages game files, creates git tag v0.1.0, pushes tag to origin.
-Run from the repository root after all manual checks pass."""
-import os
+"""release.py – Build prime_tester, tag v0.3.0, push tag to origin.
+Run from the repository root after all 0.3.0 changes are merged to main."""
 import subprocess
 import sys
-import zipfile
+import os
 
-VERSION = "0.1.0"
+VERSION = "0.3.0"
 TAG = f"v{VERSION}"
-ZIP_NAME = f"e2e-space-invaders-{VERSION}.zip"
-FILES = [
-    "index.html", "game.js", "gameConfig.js", "input.js", "player.js",
-    "invaders.js", "collision.js", "explosion.js", "level1.js", "level2.js",
-    "level3.js", "boss.js", "README.md",
-]
+BUILD_DIR = "build"
 
-def run(cmd, check=True):
-    print(f"  + {' '.join(cmd)}")
-    result = subprocess.run(cmd, capture_output=True, text=True)
-    if result.stdout:
-        print(result.stdout.rstrip())
-    if result.stderr:
-        print(result.stderr.rstrip(), file=sys.stderr)
-    if check and result.returncode != 0:
-        sys.exit(f"Command failed: {' '.join(cmd)}")
+def run(cmd, **kwargs):
+    print(f">>> {' '.join(cmd)}")
+    result = subprocess.run(cmd, **kwargs)
+    if result.returncode != 0:
+        print(f"ERROR: command failed with exit code {result.returncode}", file=sys.stderr)
+        sys.exit(result.returncode)
     return result
 
 def main():
-    root = os.path.dirname(os.path.abspath(__file__))
-    repo_root = os.path.join(root, "..", "..")
-    os.chdir(os.path.normpath(repo_root))
-    print(f"Working in: {os.getcwd()}")
+    # 1. Configure
+    run(["cmake", "-S", ".", "-B", BUILD_DIR, "-DCMAKE_BUILD_TYPE=Release"])
+    # 2. Build
+    run(["cmake", "--build", BUILD_DIR])
+    print(f"Build complete. Artifact: {BUILD_DIR}/prime_tester")
 
-    # 1. Check clean working tree
-    status = run(["git", "status", "--porcelain"])
-    if status.stdout.strip():
-        sys.exit("Working tree is not clean. Commit or stash changes first.")
-    print("Working tree is clean.")
+    # 3. Check tag does not already exist remotely
+    result = subprocess.run(["git", "ls-remote", "--tags", "origin", TAG],
+                            capture_output=True, text=True)
+    if TAG in result.stdout:
+        print(f"ERROR: tag {TAG} already exists on origin. Aborting.", file=sys.stderr)
+        sys.exit(1)
 
-    # 2. Check required files exist
-    missing = [f for f in FILES if not os.path.isfile(f)]
-    if missing:
-        sys.exit(f"Missing files: {missing}")
-    print(f"All {len(FILES)} source files present.")
-
-    # 3. Create zip artefact
-    zip_path = os.path.join("release", "scripts", ZIP_NAME)
-    os.makedirs(os.path.dirname(zip_path), exist_ok=True)
-    print(f"Creating {zip_path} ...")
-    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
-        for f in FILES:
-            zf.write(f)
-            print(f"  added {f}")
-    print(f"Artefact created: {zip_path}")
-
-    # 4. Create annotated tag (idempotent: skip if already exists)
-    existing = run(["git", "tag", "-l", TAG])
-    if existing.stdout.strip() == TAG:
-        print(f"Tag {TAG} already exists, skipping tag creation.")
-    else:
-        run(["git", "tag", "-a", TAG, "-m", f"Release {TAG} – initial four-level Space Invaders"])
-        print(f"Tag {TAG} created.")
-
+    # 4. Create annotated tag
+    run(["git", "tag", "-a", TAG, "-m", f"Release e2e prime tester {VERSION}"])
     # 5. Push tag
     run(["git", "push", "origin", TAG])
-    print(f"Tag {TAG} pushed to origin.")
-    print(f"\nDone. Upload {zip_path} to the GitHub Release for {TAG}.")
+    print(f"Tag {TAG} pushed to origin. Upload the artifact to the GitHub release manually.")
 
 if __name__ == "__main__":
     main()

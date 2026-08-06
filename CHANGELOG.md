@@ -1,3 +1,27 @@
+## 0.3.0 -- e2e prime tester 0.3.0
+
+# Changelog
+
+## [0.3.0] – Initial Release
+
+### Added
+
+#### C++ Prime Tester Console App (`feat: Prime tester console app #92`)
+- `src/prime.h` / `src/prime.cpp` – `is_prime()` function implementing trial-division primality test.
+- `src/sieve.h` / `src/sieve.cpp` – Sieve of Eratosthenes for range prime generation, plus a benchmark comparing sieve vs. trial-division (`feat: A sieve for ranges, and a benchmark #93`).
+- `src/main.cpp` – CLI entry point: accepts a number or `--range N M` flag; reports primality or lists primes in range.
+- `CMakeLists.txt` – CMake build system (C++17, Release build type, produces binary `prime_tester`).
+- `README.md` – Full build, usage, and manual verification instructions (`feat: Manual verification steps in the README #94`).
+- `CHANGELOG.md` – Project changelog seeded for this release.
+
+#### Release & Run Scripts
+- `release/scripts/release.{py,sh,ps1}` – Automate tagging and publishing.
+- `release/scripts/run.{py,sh,ps1}` – Build and launch the console app.
+
+#### Space Invaders JS game (pre-existing, same repo)
+- `index.html`, `game.js`, `gameConfig.js`, `input.js`, `player.js`, `invaders.js`, `collision.js`, `explosion.js`, `level1.js`, `level2.js`, `level3.js`, `boss.js` – Full browser-based Space Invaders implementation shipped under a prior effort (`e2e space invaders 0.1.0`).
+- `docs/releases/0-1-0.md` – Release notes for the Space Invaders 0.1.0 release bundled in the same repository.
+
 ## 0.1.0 -- e2e space invaders 0.1.0
 
 # Changelog

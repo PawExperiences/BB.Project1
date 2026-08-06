@@ -1,58 +1,35 @@
-# release.ps1 — packages game files, creates git tag v0.1.0, pushes tag to origin.
-# Run from the repository root after all manual checks pass.
-
+# release.ps1 - Build prime_tester, tag v0.3.0, push tag to origin.
+# Run from the repository root after all 0.3.0 changes are merged to main.
+[CmdletBinding()]
+param()
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$Version  = '0.1.0'
-$Tag      = "v$Version"
-$ZipName  = "e2e-space-invaders-$Version.zip"
-$Files    = @('index.html','game.js','gameConfig.js','input.js','player.js',
-              'invaders.js','collision.js','explosion.js','level1.js','level2.js',
-              'level3.js','boss.js','README.md')
+$Version = '0.3.0'
+$Tag = "v$Version"
+$BuildDir = 'build'
 
-# Move to repo root (script lives in release/scripts/)
-$ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-Set-Location (Join-Path $ScriptDir '../..')
-Write-Host "Working in: $(Get-Location)"
-
-# 1. Clean working tree check
-$Status = & git status --porcelain 2>&1
-if ($Status) {
-    Write-Error 'Working tree is not clean. Commit or stash changes first.'
-    exit 1
-}
-Write-Host 'Working tree is clean.'
-
-# 2. Check required files
-foreach ($f in $Files) {
-    if (-not (Test-Path $f)) {
-        Write-Error "Missing file: $f"
-        exit 1
-    }
-}
-Write-Host "All $($Files.Count) source files present."
-
-# 3. Create zip artefact (idempotent: overwrite)
-$OutDir = Join-Path 'release' 'scripts'
-New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
-$OutPath = Join-Path $OutDir $ZipName
-if (Test-Path $OutPath) { Remove-Item $OutPath -Force }
-$AbsFiles = $Files | ForEach-Object { (Resolve-Path $_).Path }
-Compress-Archive -Path $AbsFiles -DestinationPath $OutPath
-Write-Host "Artefact created: $OutPath"
-
-# 4. Create annotated tag (idempotent)
-$ExistingTag = & git tag -l $Tag 2>&1
-if ($ExistingTag -eq $Tag) {
-    Write-Host "Tag $Tag already exists, skipping tag creation."
-} else {
-    & git tag -a $Tag -m "Release $Tag - initial four-level Space Invaders"
-    Write-Host "Tag $Tag created."
+function Invoke-Step {
+    param([string[]]$Cmd)
+    Write-Host ">>> $($Cmd -join ' ')"
+    & $Cmd[0] $Cmd[1..($Cmd.Length-1)]
+    if ($LASTEXITCODE -ne 0) { throw "Command failed: $($Cmd -join ' ')" }
 }
 
+# 1. Configure
+Invoke-Step cmake, '-S', '.', '-B', $BuildDir, '-DCMAKE_BUILD_TYPE=Release'
+# 2. Build
+Invoke-Step cmake, '--build', $BuildDir
+Write-Host "Build complete. Artifact: $BuildDir\prime_tester.exe"
+
+# 3. Check tag does not already exist remotely
+$remote = git ls-remote --tags origin $Tag 2>&1
+if ($remote -match [regex]::Escape($Tag)) {
+    throw "ERROR: tag $Tag already exists on origin. Aborting."
+}
+
+# 4. Create annotated tag
+Invoke-Step git, 'tag', '-a', $Tag, '-m', "Release e2e prime tester $Version"
 # 5. Push tag
-& git push origin $Tag
-Write-Host "Tag $Tag pushed to origin."
-Write-Host ""
-Write-Host "Done. Upload $OutPath to the GitHub Release for $Tag."
+Invoke-Step git, 'push', 'origin', $Tag
+Write-Host "Tag $Tag pushed to origin. Upload the artifact to the GitHub release manually."
