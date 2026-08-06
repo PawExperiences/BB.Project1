@@ -1,24 +1,47 @@
-# run.ps1 - Build (if needed) and run the prime_tester console app.
-# Usage: .\release\scripts\run.ps1 [prime_tester args...]
-# Example: .\release\scripts\run.ps1 --range 1 100
-[CmdletBinding()]
-param([Parameter(ValueFromRemainingArguments)]$AppArgs)
-Set-StrictMode -Version Latest
+# run.ps1 -- Build (if needed) and run the e2e prime tester console app.
+# Usage: .\release\scripts\run.ps1 [args to pass to the binary]
+# Example: .\release\scripts\run.ps1 97
 $ErrorActionPreference = 'Stop'
 
-$BuildDir = 'build'
-$Binary = Join-Path $BuildDir 'prime_tester.exe'
+$BUILD_DIR = 'build'
+$BINARY_NAME = 'prime_tester'
 
-if (-not (Test-Path $Binary)) {
-    Write-Host 'Binary not found -- building first...'
-    cmake -S . -B $BuildDir -DCMAKE_BUILD_TYPE=Release
-    if ($LASTEXITCODE -ne 0) { throw 'cmake configure failed' }
-    cmake --build $BuildDir
-    if ($LASTEXITCODE -ne 0) { throw 'cmake build failed' }
-} else {
-    Write-Host "Using existing binary: $Binary"
+$RepoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+Set-Location $RepoRoot
+Write-Host "[run.ps1] Working directory: $RepoRoot"
+
+# Locate binary
+$BinaryPath = $null
+$Candidates = @(
+    "$BUILD_DIR\$BINARY_NAME.exe",
+    "$BUILD_DIR\Release\$BINARY_NAME.exe",
+    "$BUILD_DIR\$BINARY_NAME",
+    "$BUILD_DIR\Release\$BINARY_NAME"
+)
+foreach ($c in $Candidates) {
+    if (Test-Path $c) {
+        $BinaryPath = $c
+        break
+    }
 }
 
-Write-Host ">>> $Binary $AppArgs"
-& $Binary @AppArgs
+if ($null -eq $BinaryPath) {
+    Write-Host "[run.ps1] Binary not found -- building with CMake..."
+    cmake -B $BUILD_DIR -S . -DCMAKE_BUILD_TYPE=Release
+    cmake --build $BUILD_DIR --config Release
+    foreach ($c in $Candidates) {
+        if (Test-Path $c) {
+            $BinaryPath = $c
+            break
+        }
+    }
+}
+
+if ($null -eq $BinaryPath) {
+    Write-Host "[run.ps1] ERROR: Could not locate binary '$BINARY_NAME' after build."
+    exit 1
+}
+
+Write-Host "[run.ps1] Running: $BinaryPath $args"
+& $BinaryPath @args
 exit $LASTEXITCODE
