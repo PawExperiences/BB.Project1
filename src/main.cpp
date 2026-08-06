@@ -1,90 +1,102 @@
 #include "prime.h"
+#include "sieve.h"
 
 #include <iostream>
 #include <string>
+#include <stdexcept>
 #include <cerrno>
-#include <climits>
 #include <cstdlib>
 
-// Process a single token string.
-// Returns true if the token was a valid integer, false otherwise.
-// On valid integer: prints result to stdout.
-// On invalid/overflow: prints error to stderr.
-static bool process_token(const std::string& token) {
-    if (token.empty()) {
-        std::cerr << "not a number: " << token << "\n";
-        return false;
-    }
-
-    // Validate: optional leading '-', then all digits, no whitespace.
-    std::size_t start = 0;
-    if (token[0] == '-' || token[0] == '+') {
-        start = 1;
-    }
-    if (start >= token.size()) {
-        // Lone sign character is not a valid integer
-        std::cerr << "not a number: " << token << "\n";
-        return false;
-    }
-    for (std::size_t i = start; i < token.size(); ++i) {
-        if (token[i] < '0' || token[i] > '9') {
-            std::cerr << "not a number: " << token << "\n";
-            return false;
+int main(int argc, char* argv[])
+{
+    // --upto N mode
+    for (int i = 1; i < argc; ++i) {
+        std::string arg(argv[i]);
+        if (arg == "--upto") {
+            if (i + 1 >= argc) {
+                std::cerr << "Error: --upto requires an integer argument.\n"
+                          << "Usage: prime_tester --upto N\n";
+                return 1;
+            }
+            std::string val(argv[i + 1]);
+            long long n = 0;
+            std::size_t pos = 0;
+            try {
+                n = std::stoll(val, &pos);
+            } catch (const std::invalid_argument&) {
+                std::cerr << "Error: '" << val << "' is not a valid integer.\n"
+                          << "Usage: prime_tester --upto N\n";
+                return 1;
+            } catch (const std::out_of_range&) {
+                std::cerr << "Error: '" << val << "' is out of range for long long.\n"
+                          << "Usage: prime_tester --upto N\n";
+                return 1;
+            }
+            if (pos != val.size()) {
+                std::cerr << "Error: '" << val << "' is not a valid integer.\n"
+                          << "Usage: prime_tester --upto N\n";
+                return 1;
+            }
+            auto primes = primes_up_to(n);
+            for (long long p : primes) {
+                std::cout << p << '\n';
+            }
+            return 0;
         }
     }
 
-    // Parse with stoll, catching overflow and other errors.
-    long long n;
-    try {
-        std::size_t pos;
-        n = std::stoll(token, &pos);
-        // pos should equal token.size() since we already validated digits
-        if (pos != token.size()) {
-            std::cerr << "not a number: " << token << "\n";
-            return false;
-        }
-    } catch (const std::out_of_range&) {
-        std::cerr << "not a number: " << token << "\n";
-        return false;
-    } catch (const std::invalid_argument&) {
-        std::cerr << "not a number: " << token << "\n";
-        return false;
-    }
-
-    if (is_prime(n)) {
-        std::cout << n << " is prime\n";
-    } else {
-        std::cout << n << " is not prime\n";
-    }
-    return true;
-}
-
-int main(int argc, char* argv[]) {
-    int exit_status = 0;
-
+    // Single-number / stdin mode (original card 1 behaviour)
     if (argc > 1) {
-        // argv mode: process each command-line argument
+        // Argument mode: test each argument
+        int exit_code = 0;
         for (int i = 1; i < argc; ++i) {
-            if (!process_token(std::string(argv[i]))) {
-                exit_status = 1;
+            std::string token(argv[i]);
+            std::size_t pos = 0;
+            long long num = 0;
+            bool valid = true;
+            try {
+                num = std::stoll(token, &pos);
+                if (pos != token.size()) valid = false;
+            } catch (...) {
+                valid = false;
+            }
+            if (!valid) {
+                std::cerr << "not a number: " << token << '\n';
+                exit_code = 1;
+            } else {
+                if (is_prime(num)) {
+                    std::cout << num << " is prime\n";
+                } else {
+                    std::cout << num << " is not prime\n";
+                }
             }
         }
+        return exit_code;
     } else {
-        // stdin mode: read one token per line until EOF
-        std::string line;
-        while (std::getline(std::cin, line)) {
-            // Strip trailing \r for Windows-style line endings
-            if (!line.empty() && line.back() == '\r') {
-                line.pop_back();
+        // Stdin mode: read tokens until EOF
+        int exit_code = 0;
+        std::string token;
+        while (std::cin >> token) {
+            std::size_t pos = 0;
+            long long num = 0;
+            bool valid = true;
+            try {
+                num = std::stoll(token, &pos);
+                if (pos != token.size()) valid = false;
+            } catch (...) {
+                valid = false;
             }
-            if (line.empty()) {
-                continue;
-            }
-            if (!process_token(line)) {
-                exit_status = 1;
+            if (!valid) {
+                std::cerr << "not a number: " << token << '\n';
+                exit_code = 1;
+            } else {
+                if (is_prime(num)) {
+                    std::cout << num << " is prime\n";
+                } else {
+                    std::cout << num << " is not prime\n";
+                }
             }
         }
+        return exit_code;
     }
-
-    return exit_status;
 }
