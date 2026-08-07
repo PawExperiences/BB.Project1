@@ -78,6 +78,8 @@ This command runs the profiling script unattended. It connects to the database s
 | `index.html` | Space Invaders game entry point — open directly from the filesystem |
 | `game.js` | Main game ES module: loop, scene state machine, HUD |
 | `gameConfig.js` | Shared game constants (canvas size, speeds, lives) |
+| `input.js` | Keyboard input module — `initInput()` and `isKeyHeld(code)` |
+| `player.js` | Player ship entity — movement, single-bullet mechanic, procedural drawing |
 
 > Any files added to the repository after this PR must be appended to the table above.
 
@@ -103,8 +105,6 @@ The following source files will be added by later cards. They do **not** exist y
 
 | File | Owning card |
 |---|---|
-| `input.js` | "Keyboard input and the player ship" card |
-| `player.js` | "Keyboard input and the player ship" card |
 | `invaders.js` | "Invader grid and movement" card |
 | `collision.js` | "Collision detection" card |
 | `level1.js` | "Level 1" card |
@@ -112,13 +112,30 @@ The following source files will be added by later cards. They do **not** exist y
 | `level3.js` | "Level 3" card |
 | `boss.js` | "Boss enemy" card |
 
-### Manual Verification
+---
 
-To verify the game loop and canvas framework after this card ships:
+## Manual Verification
+
+### Game Loop and Canvas (previous card)
 
 1. Open `index.html` directly in a browser from the filesystem (`file://` URL — no web server needed).
 2. **Title scene**: confirm the page has a black background, a centred canvas, the text `SPACE INVADERS` and a blinking `Press ENTER to start` prompt are visible.
-3. **Transition to Playing**: press **Enter**; confirm the Playing scene appears (shows a HUD with score/lives and a placeholder message).
+3. **Transition to Playing**: press **Enter**; confirm the Playing scene appears (shows a HUD with score/lives).
 4. **Background-tab delta cap**: switch to another tab, wait ≥ 5 seconds, switch back; confirm there is no burst of rapid updates or visual jump.
-5. **Game Over scene**: open the browser console and run `import('./game.js').then(m => { m.hudState.lives = 0; })` — future cards will trigger this automatically; for now, verify the Game Over scene can be reached by temporarily setting `currentScene` in the console, then pressing **Enter** to return to Title.
+5. **Game Over scene**: open the browser console and run `import('./game.js').then(m => { m.hudState.lives = 0; })` — future cards will trigger this automatically.
 6. Confirm no console errors appear at any point.
+
+### Keyboard Input and Player Ship (this card)
+
+1. Open `index.html` directly in a browser (`file://` URL — no web server needed).
+2. Press **Enter** to start the game (transition to Playing scene).
+3. **Ship visible**: confirm a green spaceship is visible near the bottom-centre of the canvas.
+4. **Left movement**: hold **ArrowLeft** or **A** — the ship moves left smoothly. Release — it stops.
+5. **Right movement**: hold **ArrowRight** or **D** — the ship moves right smoothly. Release — it stops.
+6. **Both keys simultaneously**: hold both a left and a right key at the same time — the ship does not move.
+7. **Boundary clamping**: hold a direction key until the ship reaches the edge; confirm it stops at the edge and does not leave the canvas.
+8. **Shoot**: press **Space** — a small yellow rectangle (bullet) appears above the ship and travels upward.
+9. **Single bullet**: while the bullet is in flight, press **Space** again — no second bullet appears.
+10. **Bullet exit**: wait for the bullet to exit the top of the canvas; then press **Space** — a new bullet fires.
+11. **No key-repeat stutter**: hold **ArrowLeft** for several seconds; movement is perfectly smooth with no stutter or double-stepping.
+12. Confirm no console errors appear at any point.
