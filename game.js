@@ -1,9 +1,9 @@
 // game.js — main ES module: canvas setup, fixed-timestep loop, scene state machine, HUD
 
 import { CANVAS_WIDTH, CANVAS_HEIGHT, STARTING_LIVES } from './gameConfig.js';
+import { initInput } from './input.js';
+import { Player } from './player.js';
 
-// input.js — added by "Keyboard input and the player ship" card
-// player.js — added by "Keyboard input and the player ship" card
 // invaders.js — added by "Invader grid and movement" card
 // collision.js — added by "Collision detection" card
 // level1.js — added by "Level 1" card
@@ -46,7 +46,18 @@ const SCENE = Object.freeze({
 let currentScene = SCENE.TITLE;
 
 // ---------------------------------------------------------------------------
-// Keyboard state
+// Initialise input (once at startup)
+// ---------------------------------------------------------------------------
+initInput();
+
+// ---------------------------------------------------------------------------
+// Player entity — constructed once; reset on new game
+// ---------------------------------------------------------------------------
+let player = new Player(CANVAS_HEIGHT);
+
+// ---------------------------------------------------------------------------
+// Keyboard state (for scene transitions — ENTER key)
+// Game-play keys are handled by input.js / player.js
 // ---------------------------------------------------------------------------
 const keys = {};
 
@@ -71,6 +82,7 @@ function handleKeyPressed(code) {
     // Reset game state when starting a new game
     hudState.score = 0;
     hudState.lives = STARTING_LIVES;
+    player = new Player(CANVAS_HEIGHT); // fresh player for new game
     currentScene = SCENE.PLAYING;
   } else if (currentScene === SCENE.GAME_OVER) {
     // Update hi-score before going back to title
@@ -134,16 +146,18 @@ const titleScene = {
 };
 
 // ---------------------------------------------------------------------------
-// Scene: Playing  (stub — downstream cards add real logic)
+// Scene: Playing
 // ---------------------------------------------------------------------------
 const playingScene = {
-  update(/* dt */) {
-    // Placeholder: downstream cards (player.js, invaders.js, etc.) will
-    // populate this phase.
+  update(dt) {
+    // Update the player (movement + bullet)
+    player.update(dt);
+
+    // Downstream cards (invaders.js, collision.js, etc.) will add more here.
     //
-    // Temporary: transition to Game Over when score hits 0 is NOT triggered
-    // here; future cards will set hudState.lives = 0 and call
-    // setScene(SCENE.GAME_OVER) when the game ends.
+    // Mirror player lives into the HUD state so the HUD stays accurate when
+    // later cards decrement player.lives.
+    hudState.lives = player.lives;
   },
   render() {
     ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
@@ -151,14 +165,8 @@ const playingScene = {
     // HUD is always rendered during gameplay
     renderHUD();
 
-    // Placeholder visual so the Playing scene is visually distinct
-    ctx.save();
-    ctx.fillStyle = '#333';
-    ctx.font      = '20px monospace';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('[ Game area — coming soon ]', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2);
-    ctx.restore();
+    // Draw the player ship and bullet
+    player.draw(ctx);
   },
 };
 

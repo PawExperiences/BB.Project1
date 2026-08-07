@@ -5,3 +5,4 @@ export const CANVAS_HEIGHT  = 896;  // pixels
 export const PLAYER_SPEED   = 200;  // pixels per second
 export const BULLET_SPEED   = 500;  // pixels per second
 export const STARTING_LIVES = 3;
+export const PLAYER_LIVES   = 3;    // starting lives (used by Player constructor)
