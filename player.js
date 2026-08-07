@@ -2,6 +2,7 @@
 
 import { CANVAS_WIDTH, PLAYER_SPEED, BULLET_SPEED, PLAYER_LIVES } from './gameConfig.js';
 import { isKeyHeld } from './input.js';
+import { state } from './state.js';
 
 // Ship visual dimensions
 const SHIP_WIDTH  = 48; // px
@@ -11,16 +12,27 @@ const SHIP_HEIGHT = 32; // px
 const BULLET_WIDTH  = 4;  // px
 const BULLET_HEIGHT = 10; // px
 
+// Invulnerability duration after respawn (seconds)
+const INVULN_DURATION = 2.0;
+// Flash period (seconds) — ship alternates visible/hidden at this half-period
+const FLASH_PERIOD = 0.1;
+
 export class Player {
   /**
    * @param {number} canvasHeight — height of the canvas in pixels (for vertical positioning)
    */
   constructor(canvasHeight) {
+    this._canvasHeight = canvasHeight;
+
     // Horizontally centred; near the bottom of the canvas
     this.x = (CANVAS_WIDTH - SHIP_WIDTH) / 2; // left edge of ship
     this.y = canvasHeight - SHIP_HEIGHT - 24;  // top edge of ship, 24 px from bottom
 
-    // Lives — initialised from config
+    // Canonical bottom-centre spawn position (used for respawn)
+    this._spawnX = (CANVAS_WIDTH - SHIP_WIDTH) / 2;
+    this._spawnY = canvasHeight - SHIP_HEIGHT - 24;
+
+    // Lives — initialised from shared state (or config if state not yet set)
     this.lives = PLAYER_LIVES;
 
     // Bullet state
@@ -29,6 +41,38 @@ export class Player {
 
     // Hit flag — set by CollisionSystem when an invader bullet hits the player
     this.hit = false;
+
+    // Invulnerability timer (seconds remaining); 0 = not invulnerable
+    this._invulnTimer = 0;
+  }
+
+  /**
+   * Returns true if the player is currently invulnerable (post-respawn window).
+   * @returns {boolean}
+   */
+  get isInvulnerable() {
+    return this._invulnTimer > 0;
+  }
+
+  /**
+   * Called by CollisionSystem (or level logic) when an invader bullet hits the player.
+   * Respects invulnerability window.
+   */
+  onHit() {
+    if (this._invulnTimer > 0) return; // invulnerable — ignore hit
+    this.lives -= 1;
+    this._respawn();
+  }
+
+  /**
+   * Respawn the player at the bottom-centre start position with invulnerability.
+   * @private
+   */
+  _respawn() {
+    this.x = this._spawnX;
+    this.y = this._spawnY;
+    this._bullet = null; // clear any in-flight bullet
+    this._invulnTimer = INVULN_DURATION;
   }
 
   /**
@@ -50,6 +94,14 @@ export class Player {
    * @param {number} dt — delta time in seconds
    */
   update(dt) {
+    // -----------------------------------------------------------------------
+    // Invulnerability timer
+    // -----------------------------------------------------------------------
+    if (this._invulnTimer > 0) {
+      this._invulnTimer -= dt;
+      if (this._invulnTimer < 0) this._invulnTimer = 0;
+    }
+
     // -----------------------------------------------------------------------
     // Movement
     // -----------------------------------------------------------------------
@@ -80,6 +132,8 @@ export class Player {
         x: this.x + SHIP_WIDTH / 2, // horizontal centre of ship
         y: this.y - BULLET_HEIGHT,  // just above the top of the ship
       };
+      // Increment cumulative shot count in shared state
+      state.sessionShotCount += 1;
     }
 
     // -----------------------------------------------------------------------
@@ -116,14 +170,16 @@ export class Player {
     }
 
     // -----------------------------------------------------------------------
+    // Invulnerability flash — skip drawing on alternate FLASH_PERIOD windows
+    // -----------------------------------------------------------------------
+    if (this._invulnTimer > 0) {
+      // Flash: visible when floor(invulnTimer / FLASH_PERIOD) is even
+      const flashPhase = Math.floor(this._invulnTimer / FLASH_PERIOD);
+      if (flashPhase % 2 === 0) return; // hidden this frame
+    }
+
+    // -----------------------------------------------------------------------
     // Draw ship (procedural — arcs + rectangles, ~48 × 32 px)
-    //
-    // Layout (origin = this.x, this.y, i.e. top-left of bounding box):
-    //
-    //        ___          ← cannon (small rect, top-centre)
-    //      /     \        ← cockpit dome (arc)
-    //   [===========]    ← main body (rect)
-    //   |           |    ← wing nubs (small rects at each side)
     // -----------------------------------------------------------------------
     ctx.save();
 

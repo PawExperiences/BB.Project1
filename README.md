@@ -79,13 +79,13 @@ This command runs the profiling script unattended. It connects to the database s
 | `game.js` | Main game ES module: loop, scene state machine, HUD, entity wiring |
 | `gameConfig.js` | Shared game constants (canvas size, speeds, lives) |
 | `input.js` | Keyboard input module — `initInput()` and `isKeyHeld(code)` |
-| `player.js` | Player ship entity — movement, single-bullet mechanic, procedural drawing, `getBounds()` |
+| `player.js` | Player ship entity — movement, single-bullet mechanic, procedural drawing, `getBounds()`, respawn, invulnerability |
 | `invaders.js` | InvaderGrid class — 11×5 formation, step-and-drop movement, per-invader alive state |
 | `collision.js` | CollisionSystem class — AABB collision, explosion effects, score tracking |
 | `formation.js` | Shared formation constants — cell dimensions, invader types, grid geometry |
 | `level1.js` | Level 1 — classic 55-invader grid; movement, breach detection, life loss, level completion |
-
-> Any files added to the repository after this PR must be appended to the table above.
+| `level2.js` | Level 2 — faster grid, invader shooting, player respawn/invulnerability, UFO bonus |
+| `state.js` | Shared session state — `sessionShotCount` and `lives` (persisted across levels) |
 
 ---
 
@@ -109,7 +109,6 @@ The following source files will be added by later cards. They do **not** exist y
 
 | File | Owning card |
 |---|---|
-| `level2.js` | "Level 2" card |
 | `level3.js` | "Level 3" card |
 | `boss.js` | "Boss enemy" card |
 
@@ -159,7 +158,7 @@ The following source files will be added by later cards. They do **not** exist y
 11. **No new dependencies**: confirm the game still opens from a `file://` URL with no server required and no console errors about missing modules or network requests.
 12. Confirm no console errors appear at any point.
 
-### Level 1 — Classic Grid (this card)
+### Level 1 — Classic Grid (previous card)
 
 1. Open `index.html` directly in a browser from the filesystem (`file://` URL — no web server needed). Confirm no console errors on load.
 2. Press **Enter** to start the game.
@@ -180,7 +179,40 @@ The following source files will be added by later cards. They do **not** exist y
       - The player's life count in the HUD decrements by exactly 1.
       - The formation immediately resets to its original 55-invader layout at the top of the canvas.
       - The step interval resets to ~800 ms (slow speed).
-9. **Level completion**: destroy all 55 invaders. Confirm that `game.nextLevel()` (or `game.setLevel(2)`) is called — in the current build this transitions to whatever Level 2 state is wired; if Level 2 is not yet implemented, a console log or scene change from `game.js` is acceptable evidence.
+9. **Level completion**: destroy all 55 invaders. Confirm the game automatically transitions to Level 2 with no level-select screen and the same life count as at the end of Level 1.
 10. **Interval formula spot-check** (optional, console): after shooting exactly 28 invaders (27 alive), open the console and verify the step interval is approximately `100 + 26 * (700 / 54) ≈ 437 ms`.
 11. **No bundler / server required**: confirm the game still opens and runs from a `file://` URL with no web server, no npm, and no console errors about missing modules or failed network requests.
 12. Confirm no console errors appear at any point during the above steps.
+
+### Level 2 — They Shoot Back (this card)
+
+1. Open `index.html` directly in a browser from the filesystem (`file://` URL — no web server needed). Confirm no console errors on load.
+2. Press **Enter** to start the game. Play through Level 1 (destroy all 55 invaders).
+3. **Automatic transition**: confirm Level 2 begins immediately with no level-select screen and with the same number of lives you had at the end of Level 1.
+4. **Level 2 label**: confirm the text `Level 2` is visible in the HUD on every frame of Level 2.
+5. **Fresh 11×5 grid**: confirm exactly 55 green rectangles (11 columns × 5 rows) are visible at the top of the canvas at the start of Level 2.
+6. **Faster formation**: observe the invader formation in Level 2. Confirm it moves noticeably faster than Level 1 did at the same starting density of 55 invaders. (Level 2 step interval at 55 invaders ≈ 536 ms vs Level 1's 800 ms.)
+7. **Invader shooting — fire event**: wait up to 2 seconds. Confirm a red rectangle (invader bullet) appears from the bottom of one of the invaders and travels downward.
+8. **Lowest-in-column rule**: kill all invaders in a column except the topmost one. Confirm the remaining invader in that column is the one that fires (not a dead one above it). Confirm columns with no alive invaders never produce a shot.
+9. **Invader bullet travel**: watch the red bullet travel straight downward. Confirm:
+   - It does not deviate horizontally.
+   - If it reaches the bottom of the canvas without hitting the player, it disappears.
+10. **Player hit — life loss**: allow an invader bullet to hit your ship. Confirm:
+    - The life count in the HUD decrements by exactly 1.
+    - The ship immediately reappears at the bottom-centre of the canvas.
+11. **Invulnerability flash**: immediately after being hit, confirm the ship flashes (alternates between visible and invisible). Confirm that a second invader bullet hitting the ship during this 2-second window does **not** remove another life.
+12. **Invulnerability ends**: after 2 seconds, confirm the ship stops flashing and is again vulnerable (the next hit removes a life).
+13. **Game Over on zero lives**:
+    a. Let all lives be lost to invader bullets.
+    b. Confirm the Game Over scene is displayed immediately.
+    c. Press **Enter** on the Game Over scene; confirm the Title scene is shown.
+14. **UFO appearance**: wait 20 seconds after Level 2 starts (a magenta UFO-shaped sprite enters from one side). Confirm:
+    - The UFO enters the canvas from either the left or right edge.
+    - It travels horizontally across the canvas at a steady speed.
+    - If not shot, it disappears when it exits the far edge.
+15. **UFO alternating sides**: wait for a second UFO appearance (another 20 seconds). Confirm it enters from the **opposite** side to the first UFO.
+16. **UFO scoring**: shoot the UFO. Confirm the score increases by one of the fixed tiers (50, 100, 150, or 300 points). The tier is `[50, 100, 150, 300][sessionShotCount % 4]` where `sessionShotCount` is the total shots fired since pressing Enter on the Title screen.
+17. **sessionShotCount accumulation**: open the browser console and inspect `state.sessionShotCount` (import `./state.js`). Fire several shots in Level 1 and several in Level 2; confirm the count is strictly increasing and is never reset between levels.
+18. **lives carried over**: confirm that the `lives` value shown at the start of Level 2 equals the `lives` value at the moment the last Level 1 invader was destroyed — no life is lost or gained by the level transition itself.
+19. **No bundler / server required**: confirm the game opens and runs from a `file://` URL with no web server, no npm, and no console errors about missing modules.
+20. Confirm no console errors appear at any point during the above steps.
