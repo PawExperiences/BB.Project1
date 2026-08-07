@@ -76,10 +76,12 @@ This command runs the profiling script unattended. It connects to the database s
 | [`SCHEMA.md`](SCHEMA.md) | Database schema documentation for the third-party source database |
 | [`FINDINGS.md`](FINDINGS.md) | Analytical findings and conclusions from the investigation |
 | `index.html` | Space Invaders game entry point — open directly from the filesystem |
-| `game.js` | Main game ES module: loop, scene state machine, HUD |
+| `game.js` | Main game ES module: loop, scene state machine, HUD, entity wiring |
 | `gameConfig.js` | Shared game constants (canvas size, speeds, lives) |
 | `input.js` | Keyboard input module — `initInput()` and `isKeyHeld(code)` |
-| `player.js` | Player ship entity — movement, single-bullet mechanic, procedural drawing |
+| `player.js` | Player ship entity — movement, single-bullet mechanic, procedural drawing, `getBounds()` |
+| `invaders.js` | InvaderGrid class — 11×5 formation, step-and-drop movement, per-invader alive state |
+| `collision.js` | CollisionSystem class — AABB collision, explosion effects, score tracking |
 
 > Any files added to the repository after this PR must be appended to the table above.
 
@@ -105,8 +107,6 @@ The following source files will be added by later cards. They do **not** exist y
 
 | File | Owning card |
 |---|---|
-| `invaders.js` | "Invader grid and movement" card |
-| `collision.js` | "Collision detection" card |
 | `level1.js` | "Level 1" card |
 | `level2.js` | "Level 2" card |
 | `level3.js` | "Level 3" card |
@@ -125,7 +125,7 @@ The following source files will be added by later cards. They do **not** exist y
 5. **Game Over scene**: open the browser console and run `import('./game.js').then(m => { m.hudState.lives = 0; })` — future cards will trigger this automatically.
 6. Confirm no console errors appear at any point.
 
-### Keyboard Input and Player Ship (this card)
+### Keyboard Input and Player Ship (previous card)
 
 1. Open `index.html` directly in a browser (`file://` URL — no web server needed).
 2. Press **Enter** to start the game (transition to Playing scene).
@@ -138,4 +138,22 @@ The following source files will be added by later cards. They do **not** exist y
 9. **Single bullet**: while the bullet is in flight, press **Space** again — no second bullet appears.
 10. **Bullet exit**: wait for the bullet to exit the top of the canvas; then press **Space** — a new bullet fires.
 11. **No key-repeat stutter**: hold **ArrowLeft** for several seconds; movement is perfectly smooth with no stutter or double-stepping.
+12. Confirm no console errors appear at any point.
+
+### Sprite Rendering and Collision Detection (this card)
+
+1. Open `index.html` directly in a browser (`file://` URL — no web server needed).
+2. Press **Enter** to start the game.
+3. **Invader grid visible**: confirm 55 green rectangles (11 columns × 5 rows) are visible on the canvas immediately, above the player ship.
+4. **Formation movement**: watch the grid move sideways as a unit across the canvas.
+5. **Step-and-drop**: when the leading edge of the formation reaches the canvas boundary, confirm the entire grid drops down by one step and reverses horizontal direction.
+6. **Player shoots invader**: move the ship under an invader and press **Space**. Confirm:
+   - The invader disappears immediately.
+   - A brief orange flash/burst appears at the kill site and fades within ~0.5 seconds.
+   - The score in the top-left of the canvas increments by exactly 10.
+7. **Score accuracy**: shoot several more invaders; confirm the score increases by 10 for each kill, with no incorrect increments.
+8. **Dead invaders skipped**: after killing an invader, shoot at the same location again; confirm no second score increment occurs (ghost hit prevention).
+9. **Bullet consumed on hit**: after hitting an invader, the bullet is gone and a new one can be fired immediately with **Space**.
+10. **Collision-before-draw order**: confirm that there is no frame where a killed invader is visible after the bullet reaches it (collision runs before draw each tick).
+11. **No new dependencies**: confirm the game still opens from a `file://` URL with no server required and no console errors about missing modules or network requests.
 12. Confirm no console errors appear at any point.

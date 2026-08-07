@@ -3,9 +3,9 @@
 import { CANVAS_WIDTH, CANVAS_HEIGHT, STARTING_LIVES } from './gameConfig.js';
 import { initInput } from './input.js';
 import { Player } from './player.js';
+import { InvaderGrid } from './invaders.js';
+import { CollisionSystem } from './collision.js';
 
-// invaders.js — added by "Invader grid and movement" card
-// collision.js — added by "Collision detection" card
 // level1.js — added by "Level 1" card
 // level2.js — added by "Level 2" card
 // level3.js — added by "Level 3" card
@@ -51,9 +51,11 @@ let currentScene = SCENE.TITLE;
 initInput();
 
 // ---------------------------------------------------------------------------
-// Player entity — constructed once; reset on new game
+// Game entities — constructed once per new game
 // ---------------------------------------------------------------------------
-let player = new Player(CANVAS_HEIGHT);
+let player          = new Player(CANVAS_HEIGHT);
+let invaderGrid     = new InvaderGrid(CANVAS_WIDTH, CANVAS_HEIGHT);
+let collisionSystem = new CollisionSystem();
 
 // ---------------------------------------------------------------------------
 // Keyboard state (for scene transitions — ENTER key)
@@ -82,7 +84,9 @@ function handleKeyPressed(code) {
     // Reset game state when starting a new game
     hudState.score = 0;
     hudState.lives = STARTING_LIVES;
-    player = new Player(CANVAS_HEIGHT); // fresh player for new game
+    player          = new Player(CANVAS_HEIGHT);                   // fresh player
+    invaderGrid     = new InvaderGrid(CANVAS_WIDTH, CANVAS_HEIGHT); // fresh grid
+    collisionSystem = new CollisionSystem();                        // fresh score / explosions
     currentScene = SCENE.PLAYING;
   } else if (currentScene === SCENE.GAME_OVER) {
     // Update hi-score before going back to title
@@ -92,6 +96,34 @@ function handleKeyPressed(code) {
     currentScene = SCENE.TITLE;
   }
   // PLAYING: ENTER is reserved for future use (no transition here)
+}
+
+// ---------------------------------------------------------------------------
+// Build bullet descriptor array for the collision system.
+// Wraps the player's single-bullet mechanic into the array interface.
+// ---------------------------------------------------------------------------
+function getPlayerBulletDescriptors() {
+  const bullet = player.bullet; // null or {x, y}
+  if (bullet === null) return [];
+
+  // Bullet dimensions match those in player.js
+  const BULLET_WIDTH  = 4;
+  const BULLET_HEIGHT = 10;
+
+  return [{
+    getBounds() {
+      return {
+        x:      bullet.x - BULLET_WIDTH / 2,
+        y:      bullet.y,
+        width:  BULLET_WIDTH,
+        height: BULLET_HEIGHT,
+      };
+    },
+    remove() {
+      player.clearBullet();
+    },
+    removed: false,
+  }];
 }
 
 // ---------------------------------------------------------------------------
@@ -150,11 +182,22 @@ const titleScene = {
 // ---------------------------------------------------------------------------
 const playingScene = {
   update(dt) {
-    // Update the player (movement + bullet)
+    // ---- Collision pass (runs BEFORE draw, BEFORE invader/player updates) ----
+    const bulletDescs = getPlayerBulletDescriptors();
+    collisionSystem.update(
+      bulletDescs,
+      invaderGrid.getInvaders(),
+      [],      // invader bullets — empty until Level 2 card
+      player,  // player object — collision system calls player.getBounds()
+    );
+
+    // Sync score from collision system into HUD state
+    hudState.score = collisionSystem.getScore();
+
+    // ---- Entity updates ----
+    invaderGrid.update(dt);
     player.update(dt);
 
-    // Downstream cards (invaders.js, collision.js, etc.) will add more here.
-    //
     // Mirror player lives into the HUD state so the HUD stays accurate when
     // later cards decrement player.lives.
     hudState.lives = player.lives;
@@ -165,8 +208,14 @@ const playingScene = {
     // HUD is always rendered during gameplay
     renderHUD();
 
+    // Draw invader formation (alive invaders only)
+    invaderGrid.draw(ctx);
+
     // Draw the player ship and bullet
     player.draw(ctx);
+
+    // Draw explosion effects (on top of everything)
+    collisionSystem.draw(ctx);
   },
 };
 
