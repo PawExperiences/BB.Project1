@@ -1,21 +1,21 @@
-#!/usr/bin/env sh
-# run.sh — build (if needed) and launch the prime_tester executable.
+#!/bin/sh
+# run.sh -- locate and launch the prime_tester binary.
+# Forwards all arguments to the binary. Run after `cmake --build build`.
+# Usage: sh release/scripts/run.sh [numbers or tokens]
 set -eu
 
-BUILD_DIR="build"
-EXE="${BUILD_DIR}/prime_tester"
+BINARY=''
+for candidate in build/prime_tester build/prime_tester.exe build/Release/prime_tester.exe build/Debug/prime_tester.exe; do
+    if [ -f "$candidate" ]; then
+        BINARY="$candidate"
+        break
+    fi
+done
 
-if [ ! -f "${EXE}" ]; then
-  echo "Executable not found — building now..."
-  mkdir -p "${BUILD_DIR}"
-  cmake -B "${BUILD_DIR}"
-  cmake --build "${BUILD_DIR}" --config Release
+if [ -z "$BINARY" ]; then
+    printf 'ERROR: prime_tester binary not found. Run `cmake -B build && cmake --build build` first.\n' >&2
+    exit 1
 fi
 
-if [ ! -f "${EXE}" ]; then
-  echo "ERROR: could not locate ${EXE} after build." >&2
-  exit 1
-fi
-
-echo "+ ${EXE} $*"
-exec "${EXE}" "$@"
+printf '[run.sh] Launching: %s %s\n' "$BINARY" "$*"
+exec "$BINARY" "$@"
