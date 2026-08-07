@@ -1,74 +1,94 @@
 #include <iostream>
 #include <string>
-#include <cerrno>
-#include <climits>
-#include <stdexcept>
+#include <cstdlib>
+
 #include "prime.h"
+#include "sieve.h"
 
-// Trim leading and trailing ASCII whitespace from a string.
-static std::string trim(const std::string &s)
+int main(int argc, char* argv[])
 {
-    const std::string ws = " \t\r\n\f\v";
-    std::size_t start = s.find_first_not_of(ws);
-    if (start == std::string::npos) return "";
-    std::size_t end = s.find_last_not_of(ws);
-    return s.substr(start, end - start + 1);
-}
-
-// Try to parse token as a long long.
-// Returns true and sets value on success.
-// Returns false if the token is not a valid integer or overflows long long.
-static bool parse_ll(const std::string &token, long long &value)
-{
-    if (token.empty()) return false;
-
-    std::size_t pos = 0;
-    try {
-        value = std::stoll(token, &pos);
-    } catch (const std::out_of_range &) {
-        return false;
-    } catch (const std::invalid_argument &) {
-        return false;
+    // --upto N mode
+    if (argc >= 2 && std::string(argv[1]) == "--upto") {
+        if (argc < 3) {
+            std::cerr << "Usage: prime_tester --upto <N>\n";
+            return 1;
+        }
+        long long n = 0;
+        try {
+            std::size_t pos = 0;
+            n = std::stoll(std::string(argv[2]), &pos);
+            if (pos != std::string(argv[2]).size()) {
+                std::cerr << "not a number: " << argv[2] << "\n";
+                return 1;
+            }
+        } catch (...) {
+            std::cerr << "not a number: " << argv[2] << "\n";
+            return 1;
+        }
+        auto primes = primes_up_to(n);
+        for (long long p : primes) {
+            std::cout << p << "\n";
+        }
+        return 0;
     }
 
-    // The entire token must have been consumed.
-    return pos == token.size();
-}
-
-static int process_token(const std::string &token, int exit_code)
-{
-    long long n = 0;
-    if (!parse_ll(token, n)) {
-        std::cerr << "not a number: " << token << "\n";
-        return 1;
-    }
-    if (is_prime(n)) {
-        std::cout << n << " is prime\n";
-    } else {
-        std::cout << n << " is not prime\n";
-    }
-    return exit_code;
-}
-
-int main(int argc, char *argv[])
-{
-    int exit_code = 0;
-
+    // Argv mode: test each argument
     if (argc > 1) {
-        // Argv mode: treat each argument as a token.
+        int exit_code = 0;
         for (int i = 1; i < argc; ++i) {
             std::string token(argv[i]);
-            exit_code = process_token(token, exit_code);
+            long long num = 0;
+            bool valid = true;
+            try {
+                std::size_t pos = 0;
+                num = std::stoll(token, &pos);
+                if (pos != token.size()) {
+                    valid = false;
+                }
+            } catch (...) {
+                valid = false;
+            }
+            if (!valid) {
+                std::cerr << "not a number: " << token << "\n";
+                exit_code = 1;
+            } else {
+                if (is_prime(num)) {
+                    std::cout << num << " is prime\n";
+                } else {
+                    std::cout << num << " is not prime\n";
+                }
+            }
         }
-    } else {
-        // Stdin mode: read one line at a time until EOF.
-        std::string line;
-        while (std::getline(std::cin, line)) {
-            std::string token = trim(line);
-            if (token.empty()) continue;
-            exit_code = process_token(token, exit_code);
-        }
+        return exit_code;
     }
 
-    return exit_code;
+    // Stdin mode: read whitespace-delimited tokens until EOF
+    {
+        int exit_code = 0;
+        std::string token;
+        while (std::cin >> token) {
+            long long num = 0;
+            bool valid = true;
+            try {
+                std::size_t pos = 0;
+                num = std::stoll(token, &pos);
+                if (pos != token.size()) {
+                    valid = false;
+                }
+            } catch (...) {
+                valid = false;
+            }
+            if (!valid) {
+                std::cerr << "not a number: " << token << "\n";
+                exit_code = 1;
+            } else {
+                if (is_prime(num)) {
+                    std::cout << num << " is prime\n";
+                } else {
+                    std::cout << num << " is not prime\n";
+                }
+            }
+        }
+        return exit_code;
+    }
 }
