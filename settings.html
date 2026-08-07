@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Settings</title>
+  <link rel="stylesheet" href="settings.css" />
+</head>
+<body>
+  <main class="settings-container">
+    <h1>Settings</h1>
+
+    <section class="setting-row">
+      <label for="darkModeToggle" class="setting-label">Dark Mode</label>
+      <input type="checkbox" id="darkModeToggle" />
+    </section>
+
+    <p class="setting-hint">Your preference is saved and will be restored on next visit.</p>
+
+    <nav>
+      <a href="index.html">&larr; Back to Game</a>
+    </nav>
+  </main>
+
+  <script>
+    /**
+     * Dark-mode theme logic
+     *
+     * localStorage key: "bb_theme"
+     * Possible stored values: "dark" | "light"
+     * Applied class: "dark-mode" on <html>
+     *
+     * Priority:
+     *   1. Value stored in localStorage under "bb_theme"
+     *   2. OS prefers-color-scheme media query (fallback when no stored value)
+     */
+    (function () {
+      var STORAGE_KEY = 'bb_theme';
+      var htmlEl = document.documentElement;
+      var toggle = document.getElementById('darkModeToggle');
+
+      /**
+       * Resolve the theme to apply on page load.
+       * Returns true if dark mode should be active.
+       */
+      function resolveDark() {
+        var stored = localStorage.getItem(STORAGE_KEY);
+        if (stored === 'dark') return true;
+        if (stored === 'light') return false;
+        // No stored preference — fall back to OS setting
+        return window.matchMedia('(prefers-color-scheme: dark)').matches;
+      }
+
+      /**
+       * Apply the theme class to <html> and keep the toggle in sync.
+       * @param {boolean} isDark
+       */
+      function applyTheme(isDark) {
+        if (isDark) {
+          htmlEl.classList.add('dark-mode');
+        } else {
+          htmlEl.classList.remove('dark-mode');
+        }
+        toggle.checked = isDark;
+      }
+
+      // --- Initial load ---
+      applyTheme(resolveDark());
+
+      // --- Toggle interaction ---
+      toggle.addEventListener('change', function () {
+        var isDark = toggle.checked;
+        applyTheme(isDark);
+        localStorage.setItem(STORAGE_KEY, isDark ? 'dark' : 'light');
+      });
+    }());
+  </script>
+</body>
+</html>
