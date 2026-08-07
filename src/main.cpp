@@ -1,83 +1,72 @@
 #include <iostream>
-#include <sstream>
 #include <string>
-#include <cstdlib>
-
+#include <cerrno>
+#include <climits>
+#include <stdexcept>
 #include "prime.h"
-#include "sieve.h"
 
-int main(int argc, char* argv[]) {
-    // --upto N mode
-    if (argc >= 2 && std::string(argv[1]) == "--upto") {
-        if (argc < 3) {
-            std::cerr << "Usage: prime_tester --upto N" << std::endl;
-            return 1;
-        }
-        std::string arg = argv[2];
-        long long n = 0;
-        try {
-            std::size_t pos = 0;
-            n = std::stoll(arg, &pos);
-            if (pos != arg.size()) {
-                std::cerr << "Usage: prime_tester --upto N" << std::endl;
-                return 1;
-            }
-        } catch (...) {
-            std::cerr << "Usage: prime_tester --upto N" << std::endl;
-            return 1;
-        }
-        if (n < 2) {
-            return 0;
-        }
-        auto primes = primes_up_to(n);
-        for (long long p : primes) {
-            std::cout << p << "\n";
-        }
-        return 0;
+// Trim leading and trailing ASCII whitespace from a string.
+static std::string trim(const std::string &s)
+{
+    const std::string ws = " \t\r\n\f\v";
+    std::size_t start = s.find_first_not_of(ws);
+    if (start == std::string::npos) return "";
+    std::size_t end = s.find_last_not_of(ws);
+    return s.substr(start, end - start + 1);
+}
+
+// Try to parse token as a long long.
+// Returns true and sets value on success.
+// Returns false if the token is not a valid integer or overflows long long.
+static bool parse_ll(const std::string &token, long long &value)
+{
+    if (token.empty()) return false;
+
+    std::size_t pos = 0;
+    try {
+        value = std::stoll(token, &pos);
+    } catch (const std::out_of_range &) {
+        return false;
+    } catch (const std::invalid_argument &) {
+        return false;
     }
 
-    // Single-number / stdin mode
+    // The entire token must have been consumed.
+    return pos == token.size();
+}
+
+static int process_token(const std::string &token, int exit_code)
+{
+    long long n = 0;
+    if (!parse_ll(token, n)) {
+        std::cerr << "not a number: " << token << "\n";
+        return 1;
+    }
+    if (is_prime(n)) {
+        std::cout << n << " is prime\n";
+    } else {
+        std::cout << n << " is not prime\n";
+    }
+    return exit_code;
+}
+
+int main(int argc, char *argv[])
+{
     int exit_code = 0;
 
-    if (argc >= 2) {
-        // Argument mode: test each argument
+    if (argc > 1) {
+        // Argv mode: treat each argument as a token.
         for (int i = 1; i < argc; ++i) {
-            std::string token = argv[i];
-            try {
-                std::size_t pos = 0;
-                long long val = std::stoll(token, &pos);
-                if (pos != token.size()) {
-                    throw std::invalid_argument("not a number");
-                }
-                if (is_prime(val)) {
-                    std::cout << val << " is prime" << std::endl;
-                } else {
-                    std::cout << val << " is not prime" << std::endl;
-                }
-            } catch (...) {
-                std::cerr << "not a number: " << token << std::endl;
-                exit_code = 1;
-            }
+            std::string token(argv[i]);
+            exit_code = process_token(token, exit_code);
         }
     } else {
-        // Stdin mode: read tokens until EOF
-        std::string token;
-        while (std::cin >> token) {
-            try {
-                std::size_t pos = 0;
-                long long val = std::stoll(token, &pos);
-                if (pos != token.size()) {
-                    throw std::invalid_argument("not a number");
-                }
-                if (is_prime(val)) {
-                    std::cout << val << " is prime" << std::endl;
-                } else {
-                    std::cout << val << " is not prime" << std::endl;
-                }
-            } catch (...) {
-                std::cerr << "not a number: " << token << std::endl;
-                exit_code = 1;
-            }
+        // Stdin mode: read one line at a time until EOF.
+        std::string line;
+        while (std::getline(std::cin, line)) {
+            std::string token = trim(line);
+            if (token.empty()) continue;
+            exit_code = process_token(token, exit_code);
         }
     }
 
