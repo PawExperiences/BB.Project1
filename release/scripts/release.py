@@ -1,69 +1,93 @@
 #!/usr/bin/env python3
-"""release.py — tag, build, package, and publish prime_tester 0.3.0 to GitHub Releases."""
-import subprocess, sys, os, platform, shutil, tarfile, zipfile
+"""release.py -- tag, push, create GitHub Release draft, upload artifact.
+Run after CI is green and the build artifact exists.
+Required env vars: GITHUB_TOKEN, GITHUB_REPO (owner/repo), RELEASE_VERSION, ARTIFACT_PATH."""
+import os, subprocess, sys, json, urllib.request, urllib.error
 
-VERSION = "0.3.0"
-TAG = f"v{VERSION}"
-REPO = "PawExperiences/BB.Project1"
-BUILD_DIR = "build"
-DIST_DIR = "dist"
+def env(key):
+    val = os.environ.get(key, '').strip()
+    if not val:
+        print(f'ERROR: environment variable {key} is not set.', file=sys.stderr)
+        sys.exit(1)
+    return val
 
-def run(cmd, **kw):
-    print(f"+ {' '.join(cmd)}")
-    result = subprocess.run(cmd, **kw)
-    if result.returncode != 0:
-        sys.exit(result.returncode)
-    return result
+TOKEN   = env('GITHUB_TOKEN')
+REPO    = env('GITHUB_REPO')
+VERSION = env('RELEASE_VERSION')
+ARTIFACT= env('ARTIFACT_PATH')
+TAG     = f'v{VERSION}'
+API     = 'https://api.github.com'
 
-def main():
-    # 1. Ensure working tree is clean enough (tag step is additive only)
-    run(["git", "fetch", "--tags"])
-    tags = subprocess.run(["git", "tag", "-l", TAG], capture_output=True, text=True).stdout.strip()
-    if not tags:
-        run(["git", "tag", "-a", TAG, "-m", f"Release e2e prime tester {VERSION}"])
-        run(["git", "push", "origin", TAG])
-    else:
-        print(f"Tag {TAG} already exists — skipping tag creation.")
-
-    # 2. Build
-    os.makedirs(BUILD_DIR, exist_ok=True)
-    run(["cmake", "-B", BUILD_DIR, "-DCMAKE_BUILD_TYPE=Release"])
-    run(["cmake", "--build", BUILD_DIR, "--config", "Release"])
-
-    # 3. Locate executable
-    exe = os.path.join(BUILD_DIR, "prime_tester")
-    if platform.system() == "Windows":
-        exe_candidates = [
-            os.path.join(BUILD_DIR, "Release", "prime_tester.exe"),
-            os.path.join(BUILD_DIR, "prime_tester.exe"),
-        ]
-        exe = next((c for c in exe_candidates if os.path.isfile(c)), None)
-    if not exe or not os.path.isfile(exe):
-        print("ERROR: built executable not found.", file=sys.stderr)
+def gh_request(method, url, data=None, content_type='application/json', extra_headers=None):
+    body = json.dumps(data).encode() if data is not None else None
+    headers = {
+        'Authorization': f'token {TOKEN}',
+        'Accept': 'application/vnd.github+json',
+        'Content-Type': content_type,
+    }
+    if extra_headers:
+        headers.update(extra_headers)
+    req = urllib.request.Request(url, data=body, headers=headers, method=method)
+    try:
+        with urllib.request.urlopen(req) as r:
+            return json.loads(r.read())
+    except urllib.error.HTTPError as e:
+        body = e.read().decode(errors='replace')
+        print(f'HTTP {e.code} {method} {url}: {body}', file=sys.stderr)
         sys.exit(1)
 
-    # 4. Package
-    os.makedirs(DIST_DIR, exist_ok=True)
-    system_tag = platform.system().lower()
-    if platform.system() == "Windows":
-        archive_name = f"prime_tester-{VERSION}-{system_tag}.zip"
-        archive_path = os.path.join(DIST_DIR, archive_name)
-        with zipfile.ZipFile(archive_path, "w", zipfile.ZIP_DEFLATED) as zf:
-            zf.write(exe, os.path.basename(exe))
+# 1. Create tag
+print(f'[release.py] Creating annotated tag {TAG} ...')
+result = subprocess.run(['git', 'tag', '-a', TAG, '-m', f'Release {TAG}'], capture_output=True, text=True)
+if result.returncode != 0:
+    if 'already exists' in result.stderr:
+        print(f'[release.py] Tag {TAG} already exists, skipping tag creation.')
     else:
-        archive_name = f"prime_tester-{VERSION}-{system_tag}.tar.gz"
-        archive_path = os.path.join(DIST_DIR, archive_name)
-        with tarfile.open(archive_path, "w:gz") as tf:
-            tf.add(exe, arcname=os.path.basename(exe))
-    print(f"Packaged: {archive_path}")
+        print(result.stderr, file=sys.stderr); sys.exit(1)
+else:
+    print(f'[release.py] Tag {TAG} created.')
 
-    # 5. Upload to GitHub Release (requires gh CLI)
-    run(["gh", "release", "create", TAG,
-         "--repo", REPO,
-         "--title", f"e2e prime tester {VERSION}",
-         "--notes", f"Release {VERSION} of the e2e prime tester project.",
-         archive_path])
-    print("Release published successfully.")
+# 2. Push tag
+print(f'[release.py] Pushing tag {TAG} to origin ...')
+result = subprocess.run(['git', 'push', 'origin', TAG], capture_output=True, text=True)
+if result.returncode != 0 and 'already exists' not in result.stderr:
+    print(result.stderr, file=sys.stderr); sys.exit(1)
+print(f'[release.py] Tag pushed.')
 
-if __name__ == "__main__":
-    main()
+# 3. Create GitHub Release draft
+CHANGELOG_BODY = (
+    '## e2e prime tester 0.3.0 -- Initial Release\n\n'
+    '### Added\n'
+    '- `prime_tester` C++17 console app: trial-division primality test with 6k\u00b11 optimisation.\n'
+    '- Dual input mode: argv tokens or stdin line-by-line.\n'
+    '- Robust error handling: invalid tokens to stderr; exit code 1 on any error.\n'
+    '- `README.md` with build instructions and 8-case worked-examples table.\n'
+    '- `CHANGELOG.md`, `CONTRIBUTING.md`, `RELEASING.md` added.\n'
+    '- CI workflow updated for C++17/CMake build.\n'
+    '- Release and run helper scripts (Python / sh / PowerShell).\n'
+)
+print(f'[release.py] Creating GitHub Release draft for {TAG} ...')
+rel = gh_request('POST', f'{API}/repos/{REPO}/releases', {
+    'tag_name': TAG, 'name': f'e2e prime tester {VERSION}',
+    'body': CHANGELOG_BODY, 'draft': True, 'prerelease': False
+})
+rel_id    = rel['id']
+upload_url= rel['upload_url'].split('{')[0]
+print(f'[release.py] Draft release created: id={rel_id}')
+
+# 4. Upload artifact
+if not os.path.isfile(ARTIFACT):
+    print(f'ERROR: artifact not found at {ARTIFACT}', file=sys.stderr); sys.exit(1)
+artifact_name = os.path.basename(ARTIFACT)
+print(f'[release.py] Uploading artifact {artifact_name} ...')
+with open(ARTIFACT, 'rb') as f:
+    artifact_bytes = f.read()
+gh_request(
+    'POST',
+    f'{upload_url}?name={artifact_name}',
+    data=None,
+    content_type='application/octet-stream',
+    extra_headers={'Content-Length': str(len(artifact_bytes))}
+)
+print(f'[release.py] Artifact uploaded.')
+print(f'[release.py] Done. Review and publish the draft at: https://github.com/{REPO}/releases')

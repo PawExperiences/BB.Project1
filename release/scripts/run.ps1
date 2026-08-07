@@ -1,28 +1,27 @@
-# run.ps1 — build (if needed) and launch the prime_tester executable.
+# run.ps1 -- locate and launch the prime_tester binary.
+# Forwards all arguments to the binary. Run after `cmake --build build`.
+# Usage: pwsh release/scripts/run.ps1 [numbers or tokens]
+param([Parameter(ValueFromRemainingArguments=$true)][string[]]$Args)
+Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$BuildDir = 'build'
-$ExeCandidates = @(
-    Join-Path $BuildDir 'Release\prime_tester.exe',
-    Join-Path $BuildDir 'prime_tester.exe'
+$Candidates = @(
+    'build\prime_tester.exe',
+    'build/prime_tester',
+    'build\Release\prime_tester.exe',
+    'build\Debug\prime_tester.exe'
 )
 
-$Exe = $ExeCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
-
-if (-not $Exe) {
-    Write-Host 'Executable not found -- building now...'
-    if (-not (Test-Path $BuildDir)) { New-Item -ItemType Directory -Path $BuildDir | Out-Null }
-    cmake -B $BuildDir
-    cmake --build $BuildDir --config Release
-    $Exe = $ExeCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+$Binary = $null
+foreach ($c in $Candidates) {
+    if (Test-Path $c) { $Binary = $c; break }
 }
 
-if (-not $Exe) {
-    Write-Error 'ERROR: could not locate prime_tester.exe after build.'
+if (-not $Binary) {
+    Write-Error 'ERROR: prime_tester binary not found. Run `cmake -B build && cmake --build build` first.'
     exit 1
 }
 
-$PassArgs = $args
-Write-Host "+ $Exe $PassArgs"
-& $Exe @PassArgs
+Write-Host "[run.ps1] Launching: $Binary $Args"
+& $Binary @Args
 exit $LASTEXITCODE
