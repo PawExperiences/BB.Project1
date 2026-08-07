@@ -26,6 +26,23 @@ export class Player {
     // Bullet state
     this._bullet = null; // null when no bullet in flight
     // _bullet shape: { x: centreX, y: topEdgeY }
+
+    // Hit flag — set by CollisionSystem when an invader bullet hits the player
+    this.hit = false;
+  }
+
+  /**
+   * Returns the axis-aligned bounding box of the player ship.
+   * Used by CollisionSystem for invader-bullet-vs-player detection.
+   * @returns {{x: number, y: number, width: number, height: number}}
+   */
+  getBounds() {
+    return {
+      x:      this.x,
+      y:      this.y,
+      width:  SHIP_WIDTH,
+      height: SHIP_HEIGHT,
+    };
   }
 
   /**
