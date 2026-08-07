@@ -21,6 +21,7 @@ import {
   FORMATION_TOP,
   FORMATION_WIDTH,
 } from './formation.js';
+import { state } from './state.js';
 
 // ---------------------------------------------------------------------------
 // Step-interval constants
@@ -209,6 +210,8 @@ export class Level1 {
     // ---- Level completion ------------------------------------------------
     if (alive === 0) {
       this._levelCompleted = true;
+      // Save lives into shared state before transitioning
+      state.lives = this._player.lives;
       if (typeof this._game.nextLevel === 'function') {
         this._game.nextLevel();
       } else if (typeof this._game.setLevel === 'function') {
@@ -234,6 +237,7 @@ export class Level1 {
       if (b.y >= this._breachY) {
         // Player loses one life
         this._player.lives -= 1;
+        state.lives = this._player.lives;
 
         // Reset the formation
         this._reset();
@@ -251,8 +255,6 @@ export class Level1 {
     const ctx = this._ctx;
 
     // ---- HUD: level number -----------------------------------------------
-    // Use the injected hud object if it provides a setLevel/drawLevel method;
-    // otherwise fall back to a direct draw if hud exposes draw(ctx, levelNum).
     if (this._hud) {
       if (typeof this._hud.setLevel === 'function') {
         this._hud.setLevel(1);
@@ -261,8 +263,6 @@ export class Level1 {
       } else if (typeof this._hud.draw === 'function') {
         this._hud.draw(ctx, { level: 1 });
       } else {
-        // Minimal fallback: render directly with ctx so the criterion is met
-        // regardless of the hud interface chosen by game.js.
         ctx.save();
         ctx.font      = '18px monospace';
         ctx.fillStyle = '#0f0';
@@ -270,6 +270,13 @@ export class Level1 {
         ctx.fillText('Level 1', ctx.canvas.width / 2, 28);
         ctx.restore();
       }
+    } else {
+      ctx.save();
+      ctx.font      = '18px monospace';
+      ctx.fillStyle = '#0f0';
+      ctx.textAlign = 'center';
+      ctx.fillText('Level 1', ctx.canvas.width / 2, 28);
+      ctx.restore();
     }
 
     // ---- Invader formation -----------------------------------------------
