@@ -75,6 +75,9 @@ This command runs the profiling script unattended. It connects to the database s
 | `generate_schema.py` | Schema documentation generator — writes `SCHEMA.md` from the live PostgreSQL source |
 | [`SCHEMA.md`](SCHEMA.md) | Database schema documentation for the third-party source database |
 | [`FINDINGS.md`](FINDINGS.md) | Analytical findings and conclusions from the investigation |
+| `index.html` | Space Invaders game entry point — open directly from the filesystem |
+| `game.js` | Main game ES module: loop, scene state machine, HUD |
+| `gameConfig.js` | Shared game constants (canvas size, speeds, lives) |
 
 > Any files added to the repository after this PR must be appended to the table above.
 
@@ -91,3 +94,31 @@ The database is read-only and third-party. No credentials are included in this r
 - [SCHEMA.md](SCHEMA.md) — database schema documentation
 - [FINDINGS.md](FINDINGS.md) — analytical findings
 - [requirements.txt](requirements.txt) — pip dependencies
+
+---
+
+## Planned File Layout
+
+The following source files will be added by later cards. They do **not** exist yet; stubs must not be created ahead of their owning card.
+
+| File | Owning card |
+|---|---|
+| `input.js` | "Keyboard input and the player ship" card |
+| `player.js` | "Keyboard input and the player ship" card |
+| `invaders.js` | "Invader grid and movement" card |
+| `collision.js` | "Collision detection" card |
+| `level1.js` | "Level 1" card |
+| `level2.js` | "Level 2" card |
+| `level3.js` | "Level 3" card |
+| `boss.js` | "Boss enemy" card |
+
+### Manual Verification
+
+To verify the game loop and canvas framework after this card ships:
+
+1. Open `index.html` directly in a browser from the filesystem (`file://` URL — no web server needed).
+2. **Title scene**: confirm the page has a black background, a centred canvas, the text `SPACE INVADERS` and a blinking `Press ENTER to start` prompt are visible.
+3. **Transition to Playing**: press **Enter**; confirm the Playing scene appears (shows a HUD with score/lives and a placeholder message).
+4. **Background-tab delta cap**: switch to another tab, wait ≥ 5 seconds, switch back; confirm there is no burst of rapid updates or visual jump.
+5. **Game Over scene**: open the browser console and run `import('./game.js').then(m => { m.hudState.lives = 0; })` — future cards will trigger this automatically; for now, verify the Game Over scene can be reached by temporarily setting `currentScene` in the console, then pressing **Enter** to return to Title.
+6. Confirm no console errors appear at any point.
