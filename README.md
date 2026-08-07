@@ -5,15 +5,15 @@ the filesystem — no server, no bundler, no npm.
 
 ---
 
-## Planned File Layout
+## File Layout
 
 | File | Owner / Card |
 |---|---|
-| `index.html` | **This card** — Game loop and canvas framework |
-| `game.js` | **This card** — Game loop and canvas framework |
-| `gameConfig.js` | **This card** — Game loop and canvas framework |
-| `input.js` | Later card — *Keyboard input and the player ship* |
-| `player.js` | Later card — *Keyboard input and the player ship* |
+| `index.html` | **Game loop and canvas framework** |
+| `game.js` | **Game loop and canvas framework** |
+| `gameConfig.js` | **Game loop and canvas framework** |
+| `input.js` | **Keyboard input and the player ship** |
+| `player.js` | **Keyboard input and the player ship** |
 | `invaders.js` | Later card — *Level 1: the classic grid* |
 | `collision.js` | Later card — *Sprite rendering and collision detection* |
 | `level1.js` | Later card — *Level 1* |
@@ -32,6 +32,22 @@ Exports shared constants:
 - `PLAYER_SPEED = 200` px/sec
 - `BULLET_SPEED = 500` px/sec
 - `STARTING_LIVES = 3`
+- `startingLives = 3` (alias for backward-compatibility)
+
+### `input.js`
+- `initInput()` — attaches `keydown`/`keyup` listeners to `window` once at startup.
+- `isKeyHeld(key)` — returns `true` while the given `KeyboardEvent.key` is held; `false` otherwise.
+- No reliance on key-repeat events; the Map-backed held state is authoritative.
+
+### `player.js`
+Exports the `Player` class:
+- Constructor sets starting position and reads `STARTING_LIVES` from `gameConfig.js`.
+- `update(dt)` — moves the ship left/right (`ArrowLeft`/`a`, `ArrowRight`/`d`) at 200 px/s;
+  clamps to canvas bounds; manages the single-bullet-in-flight constraint.
+- `draw(ctx)` — procedural Canvas 2D rendering: wide base + mid body + barrel + dome arc;
+  also draws the active bullet as a 4 × 12 px yellow rectangle.
+- `this.lives` — initialised from `STARTING_LIVES`; readable/decrementable by level cards.
+- `this.bullet` getter — exposes bullet state for future collision detection.
 
 ### `game.js`
 - **Fixed-timestep loop**: 60 update steps/sec (`UPDATE_STEP = 1/60 s`),
@@ -40,6 +56,8 @@ Exports shared constants:
   the ENTER key with no page reload.
 - **HUD**: drawn directly on the canvas; exports `hudState { score, lives,
   hiScore }` for sibling modules to read and mutate.
+- Instantiates a `Player` on transition to Playing; calls `player.update(dt)`
+  and `player.draw(ctx)` each tick/frame.
 
 ---
 
@@ -50,8 +68,8 @@ so the URL starts with `file://`. No local server is required.
 
 ### 1. No errors on load
 - [ ] The browser console (F12 → Console) shows **no errors** and **no
-  network requests** (Network tab should be empty or show only the two
-  local file loads for `game.js` and `gameConfig.js`).
+  network requests** (Network tab should be empty or show only the local
+  file loads for `game.js`, `gameConfig.js`, `input.js`, and `player.js`).
 
 ### 2. Canvas size and background
 - [ ] A black rectangle 768 × 896 px is visible in the page.
@@ -66,56 +84,58 @@ so the URL starts with `file://`. No local server is required.
 
 ### 4. Title → Playing transition (ENTER)
 - [ ] Pressing **ENTER** while on the Title scene switches to the Playing
-  scene **without** a page reload (URL does not change, no white flash).
+  scene **without** a page reload.
 - [ ] The Playing scene shows the HUD: **"SCORE: 0"** on the top-left and
   **"LIVES: 3"** on the top-right of the canvas.
-- [ ] The canvas is cleared and re-drawn every frame (no flickering
-  artefacts from previous frames).
+- [ ] A green player ship is visible near the bottom of the canvas.
 
-### 5. Playing scene stubs
+### 5. Player movement
+- [ ] Hold **ArrowLeft** or **a** — the ship moves left at a steady speed
+  and stops at the left edge (x = 0), never going further.
+- [ ] Hold **ArrowRight** or **d** — the ship moves right at a steady speed
+  and stops at the right edge, never going past the canvas boundary.
+- [ ] Release the key — the ship stops immediately (no coasting).
+
+### 6. Shooting
+- [ ] Press **Space** — a small yellow bullet appears above the barrel and
+  travels upward.
+- [ ] While the bullet is in flight, pressing or holding **Space** does **not**
+  spawn a second bullet.
+- [ ] Once the bullet exits the top of the canvas it disappears, and
+  **Space** can fire again.
+
+### 7. Ship rendering
+- [ ] The ship is drawn procedurally (no image files loaded).
+- [ ] It has a recognisable cannon silhouette: wide base, narrower mid
+  section, narrow barrel, and a small dome/arc at the top.
+
+### 8. Playing scene stubs
 - [ ] No JavaScript errors appear in the console during the Playing scene.
-- [ ] The game loop is running (you can verify by temporarily mutating
-  `hudState.score` in the console and confirming the HUD updates on the
-  next render).
 
-### 6. Playing → Game Over transition
-- [ ] Open the browser console and type:
+### 9. Playing → Game Over transition
+- [ ] Open the browser console and run:
   ```js
   import('./game.js').then(m => { m.hudState.lives = 0; });
   ```
-  (or simply set `hudState.lives = 0` if you have a reference).
-- [ ] Within one update tick the scene should switch to **Game Over**.
-- [ ] Alternatively, wait for a later card that wires up actual lives loss.
+- [ ] Within one update tick the scene switches to **Game Over**.
 
-### 7. Game Over scene
+### 10. Game Over scene
 - [ ] The canvas displays **"GAME OVER"** in large red text.
 - [ ] Below it, the final **"SCORE: N"** is shown.
 - [ ] Below that, **"Press ENTER to restart"** is displayed.
 - [ ] The hi-score is shown near the top.
 
-### 8. Game Over → Title transition (ENTER)
-- [ ] Pressing **ENTER** on the Game Over scene returns to the **Title**
-  scene (not directly to Playing).
-- [ ] The hi-score on the Title scene reflects the score from the just-
-  finished game if it was higher than the previous hi-score.
+### 11. Game Over → Title transition (ENTER)
+- [ ] Pressing **ENTER** on the Game Over scene returns to the **Title** scene.
+- [ ] The hi-score reflects the highest score seen so far.
 
-### 9. Delta-cap behaviour (backgrounded tab)
-- [ ] Switch to a different browser tab and wait at least 5 seconds.
-- [ ] Switch back. The game should resume smoothly with **no visible
-  stutter or burst** of catch-up updates.
-- [ ] To verify programmatically: add a `console.count('update')` inside
-  `update()` temporarily; after returning from a 5-second background
-  pause the counter should jump by at most ~12 (200 ms / (1/60 s) ≈ 12)
-  regardless of how long the tab was hidden.
+### 12. Delta-cap behaviour (backgrounded tab)
+- [ ] Switch to another tab for ≥ 5 seconds, then switch back.
+- [ ] The game resumes smoothly with no visible burst of catch-up updates.
 
-### 10. `hudState` export
-- [ ] In the browser console run:
+### 13. `hudState` export
+- [ ] In the console run:
   ```js
   import('./game.js').then(m => console.log(m.hudState));
   ```
-- [ ] The logged object has properties `score`, `lives`, and `hiScore`.
-
-### 11. Exactly three source files
-- [ ] Only `index.html`, `game.js`, and `gameConfig.js` exist in the
-  project root (besides `README.md` and the CI config). No other `.js`
-  or `.html` files have been created.
+- [ ] The logged object has `score`, `lives`, and `hiScore`.
