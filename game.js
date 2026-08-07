@@ -2,8 +2,6 @@
  * game.js — Main ES module: game loop, scene state machine, HUD.
  *
  * Future import sites (added by later cards):
- *   import { setupInput, keys } from './input.js';        // Card: Keyboard input and the player ship
- *   import { createPlayer, updatePlayer } from './player.js'; // Card: Keyboard input and the player ship
  *   import { createInvaders, updateInvaders } from './invaders.js'; // Card: Level 1 – the classic grid
  *   import { checkCollisions } from './collision.js';     // Card: Sprite rendering and collision detection
  *   import { initLevel1 } from './level1.js';             // Card: Level 1
@@ -13,6 +11,8 @@
  */
 
 import { CANVAS_WIDTH, CANVAS_HEIGHT, STARTING_LIVES } from './gameConfig.js';
+import { initInput } from './input.js';
+import { Player } from './player.js';
 
 // ---------------------------------------------------------------------------
 // HUD state — exported so later modules can read and mutate it directly.
@@ -41,8 +41,11 @@ const SCENE = Object.freeze({
 let currentScene = SCENE.TITLE;
 
 // ---------------------------------------------------------------------------
-// Keyboard input (ENTER key only — full input module added by later card)
+// Keyboard input — initialise the full input module.
+// ENTER tracking is still handled here; arrow / space handled in player.js.
 // ---------------------------------------------------------------------------
+initInput();
+
 let enterPressed = false;
 
 window.addEventListener('keydown', (e) => {
@@ -58,6 +61,11 @@ function consumeEnter() {
 }
 
 // ---------------------------------------------------------------------------
+// Player instance — created fresh each game session.
+// ---------------------------------------------------------------------------
+let player = null;
+
+// ---------------------------------------------------------------------------
 // Scene transitions
 // ---------------------------------------------------------------------------
 function transitionTo(scene) {
@@ -65,12 +73,15 @@ function transitionTo(scene) {
     // Reset game state for a fresh run.
     hudState.score = 0;
     hudState.lives = STARTING_LIVES;
+    // Create a new player for the session.
+    player = new Player();
   }
   if (scene === SCENE.TITLE) {
     // Update hi-score when returning to title.
     if (hudState.score > hudState.hiScore) {
       hudState.hiScore = hudState.score;
     }
+    player = null;
   }
   currentScene = scene;
 }
@@ -89,8 +100,13 @@ function update(dt) {
       break;
 
     case SCENE.PLAYING:
-      // TODO (input.js)    — read player controls here
-      // TODO (player.js)   — update player position and bullets here
+      // Update player movement and bullets.
+      if (player) {
+        player.update(dt);
+        // Mirror lives from hudState so level cards can decrement hudState.lives.
+        player.lives = hudState.lives;
+      }
+
       // TODO (invaders.js) — update invader grid here
       // TODO (collision.js)— run collision detection here
       // TODO (level files) — check level-completion conditions here
@@ -155,7 +171,11 @@ function renderTitle() {
 }
 
 function renderPlaying() {
-  // TODO (player.js)   — draw player sprite here
+  // Draw player ship and bullet.
+  if (player) {
+    player.draw(ctx);
+  }
+
   // TODO (invaders.js) — draw invader grid here
   // TODO (collision.js)— draw bullets / explosions here
   // TODO (level files) — draw level-specific elements here
