@@ -82,6 +82,8 @@ This command runs the profiling script unattended. It connects to the database s
 | `player.js` | Player ship entity — movement, single-bullet mechanic, procedural drawing, `getBounds()` |
 | `invaders.js` | InvaderGrid class — 11×5 formation, step-and-drop movement, per-invader alive state |
 | `collision.js` | CollisionSystem class — AABB collision, explosion effects, score tracking |
+| `formation.js` | Shared formation constants — cell dimensions, invader types, grid geometry |
+| `level1.js` | Level 1 — classic 55-invader grid; movement, breach detection, life loss, level completion |
 
 > Any files added to the repository after this PR must be appended to the table above.
 
@@ -107,7 +109,6 @@ The following source files will be added by later cards. They do **not** exist y
 
 | File | Owning card |
 |---|---|
-| `level1.js` | "Level 1" card |
 | `level2.js` | "Level 2" card |
 | `level3.js` | "Level 3" card |
 | `boss.js` | "Boss enemy" card |
@@ -140,7 +141,7 @@ The following source files will be added by later cards. They do **not** exist y
 11. **No key-repeat stutter**: hold **ArrowLeft** for several seconds; movement is perfectly smooth with no stutter or double-stepping.
 12. Confirm no console errors appear at any point.
 
-### Sprite Rendering and Collision Detection (this card)
+### Sprite Rendering and Collision Detection (previous card)
 
 1. Open `index.html` directly in a browser (`file://` URL — no web server needed).
 2. Press **Enter** to start the game.
@@ -157,3 +158,29 @@ The following source files will be added by later cards. They do **not** exist y
 10. **Collision-before-draw order**: confirm that there is no frame where a killed invader is visible after the bullet reaches it (collision runs before draw each tick).
 11. **No new dependencies**: confirm the game still opens from a `file://` URL with no server required and no console errors about missing modules or network requests.
 12. Confirm no console errors appear at any point.
+
+### Level 1 — Classic Grid (this card)
+
+1. Open `index.html` directly in a browser from the filesystem (`file://` URL — no web server needed). Confirm no console errors on load.
+2. Press **Enter** to start the game.
+3. **Formation visible**: confirm exactly 55 green rectangles (11 columns × 5 rows) appear on the canvas above the player ship.
+4. **HUD level number**: confirm the text `Level 1` (or `1`) is displayed in the HUD area on every frame.
+5. **Formation movement**: watch the formation — it should move horizontally in discrete steps (not continuously). At 55 invaders alive the step interval is approximately 800 ms; you should see roughly one lateral step per 0.8 seconds.
+6. **Speed increase**: shoot invaders one by one. After reducing the count to a handful (e.g. 5 or fewer), observe that the formation steps noticeably faster — at 1 invader remaining the step interval is approximately 100 ms (approximately 10 steps per second).
+7. **Edge-drop and direction reversal**: watch the formation reach the left or right canvas edge. Confirm:
+   - The entire formation drops down by exactly one cell height (32 px) in a single step.
+   - The formation immediately reverses horizontal direction.
+   - No invader leaves the canvas horizontally.
+8. **Breach → life loss → restart**:
+   a. Either let the formation descend naturally (takes time) or open the browser console and run:
+      ```js
+      // Force the formation to nearly breach (adjust the level reference as wired in game.js)
+      ```
+   b. When any invader's Y position reaches or exceeds `canvasHeight - cellHeight` (i.e. `896 - 32 = 864` px), confirm:
+      - The player's life count in the HUD decrements by exactly 1.
+      - The formation immediately resets to its original 55-invader layout at the top of the canvas.
+      - The step interval resets to ~800 ms (slow speed).
+9. **Level completion**: destroy all 55 invaders. Confirm that `game.nextLevel()` (or `game.setLevel(2)`) is called — in the current build this transitions to whatever Level 2 state is wired; if Level 2 is not yet implemented, a console log or scene change from `game.js` is acceptable evidence.
+10. **Interval formula spot-check** (optional, console): after shooting exactly 28 invaders (27 alive), open the console and verify the step interval is approximately `100 + 26 * (700 / 54) ≈ 437 ms`.
+11. **No bundler / server required**: confirm the game still opens and runs from a `file://` URL with no web server, no npm, and no console errors about missing modules or failed network requests.
+12. Confirm no console errors appear at any point during the above steps.
