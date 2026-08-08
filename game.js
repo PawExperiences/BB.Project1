@@ -11,6 +11,12 @@ import { CANVAS_WIDTH, CANVAS_HEIGHT, STARTING_LIVES } from './gameConfig.js';
 // level3.js added by card: "Level 3: shields and formations"
 // boss.js added by card: "Boss level: multi-phase finale"
 
+import { initInput } from './input.js';
+import { Player }    from './player.js';
+
+// Initialise keyboard tracking once at startup
+initInput();
+
 // ─── HUD State (exported so sibling modules can read/mutate) ─────────────────
 export const hudState = {
   score: 0,
@@ -21,6 +27,13 @@ export const hudState = {
 // ─── Canvas / Context ────────────────────────────────────────────────────────
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
+
+// ─── Player instance (created fresh per run) ─────────────────────────────────
+let player = null;
+
+function createPlayer() {
+  player = new Player(CANVAS_WIDTH / 2, CANVAS_HEIGHT - 80);
+}
 
 // ─── Scene State Machine ─────────────────────────────────────────────────────
 // Scenes: 'title' | 'playing' | 'gameover'
@@ -38,18 +51,18 @@ export function triggerGameOver() {
   transitionTo('gameover');
 }
 
-// ─── Keyboard Input ──────────────────────────────────────────────────────────
-const keys = {};
+// ─── Keyboard Input (scene transitions — Enter key) ──────────────────────────
+const sceneKeys = {};
 
 window.addEventListener('keydown', (e) => {
-  if (!keys[e.code]) {
-    keys[e.code] = true;
+  if (!sceneKeys[e.code]) {
+    sceneKeys[e.code] = true;
     onKeyPressed(e.code);
   }
 });
 
 window.addEventListener('keyup', (e) => {
-  keys[e.code] = false;
+  sceneKeys[e.code] = false;
 });
 
 function onKeyPressed(code) {
@@ -58,6 +71,7 @@ function onKeyPressed(code) {
       // Reset game state for a fresh run
       hudState.score = 0;
       hudState.lives = STARTING_LIVES;
+      createPlayer();
       transitionTo('playing');
     } else if (currentScene === 'gameover') {
       transitionTo('title');
@@ -119,6 +133,10 @@ function updateTitle(dt) {
 
 function updatePlaying(dt) {
   // player.js update called here by card: "Keyboard input and the player ship"
+  if (player) {
+    player.update(dt);
+    hudState.lives = player.lives;
+  }
   // invaders.js update called here by card: "Level 1: the classic grid"
   // collision.js update called here by card: "Sprite rendering and collision detection"
 }
@@ -168,9 +186,6 @@ function renderTitle() {
 
 // ─── Playing Scene ────────────────────────────────────────────────────────────
 function renderPlaying() {
-  // player.js renders here by card: "Keyboard input and the player ship"
-  // invaders.js renders here by card: "Level 1: the classic grid"
-
   // Placeholder: show a dim grid to confirm Playing scene is active
   ctx.strokeStyle = 'rgba(0, 255, 0, 0.04)';
   ctx.lineWidth = 1;
@@ -186,6 +201,12 @@ function renderPlaying() {
     ctx.lineTo(CANVAS_WIDTH, y);
     ctx.stroke();
   }
+
+  // player.js renders here by card: "Keyboard input and the player ship"
+  if (player) {
+    player.draw(ctx);
+  }
+  // invaders.js renders here by card: "Level 1: the classic grid"
 
   renderHUD();
 }
