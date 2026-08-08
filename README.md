@@ -35,7 +35,7 @@ No framework, no bundler, no npm. Open `index.html` directly from the filesystem
 | File | Owning card |
 |------|-------------|
 | `level1.js` | Level 1: the classic grid |
-| `level2.js` | Level 2 |
+| `level2.js` | Level 2: they shoot back |
 | `level3.js` | Level 3 |
 | `boss.js` | Boss encounter |
 
@@ -89,17 +89,16 @@ Follow these steps to confirm every acceptance criterion after checkout.
 
 1. After pressing Enter to start, confirm a grid of green rectangles is visible on the canvas.
 2. Count: 11 columns × 5 rows = 55 invaders total.
-3. **Expected:** All 55 green rectangles (`ctx.fillRect` only; no images) are displayed.
+3. **Expected:** All 55 green rectangles are displayed.
 
 ---
 
-### 5. Formation movement and edge-detect-and-drop (AC: movement + reversal)
+### 5. Formation movement and edge-detect-and-drop
 
 1. Watch the formation move sideways as a unit.
 2. When it reaches the right edge: **Expected** — the entire formation drops one step down and
    reverses direction (moves left).
 3. When it reaches the left edge: **Expected** — drops again and moves right.
-4. Verify no individual invader moves independently.
 
 ---
 
@@ -107,133 +106,168 @@ Follow these steps to confirm every acceptance criterion after checkout.
 
 1. Press Enter to start.
 2. **Expected at start (55 invaders):** The formation takes approximately 800 ms per horizontal step.
-3. Kill invaders by shooting them until only a handful remain.
-4. **Expected near the end (≈1 invader):** The step interval approaches 100 ms — the formation
-   moves noticeably faster.
-5. To verify the formula: open DevTools Console while playing and observe the log output
-   `[level1] aliveCount=N interval=Xms` printed at each step.
+3. Kill invaders until only a handful remain.
+4. **Expected near the end (≈1 invader):** The step interval approaches 100 ms.
+5. DevTools Console logs: `[level1] aliveCount=N interval=Xms` at each step.
 
 ---
 
 ### 7. Kill → immediate interval recalculation
 
 1. With a slow-moving formation (many invaders), shoot one invader.
-2. **Expected:** The next march step fires after the new (slightly shorter) interval,
-   not after the old interval that was already pending.
+2. **Expected:** The next march step fires after the new (slightly shorter) interval.
 3. DevTools Console will show the updated `interval=` immediately after the kill.
 
 ---
 
-### 8. Breach condition — life lost + formation resets
+### 8. Level 1 breach condition — life lost + formation resets
 
-1. Let the formation descend until the bottom row reaches the player's row
-   (or speed up by killing most invaders so the breach happens faster).
+1. Let the formation descend until the bottom row reaches the player's row.
 2. **Expected:**
-   - `LIVES:` counter in the HUD decrements by 1.
-   - The invader formation resets to its starting position and the march restarts
-     at full speed (800 ms interval, 55 invaders).
+   - `LIVES:` counter decrements by 1.
+   - The invader formation resets to its starting position.
    - The HUD still shows `LEVEL: 1`.
-3. When lives reach 0, the game transitions to the GAME OVER screen — the game loop
-   handles this, not `level1.js`.
+3. When lives reach 0, the game transitions to the GAME OVER screen.
 
 ---
 
-### 9. Level clear — CustomEvent dispatched
+### 9. Level 1 clear — advances to Level 2
+
+1. Kill all 55 invaders in Level 1.
+2. **Expected:** `levelComplete` event fires with `nextLevel: 2`, Level 2 loads automatically
+   with HUD showing `LEVEL: 2`. No level-select screen appears.
+3. Player's lives from Level 1 are **preserved** (no reset).
+
+---
+
+### 10. Level 2 — grid visible
+
+1. After Level 1 clears, confirm a fresh 11 × 5 grid of green rectangles appears.
+2. **Expected:** 55 invaders, same layout as Level 1.
+
+---
+
+### 11. Level 2 — faster formation
+
+1. In Level 2 observe the formation speed.
+2. **Expected:** Formation moves noticeably faster than Level 1 at the same invader count.
+3. DevTools Console logs: `[level2] aliveCount=N interval=Xms`.
+4. Verify each logged interval is approximately 0.67× the corresponding Level 1 value.
+
+---
+
+### 12. Level 2 — enemy fire
+
+1. Stand still in Level 2.
+2. **Expected:** Red enemy bullets appear from the bottom of invader columns every 800–2000 ms.
+3. Each bullet travels downward at approximately 300 px/s.
+4. Multiple bullets may be in flight simultaneously.
+
+---
+
+### 13. Level 2 — enemy bullet hits player
+
+1. Let an enemy bullet reach the player ship.
+2. **Expected:**
+   - `LIVES:` decrements by 1.
+   - Player ship immediately reappears at bottom-centre.
+   - Ship flashes (alternates visible/invisible) for 2 seconds.
+   - A second bullet hitting the ship during those 2 seconds does **not** cost another life.
+3. After 2 seconds the ship stops flashing and is vulnerable again.
+
+---
+
+### 14. Level 2 — UFO
+
+1. Wait 20 seconds after Level 2 loads.
+2. **Expected:** A red UFO sprite enters from the left side and crosses the screen horizontally
+   near the top.
+3. Wait another 20 seconds — **Expected:** UFO enters from the right side.
+4. UFO crossing speed is approximately 120 px/s.
+
+---
+
+### 15. Level 2 — UFO score tiers
+
+1. Fire shots to reach a known `session_shot_count` value (fire N−1 shots into empty space
+   first, then shoot the UFO as the Nth shot).
+2. **Expected scores:**
+   - If `session_shot_count mod 4 == 0` when UFO is hit → **50 pts**
+   - `== 1` → **100 pts**
+   - `== 2` → **150 pts**
+   - `== 3` → **300 pts**
+3. DevTools: `sessionShotCount` increments on each Space keypress.
+
+---
+
+### 16. Level 2 — session_shot_count persists from Level 1
+
+1. Fire several shots during Level 1 (note the count).
+2. Clear Level 1 to advance to Level 2.
+3. **Expected:** `session_shot_count` continues from where Level 1 left off (not reset to 0).
+
+---
+
+### 17. Level 2 clear — advances toward Level 3
+
+1. Kill all 55 invaders in Level 2.
+2. **Expected:** `levelComplete` event fires with `nextLevel: 3`.
+3. (Level 3 not yet implemented — game returns to title screen as fallback.)
+
+---
+
+### 18. Game Over when lives reach 0
+
+1. Let lives drain to 0 (by enemy bullets or breach).
+2. **Expected:** Game transitions to GAME OVER scene.
+3. Press **ENTER** on GAME OVER screen.
+4. **Expected:** Returns to Title scene.
+
+---
+
+### 19. HUD shows LEVEL: 2 throughout Level 2
+
+1. In Level 2, **Expected:** `LEVEL: 2` appears at top-centre.
+2. After a breach and formation reset (in Level 2), **Expected:** `LEVEL: 2` is still displayed.
+
+---
+
+### 20. Level 1 legacy checks (still valid)
+
+#### Level clear — CustomEvent dispatched
 
 1. Kill all 55 invaders.
-2. **Expected:** `window` fires a `CustomEvent('levelComplete', { detail: { nextLevel: 2 } })`.
+2. **Expected:** `window` fires `CustomEvent('levelComplete', { detail: { nextLevel: 2 } })`.
 3. In DevTools Console, confirm the log: `levelComplete received, nextLevel: 2`.
-4. The game returns to the title screen (Level 2 is not yet implemented; the game loop
-   handles the fallback).
 
----
-
-### 10. HUD shows LEVEL: 1 throughout play
+#### HUD shows LEVEL: 1 throughout Level 1
 
 1. Press Enter to start.
 2. **Expected:** `LEVEL: 1` appears at the top-centre of the canvas immediately.
-3. After a breach and formation reset, **Expected:** `LEVEL: 1` is still displayed.
 
----
-
-### 11. Bullet kills invader on overlap (AC: collision)
+#### Bullet kills invader on overlap
 
 1. Move the player under an invader in the bottom row.
 2. Press **Space** to fire.
-3. **Expected:** The invader disappears (alive = false) on the same frame the bullet bounding
-   box overlaps the invader bounding box. The bullet is also consumed (does not continue upward).
+3. **Expected:** The invader disappears on the same frame the bullet bounding box overlaps.
 
----
-
-### 12. Explosion effect (AC: explosion visible for EXPLOSION_FRAMES)
-
-1. Kill an invader (step 11 above).
-2. **Expected:** A coloured cross/spark shape appears at the killed invader's position for
-   approximately 20 frames (~0.33 seconds at 60 fps), then disappears.
-
----
-
-### 13. Score increments (AC: score display)
+#### Explosion effect
 
 1. Kill an invader.
-2. **Expected:** The `SCORE:` counter in the top-left HUD (drawn via `ctx.fillText`) increments
-   by 10 (the `SCORE_PER_KILL` constant).
-3. Kill additional invaders; score should increase by 10 per kill.
+2. **Expected:** A coloured cross/spark shape appears for approximately 20 frames, then disappears.
+
+#### Score increments
+
+1. Kill an invader.
+2. **Expected:** `SCORE:` counter increments by 10.
 
 ---
 
-### 14. Collision pass order (AC: collide → update → draw)
-
-1. Open `game.js` in a text editor.
-2. Confirm that within the `gameLoop` function, `runCollisions()` is called before `update()`
-   and both are called before `render()`.
-3. Confirm that `drawInvaders` contains no state mutations (no `alive = false` assignments).
-
----
-
-### 15. `rectsOverlap` is a pure function (AC: pure function)
-
-1. Open DevTools → Console.
-2. Run:
-   ```js
-   import('./collision.js').then(({ rectsOverlap }) => {
-     console.log(rectsOverlap({x:0,y:0,w:10,h:10}, {x:5,y:5,w:10,h:10}));  // true
-     console.log(rectsOverlap({x:0,y:0,w:10,h:10}, {x:20,y:20,w:10,h:10})); // false
-   });
-   ```
-3. **Expected output:** `true` then `false`.
-
----
-
-### 16. `checkInvaderBulletsVsPlayer` with empty array (AC: no throw)
-
-1. In DevTools → Console:
-   ```js
-   import('./collision.js').then(({ checkInvaderBulletsVsPlayer }) => {
-     checkInvaderBulletsVsPlayer([], { x: 375, y: 540, width: 50, height: 40 }, () => {});
-     console.log('no throw — ok');
-   });
-   ```
-2. **Expected output:** `no throw — ok` with no errors.
-
----
-
-### 17. Named constants (AC: no magic numbers)
-
-1. Open `invaders.js` — confirm `INVADER_SPEED`, `EXPLOSION_FRAMES`, `INVADER_DROP` are declared
-   as `const` at the top.
-2. Open `game.js` — confirm `SCORE_PER_KILL` is declared as `const`.
-3. Open `collision.js` — confirm bullet/invader dimensions are referenced via local `const` variables.
-4. Open `level1.js` — confirm `TOTAL_INVADERS`, `INTERVAL_MAX_MS`, `INTERVAL_MIN_MS` are declared
-   as `const` at the top.
-
----
-
-### 18. ES modules + file:// compatibility (AC: no bundler)
+### 21. ES modules + file:// compatibility
 
 1. Reload `index.html` from `file://` with network disconnected.
 2. **Expected:** Page loads, title screen displays, no console errors about module loading.
-3. Confirm `level1.js` uses `export` / `import` — no `require()` or `module.exports`.
+3. Confirm `level2.js` uses `export` / `import` — no `require()` or `module.exports`.
 
 ---
 
@@ -269,4 +303,4 @@ Follow these steps to confirm every acceptance criterion after checkout.
 
 ---
 
-*All checks above should pass on the `develop` branch before this card is moved to Done.*
+*All checks above should pass on the `develop` branch before the Level 2 card is moved to Done.*

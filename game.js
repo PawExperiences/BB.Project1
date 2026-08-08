@@ -6,7 +6,18 @@ import { Player } from './player.js';
 import { initInvaders, updateInvaders, drawInvaders, invaders, registerExplosion } from './invaders.js';
 import { checkBulletVsInvaders, checkInvaderBulletsVsPlayer } from './collision.js';
 import { start as startLevel1, stop as stopLevel1, notifyKill as level1NotifyKill } from './level1.js';
-// TODO: import added by card "Level 2" (level2.js)
+import {
+  start as startLevel2,
+  stop  as stopLevel2,
+  notifyKill as level2NotifyKill,
+  getEnemyBullets,
+  playerIsInvulnerable,
+  playerFlashVisible,
+  notifyEnemyBulletHit,
+  tryShootUfo,
+  update as level2Update,
+  draw   as level2Draw,
+} from './level2.js';
 // TODO: import added by card "Level 3" (level3.js)
 // TODO: import added by card "Boss encounter" (boss.js)
 
@@ -50,9 +61,26 @@ export const hudState = {
 };
 
 // ---------------------------------------------------------------------------
+// Session shot count — cumulative across all levels, never reset
+// ---------------------------------------------------------------------------
+let sessionShotCount = 0;
+
+function getSessionShotCount() {
+  return sessionShotCount;
+}
+
+// ---------------------------------------------------------------------------
+// Active level tracker
+// ---------------------------------------------------------------------------
+let activeLevel = 0;   // 0 = none, 1 = level1, 2 = level2
+
+// ---------------------------------------------------------------------------
 // Player instance (created fresh on transition to 'playing')
 // ---------------------------------------------------------------------------
 let player = null;
+
+// Track previous bullet state to detect new shots
+let _prevBulletNull = true;
 
 // ---------------------------------------------------------------------------
 // Scene state machine
@@ -66,14 +94,18 @@ function transitionTo(scene) {
     hudState.score = 0;
     hudState.lives = STARTING_LIVES;
     hudState._extra = {};
+    sessionShotCount = 0;  // reset session shot count at new game start
     player = new Player();
+    _prevBulletNull = true;
     initInvaders();
+    activeLevel = 1;
     // Start Level 1 march loop
     startLevel1(ctx, hudState);
   }
   if (scene === 'title') {
     // Stop any active level loop
-    stopLevel1();
+    _stopActiveLevel();
+    activeLevel = 0;
     // Update hi-score when returning to title
     if (hudState.score > hudState.hiScore) {
       hudState.hiScore = hudState.score;
@@ -81,7 +113,8 @@ function transitionTo(scene) {
   }
   if (scene === 'gameover') {
     // Stop any active level loop
-    stopLevel1();
+    _stopActiveLevel();
+    activeLevel = 0;
     // Persist hi-score
     if (hudState.score > hudState.hiScore) {
       hudState.hiScore = hudState.score;
@@ -90,14 +123,42 @@ function transitionTo(scene) {
   currentScene = scene;
 }
 
+/** Stop whichever level module is currently running. */
+function _stopActiveLevel() {
+  if (activeLevel === 1) stopLevel1();
+  if (activeLevel === 2) stopLevel2();
+}
+
 // ---------------------------------------------------------------------------
-// Listen for levelComplete event dispatched by level1.js
+// Listen for levelComplete event dispatched by level modules
 // ---------------------------------------------------------------------------
 window.addEventListener('levelComplete', (e) => {
-  // For now: Level 2 is not yet implemented — return to title with hi-score.
-  // The Level 2 card will replace this handler.
   console.log('levelComplete received, nextLevel:', e.detail.nextLevel);
-  transitionTo('title');
+  const next = e.detail.nextLevel;
+
+  if (next === 2) {
+    // Transition from Level 1 to Level 2
+    // Do NOT reset lives or score — carry them over
+    stopLevel1();
+    activeLevel = 2;
+    hudState._extra = {};
+    // Re-init invaders for Level 2's fresh grid
+    initInvaders();
+    // Start Level 2 — pass live player reference getter
+    startLevel2(ctx, hudState, () => player, getSessionShotCount);
+  } else if (next === 3) {
+    // Level 3 not yet implemented — return to title
+    // (Level 3 card will replace this branch)
+    stopLevel2();
+    activeLevel = 0;
+    if (hudState.score > hudState.hiScore) {
+      hudState.hiScore = hudState.score;
+    }
+    transitionTo('title');
+  } else {
+    // Fallback
+    transitionTo('title');
+  }
 });
 
 // ---------------------------------------------------------------------------
@@ -151,8 +212,9 @@ function runCollisions() {
       checkBulletVsInvaders(player.bullet, invaders, (killedInvader) => {
         hudState.score += SCORE_PER_KILL;
         registerExplosion(killedInvader.x, killedInvader.y);
-        // Notify Level 1 so the march interval recalculates immediately
-        level1NotifyKill();
+        // Notify the active level so march interval recalculates immediately
+        if (activeLevel === 1) level1NotifyKill();
+        if (activeLevel === 2) level2NotifyKill();
       });
     }
 
@@ -162,12 +224,38 @@ function runCollisions() {
     }
   }
 
-  // Invader-bullets-vs-player (stub — empty array for Level 1)
-  checkInvaderBulletsVsPlayer([], player, () => {
-    // onHit stub: Level 2 will wire real logic here
-  });
+  // Level 2: check player bullet vs UFO
+  if (activeLevel === 2 && player.bullet !== null && player.bullet.active) {
+    const BULLET_W = 4;
+    const BULLET_H = 12;
+    const bRect = {
+      x: player.bullet.x - BULLET_W / 2,
+      y: player.bullet.y,
+      w: BULLET_W,
+      h: BULLET_H,
+    };
+    const ufoScore = tryShootUfo(bRect, sessionShotCount);
+    if (ufoScore > 0) {
+      hudState.score += ufoScore;
+      player.bullet.active = false;
+      player.bullet = null;
+    }
+  }
 
-  // Breach check: if lives drop to zero after level1.js deducts, go to game-over
+  // Level 2: invader bullets vs player
+  if (activeLevel === 2) {
+    const enemyBullets = getEnemyBullets();
+    if (!playerIsInvulnerable()) {
+      checkInvaderBulletsVsPlayer(enemyBullets, player, () => {
+        notifyEnemyBulletHit();
+      });
+    }
+  } else {
+    // Level 1 stub — empty array
+    checkInvaderBulletsVsPlayer([], player, () => {});
+  }
+
+  // Breach / game-over check
   if (hudState.lives <= 0 && currentScene === 'playing') {
     transitionTo('gameover');
   }
@@ -179,6 +267,9 @@ function runCollisions() {
 // ---------------------------------------------------------------------------
 function update(dt) {
   if (currentScene !== 'playing') return;
+
+  // Track whether a new bullet was just fired this tick
+  const bulletWasNull = (player.bullet === null);
 
   // Shoot flag: ensure new bullets start with active=true
   if (player.bullet !== null && player.bullet.active === undefined) {
@@ -192,7 +283,17 @@ function update(dt) {
     player.bullet.active = true;
   }
 
+  // If bullet was null before and non-null after, a new shot was fired
+  if (bulletWasNull && player.bullet !== null) {
+    sessionShotCount++;
+  }
+
   updateInvaders(dt);
+
+  // Level 2 per-frame update (enemy bullets, UFO, invulnerability)
+  if (activeLevel === 2) {
+    level2Update(dt);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -231,9 +332,22 @@ function renderTitle() {
 }
 
 function renderPlaying() {
-  // Order: invaders (back) → player (front) → HUD (always on top)
+  // Order: invaders (back) → level2 elements → player (front) → HUD (always on top)
   drawInvaders(ctx);
-  if (player) player.draw(ctx);
+
+  // Level 2 elements (enemy bullets, UFO)
+  if (activeLevel === 2) {
+    level2Draw(ctx);
+  }
+
+  // Draw player — skip during flash-off frames in Level 2 invulnerability
+  if (player) {
+    const shouldDraw = (activeLevel !== 2) || playerFlashVisible();
+    if (shouldDraw) {
+      player.draw(ctx);
+    }
+  }
+
   renderHUD();
 }
 
