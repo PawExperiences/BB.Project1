@@ -1,12 +1,12 @@
 // game.js — Game loop, scene state machine, and HUD
 
 import { CANVAS_WIDTH, CANVAS_HEIGHT, STARTING_LIVES } from './gameConfig.js';
+import { initInput } from './input.js';
+import { Player } from './player.js';
 
 // ---------------------------------------------------------------------------
 // Placeholder imports — added by later task cards
 // ---------------------------------------------------------------------------
-// input.js     added by card: "Keyboard input and the player ship"
-// player.js    added by card: "Keyboard input and the player ship"
 // invaders.js  added by card: "Level 1: the classic grid"
 // collision.js added by card: "Sprite rendering and collision detection"
 // level1.js    added by card: "Level 1: the classic grid"
@@ -21,6 +21,11 @@ const canvas = document.getElementById('gameCanvas');
 const ctx    = canvas.getContext('2d');
 
 // ---------------------------------------------------------------------------
+// Initialise keyboard input
+// ---------------------------------------------------------------------------
+initInput();
+
+// ---------------------------------------------------------------------------
 // Exported HUD state — later cards import and mutate this object directly
 // ---------------------------------------------------------------------------
 export const hudState = {
@@ -28,6 +33,16 @@ export const hudState = {
   lives:   STARTING_LIVES,
   hiScore: 0,
 };
+
+// ---------------------------------------------------------------------------
+// Player instance — created when a new game starts
+// ---------------------------------------------------------------------------
+let player = null;
+
+function createPlayer() {
+  player = new Player(CANVAS_WIDTH / 2, CANVAS_HEIGHT - 60);
+  hudState.lives = player.lives;
+}
 
 // ---------------------------------------------------------------------------
 // Scene state machine
@@ -40,30 +55,24 @@ function enterScene(scene) {
 }
 
 // ---------------------------------------------------------------------------
-// Keyboard input
+// Keyboard input (Enter key for scene transitions — handled separately from
+// the held-key map because it is an edge-triggered action, not held state)
 // ---------------------------------------------------------------------------
-const keysPressed = {};
-
 window.addEventListener('keydown', (e) => {
-  keysPressed[e.code] = true;
-
   if (e.code === 'Enter') {
     handleEnter();
   }
 });
 
-window.addEventListener('keyup', (e) => {
-  keysPressed[e.code] = false;
-});
-
 function handleEnter() {
   if (currentScene === 'title') {
-    // Reset game state when starting a new game
     hudState.score = 0;
     hudState.lives = STARTING_LIVES;
+    createPlayer();
     enterScene('playing');
   } else if (currentScene === 'gameover') {
     enterScene('title');
+    player = null;
   }
   // 'playing' -> 'gameover' is triggered programmatically (e.g. lives === 0)
 }
@@ -81,11 +90,11 @@ export function triggerGameOver() {
 // ---------------------------------------------------------------------------
 // Fixed-timestep game loop
 // ---------------------------------------------------------------------------
-const UPDATE_STEP = 1 / 60;          // seconds per logic tick
-const DELTA_CAP   = 0.25;            // 250 ms max accumulated delta
+const UPDATE_STEP = 1 / 60;   // seconds per logic tick
+const DELTA_CAP   = 0.25;     // 250 ms max accumulated delta
 
-let lastTimestamp  = null;
-let accumulator    = 0;
+let lastTimestamp = null;
+let accumulator   = 0;
 
 function loop(timestamp) {
   if (lastTimestamp === null) {
@@ -95,20 +104,17 @@ function loop(timestamp) {
   let elapsed = (timestamp - lastTimestamp) / 1000; // convert ms → s
   lastTimestamp = timestamp;
 
-  // Delta cap: prevents a burst of catch-up ticks after tab is backgrounded
   if (elapsed > DELTA_CAP) {
     elapsed = DELTA_CAP;
   }
 
   accumulator += elapsed;
 
-  // Fixed-timestep update phase
   while (accumulator >= UPDATE_STEP) {
     update(UPDATE_STEP);
     accumulator -= UPDATE_STEP;
   }
 
-  // Render phase — always separate from update
   render();
 
   requestAnimationFrame(loop);
@@ -117,10 +123,14 @@ function loop(timestamp) {
 // ---------------------------------------------------------------------------
 // Update — pure logic, no drawing
 // ---------------------------------------------------------------------------
-function update(dt) { // eslint-disable-line no-unused-vars
+function update(dt) {
   if (currentScene === 'playing') {
-    // Future cards will call their own update logic here.
-    // Example game-over trigger: lives reaching 0
+    if (player) {
+      player.update(dt);
+      // Keep HUD lives in sync
+      hudState.lives = player.lives;
+    }
+
     if (hudState.lives <= 0) {
       triggerGameOver();
     }
@@ -131,7 +141,6 @@ function update(dt) { // eslint-disable-line no-unused-vars
 // Render — pure drawing, no state mutation
 // ---------------------------------------------------------------------------
 function render() {
-  // Clear canvas
   ctx.fillStyle = '#000';
   ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
@@ -162,8 +171,9 @@ function renderTitle() {
 }
 
 function renderPlaying() {
-  // Placeholder — entities added by later cards will draw here.
-  // HUD is already drawn by renderHUD() before this function is called.
+  if (player) {
+    player.draw(ctx);
+  }
 }
 
 function renderHUD() {
@@ -175,11 +185,11 @@ function renderHUD() {
   ctx.fillStyle    = '#fff';
   ctx.font         = `${LINE}px monospace`;
 
-  ctx.fillText(`SCORE  ${hudState.score}`,   PAD,                       PAD);
-  ctx.fillText(`LIVES  ${hudState.lives}`,   PAD,                       PAD + LINE + 4);
+  ctx.fillText(`SCORE  ${hudState.score}`,  PAD,               PAD);
+  ctx.fillText(`LIVES  ${hudState.lives}`,  PAD,               PAD + LINE + 4);
 
   ctx.textAlign = 'right';
-  ctx.fillText(`HI  ${hudState.hiScore}`,    CANVAS_WIDTH - PAD,        PAD);
+  ctx.fillText(`HI  ${hudState.hiScore}`,   CANVAS_WIDTH - PAD, PAD);
   ctx.textAlign = 'left';
 }
 
