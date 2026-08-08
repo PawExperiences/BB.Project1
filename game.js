@@ -1,383 +1,182 @@
-// game.js — Main entry point and game loop
-// Imports gameConfig constants
+// game.js — Main game loop and scene manager
+// Wires together input, player, invaders, HUD, and level scenes.
+
 import { CANVAS_WIDTH, CANVAS_HEIGHT, STARTING_LIVES } from './gameConfig.js';
-
-// input.js added by card: "Keyboard input and the player ship"
-// player.js added by card: "Keyboard input and the player ship"
-// invaders.js added by card: "Level 1: the classic grid"
-// collision.js added by card: "Sprite rendering and collision detection"
-// level1.js added by card: "Level 1: the classic grid"
-// level2.js added by card: "Level 2: they shoot back"
-// level3.js added by card: "Level 3: shields and formations"
-// boss.js added by card: "Boss level: multi-phase finale"
-
 import { initInput } from './input.js';
-import { Player }    from './player.js';
-import {
-  updateFormation,
-  drawFormation,
-  invaders,
-  score as invaderScore,
-  resetFormation,
-  addScore,
-} from './invaders.js';
-import { runCollisions } from './collision.js';
+import { Player } from './player.js';
+import { drawFormation, updateFormation, resetFormation, invaders, score } from './invaders.js';
 import level1 from './level1.js';
 import level2 from './level2.js';
+import level3 from './level3.js';
 
-// Initialise keyboard tracking once at startup
-initInput();
+// ─── Canvas setup ─────────────────────────────────────────────────────────────
+const canvas = document.getElementById('gameCanvas');
+const ctx    = canvas.getContext('2d');
 
-// ─── HUD State (exported so sibling modules can read/mutate) ─────────────────
-export const hudState = {
-  score: 0,
-  lives: STARTING_LIVES,
-  hiScore: 0,
-  level: 1,
-  sessionShotCount: 0,
+// ─── Shared game state ───────────────────────────────────────────────────────
+const gameState = {
+  lives:      STARTING_LIVES,
+  level:      1,
+  score:      0,
+  playerY:    CANVAS_HEIGHT - 60,
+  gameOver:   false,
+  win:        false,
+  triggerGameOver() {
+    gameState.gameOver = true;
+  },
 };
 
-// ─── Canvas / Context ────────────────────────────────────────────────────────
-const canvas = document.getElementById('gameCanvas');
-const ctx = canvas.getContext('2d');
+// ─── Player (shared for levels 1 and 2) ──────────────────────────────────────
+const player = new Player(CANVAS_WIDTH / 2, gameState.playerY);
 
-// ─── Player instance (created fresh per run) ─────────────────────────────────
-let player = null;
+// ─── Input initialisation ─────────────────────────────────────────────────────
+initInput();
 
-function createPlayer() {
-  player = new Player(CANVAS_WIDTH / 2, CANVAS_HEIGHT - 80);
-}
+// ─── Scene management ────────────────────────────────────────────────────────
+let currentLevel = null;
+let currentLevelId = null;
 
-// ─── Invader bullet array ─────────────────────────────────────────────────────
-const invaderBullets = [];
+function transitionTo(levelId) {
+  currentLevelId = levelId;
 
-// ─── Scene State Machine ─────────────────────────────────────────────────────
-// Scenes: 'title' | 'playing' | 'gameover'
-let currentScene = 'title';
-
-function transitionTo(scene) {
-  currentScene = scene;
-}
-
-// Called programmatically (by later cards) when lives reach 0
-export function triggerGameOver() {
-  if (hudState.score > hudState.hiScore) {
-    hudState.hiScore = hudState.score;
-  }
-  transitionTo('gameover');
-}
-
-// ─── Keyboard Input (scene transitions — Enter key) ──────────────────────────
-const sceneKeys = {};
-
-window.addEventListener('keydown', (e) => {
-  if (!sceneKeys[e.code]) {
-    sceneKeys[e.code] = true;
-    onKeyPressed(e.code);
-  }
-});
-
-window.addEventListener('keyup', (e) => {
-  sceneKeys[e.code] = false;
-});
-
-function onKeyPressed(code) {
-  if (code === 'Enter') {
-    if (currentScene === 'title') {
-      // Reset game state for a fresh run
-      hudState.score = 0;
-      hudState.lives = STARTING_LIVES;
-      hudState.level = 1;
-      hudState.sessionShotCount = 0;
-      invaderBullets.length = 0;
-      resetFormation();
-      createPlayer();
-      // Initialise level1 with a reference to hudState
-      level1.init(hudState);
-      transitionTo('playing');
-    } else if (currentScene === 'gameover') {
-      transitionTo('title');
-    }
+  if (levelId === 1) {
+    resetFormation();
+    level1.init(gameState);
+    currentLevel = level1;
+  } else if (levelId === 2) {
+    level2.init(gameState);
+    currentLevel = level2;
+  } else if (levelId === 3) {
+    level3.init(gameState);
+    currentLevel = level3;
+  } else if (levelId === 'boss') {
+    // Boss level not yet implemented — show placeholder
+    currentLevel = {
+      init:   () => {},
+      update: () => {},
+      render: (ctx) => {
+        ctx.save();
+        ctx.textAlign    = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.font         = '48px monospace';
+        ctx.fillStyle    = '#ff4444';
+        ctx.fillText('BOSS INCOMING', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2);
+        ctx.restore();
+      },
+    };
   }
 }
 
-// ─── Track player shots for session shot count ────────────────────────────────
-// We patch the player's _handleFire indirectly by checking bullet spawns each tick.
-let _prevBulletNull = true;
+// Start at level 1
+transitionTo(1);
 
-// ─── Fixed-Timestep Game Loop ─────────────────────────────────────────────────
-const UPDATE_RATE = 1 / 60;          // seconds per fixed step (~16.67 ms)
-const MAX_DELTA  = 0.25;             // 250 ms cap — prevents burst after tab switch
+// ─── Fixed timestep ───────────────────────────────────────────────────────────
+const TARGET_FPS   = 60;
+const FIXED_DT     = 1 / TARGET_FPS;
+let   lastTime     = null;
+let   accumulator  = 0;
 
-let lastTimestamp = null;
-let accumulator   = 0;
+// ─── HUD renderer ────────────────────────────────────────────────────────────
+function renderHUD(ctx, state) {
+  const padding = 16;
+  ctx.save();
+  ctx.font         = '20px monospace';
+  ctx.textBaseline = 'top';
 
-function tick(timestamp) {
-  if (lastTimestamp === null) {
-    lastTimestamp = timestamp;
-  }
+  // Score — top-left
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#ffffff';
+  ctx.fillText('SCORE: ' + (state.score || 0), padding, padding);
 
-  // Wall-clock elapsed in seconds
-  let elapsed = (timestamp - lastTimestamp) / 1000;
-  lastTimestamp = timestamp;
+  // Lives — top-right
+  ctx.textAlign = 'right';
+  ctx.fillStyle = '#00ff00';
+  ctx.fillText('LIVES: ' + state.lives, CANVAS_WIDTH - padding, padding);
 
-  // Delta cap: clamp so a backgrounded tab can't fire dozens of catch-up steps
-  if (elapsed > MAX_DELTA) {
-    elapsed = MAX_DELTA;
-  }
+  // Hi-score placeholder — top-centre
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#ffff00';
+  ctx.fillText('HI-SCORE', CANVAS_WIDTH / 2, padding);
 
-  accumulator += elapsed;
-
-  // Drain accumulator in fixed steps
-  while (accumulator >= UPDATE_RATE) {
-    update(UPDATE_RATE);
-    accumulator -= UPDATE_RATE;
-  }
-
-  render();
-  requestAnimationFrame(tick);
+  ctx.restore();
 }
 
-// ─── Update Phase ─────────────────────────────────────────────────────────────
-function update(dt) {
-  switch (currentScene) {
-    case 'title':
-      updateTitle(dt);
-      break;
-    case 'playing':
-      updatePlaying(dt);
-      break;
-    case 'gameover':
-      updateGameOver(dt);
-      break;
-  }
+// ─── Game-over screen ────────────────────────────────────────────────────────
+function renderGameOver(ctx) {
+  ctx.save();
+  ctx.textAlign    = 'center';
+  ctx.textBaseline = 'middle';
+
+  ctx.font      = '64px monospace';
+  ctx.fillStyle = '#ff0000';
+  ctx.fillText('GAME OVER', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 - 40);
+
+  ctx.font      = '24px monospace';
+  ctx.fillStyle = '#ffffff';
+  ctx.fillText('Press F5 / Cmd+R to restart', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 20);
+
+  ctx.restore();
 }
 
-function updateTitle(dt) {
-  // Future: animate title elements
-}
+// ─── Main loop ────────────────────────────────────────────────────────────────
+function loop(timestamp) {
+  requestAnimationFrame(loop);
 
-function updatePlaying(dt) {
-  // Expose player y for level lose-condition check
-  if (player) {
-    hudState.playerY = player.y;
-  }
+  if (lastTime === null) { lastTime = timestamp; }
+  const raw = (timestamp - lastTime) / 1000;
+  lastTime  = timestamp;
 
-  // player.js update
-  if (player) {
-    // Track session shot count: detect new bullet spawns
-    const hadBullet = player.bullet !== null;
-    player.update(dt);
-    const hasBullet = player.bullet !== null;
-    // A shot was fired this tick if bullet went from null → non-null
-    if (!hadBullet && hasBullet) {
-      hudState.sessionShotCount = (hudState.sessionShotCount || 0) + 1;
-    }
-    // Sync lives from hudState into player
-    player.lives = hudState.lives;
-  }
+  // Cap dt to avoid spiral-of-death after tab is hidden.
+  const cappedDt = Math.min(raw, 0.1);
+  accumulator += cappedDt;
 
-  // Explosion tick (from invaders.js)
-  updateFormation(dt);
+  // Fixed-step update
+  while (accumulator >= FIXED_DT) {
+    accumulator -= FIXED_DT;
 
-  if (hudState.level === 1) {
-    // level1.js update — handles discrete movement, win/lose conditions
-    level1.update(dt, hudState);
-
-    // Handle level transition signalled by level1 (level cleared)
-    if (hudState.level === 2) {
-      // Advance to level 2 WITHOUT resetting lives
-      // Reset formation for fresh grid
-      resetFormation();
-      invaderBullets.length = 0;
-      if (player) {
-        player.x = CANVAS_WIDTH / 2;
-        player._bullet = null;
+    if (!gameState.gameOver) {
+      // ── Level transition check ───────────────────────────────────────────
+      const newLevel = gameState.level;
+      if (newLevel !== currentLevelId) {
+        transitionTo(newLevel);
       }
-      // Initialise level2; lives carry over
-      level2.init(hudState, player, invaderBullets);
-      // hudState.level is already 2
-      // Do NOT transitionTo — still 'playing'
-    }
 
-    // Handle level restart triggered by level1 lose condition
-    if (level1._restarted) {
-      level1._restarted = false;
-      resetFormation();
-      if (player) {
-        player.x = CANVAS_WIDTH / 2;
-        player._bullet = null;
+      // ── Level-specific update ────────────────────────────────────────────
+      if (currentLevel && typeof currentLevel.update === 'function') {
+        currentLevel.update(FIXED_DT, gameState);
+      }
+
+      // ── Levels 1 & 2: shared update paths ────────────────────────────────
+      if (currentLevelId === 1 || currentLevelId === 2) {
+        updateFormation(FIXED_DT);
+        player.update(FIXED_DT);
+        gameState.score = score;
       }
     }
-  } else if (hudState.level === 2) {
-    // level2.js update
-    level2.update(dt, hudState);
-
-    // Handle level transition signalled by level2 (level cleared)
-    if (hudState.level === 3) {
-      // Level 3 not yet implemented; treat as session end → title
-      if (hudState.score > hudState.hiScore) {
-        hudState.hiScore = hudState.score;
-      }
-      hudState.level = 1;
-      transitionTo('title');
-    }
   }
 
-  // Handle game-over when lives reach 0
-  if (hudState.lives <= 0) {
-    triggerGameOver();
+  // ── Render ─────────────────────────────────────────────────────────────────
+  ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+  if (gameState.gameOver) {
+    renderGameOver(ctx);
     return;
   }
 
-  // collision.js update — BEFORE draw calls
-  // For level 2, invader bullet collisions are handled inside level2.update;
-  // we still run runCollisions for player-bullet vs invader hits.
-  const playerBullets = player && player.bullet ? [player.bullet] : [];
-  // Pass empty invaderBullets to runCollisions when in level2 (level2 handles them)
-  const bulletArrayForCollision = hudState.level === 2 ? [] : invaderBullets;
-  runCollisions(playerBullets, bulletArrayForCollision, invaders, player);
-  // If the collision pass deactivated the bullet, sync back to the player
-  if (player && player.bullet && playerBullets.length === 0) {
-    player._bullet = null;
+  // HUD (always on top)
+  renderHUD(ctx, gameState);
+
+  // Level-specific rendering
+  if (currentLevelId === 1 || currentLevelId === 2) {
+    // Shared rendering for levels 1 and 2
+    drawFormation(ctx);
+    player.draw(ctx);
   }
 
-  // Sync score from invaders module into hudState
-  hudState.score = invaderScore;
-}
-
-function updateGameOver(dt) {
-  // Future: animate game over screen
-}
-
-// ─── Render Phase ─────────────────────────────────────────────────────────────
-function render() {
-  // Clear canvas
-  ctx.fillStyle = '#000';
-  ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-
-  switch (currentScene) {
-    case 'title':
-      renderTitle();
-      break;
-    case 'playing':
-      renderPlaying();
-      break;
-    case 'gameover':
-      renderGameOver();
-      break;
+  // Level module render hook (HUD label etc.)
+  if (currentLevel && typeof currentLevel.render === 'function') {
+    currentLevel.render(ctx, gameState);
   }
 }
 
-// ─── Title Scene ──────────────────────────────────────────────────────────────
-function renderTitle() {
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-
-  ctx.fillStyle = '#00ff00';
-  ctx.font = 'bold 56px monospace';
-  ctx.fillText('SPACE INVADERS', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 - 60);
-
-  ctx.fillStyle = '#ffffff';
-  ctx.font = '28px monospace';
-  ctx.fillText('Press ENTER to start', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 20);
-
-  if (hudState.hiScore > 0) {
-    ctx.fillStyle = '#aaaaaa';
-    ctx.font = '20px monospace';
-    ctx.fillText('HI-SCORE: ' + hudState.hiScore, CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 80);
-  }
-}
-
-// ─── Playing Scene ────────────────────────────────────────────────────────────
-function renderPlaying() {
-  // Placeholder: show a dim grid to confirm Playing scene is active
-  ctx.strokeStyle = 'rgba(0, 255, 0, 0.04)';
-  ctx.lineWidth = 1;
-  for (let x = 0; x < CANVAS_WIDTH; x += 64) {
-    ctx.beginPath();
-    ctx.moveTo(x, 0);
-    ctx.lineTo(x, CANVAS_HEIGHT);
-    ctx.stroke();
-  }
-  for (let y = 0; y < CANVAS_HEIGHT; y += 64) {
-    ctx.beginPath();
-    ctx.moveTo(0, y);
-    ctx.lineTo(CANVAS_WIDTH, y);
-    ctx.stroke();
-  }
-
-  // invaders.js renders here
-  drawFormation(ctx);
-
-  // player.js renders here
-  if (player) {
-    // In level 2, respect the invulnerability flash
-    if (hudState.level === 2) {
-      if (level2.playerVisible) {
-        player.draw(ctx);
-      }
-    } else {
-      player.draw(ctx);
-    }
-  }
-
-  // HUD
-  renderHUD();
-
-  // Level-specific render (label, UFO, invader bullets, etc.)
-  if (hudState.level === 1) {
-    level1.render(ctx, hudState);
-  } else if (hudState.level === 2) {
-    level2.render(ctx, hudState);
-  }
-}
-
-// ─── Game Over Scene ──────────────────────────────────────────────────────────
-function renderGameOver() {
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-
-  ctx.fillStyle = '#ff0000';
-  ctx.font = 'bold 64px monospace';
-  ctx.fillText('GAME OVER', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 - 80);
-
-  ctx.fillStyle = '#ffffff';
-  ctx.font = '32px monospace';
-  ctx.fillText('SCORE: ' + hudState.score, CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2);
-
-  ctx.fillStyle = '#aaaaaa';
-  ctx.font = '20px monospace';
-  ctx.fillText('HI-SCORE: ' + hudState.hiScore, CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 50);
-
-  ctx.fillStyle = '#ffffff';
-  ctx.font = '28px monospace';
-  ctx.fillText('Press ENTER to restart', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 110);
-
-  renderHUD();
-}
-
-// ─── HUD ──────────────────────────────────────────────────────────────────────
-function renderHUD() {
-  const padding = 16;
-  ctx.textBaseline = 'top';
-  ctx.font = '20px monospace';
-
-  // Score — top left
-  ctx.textAlign = 'left';
-  ctx.fillStyle = '#ffffff';
-  ctx.fillText('SCORE: ' + hudState.score, padding, padding);
-
-  // Hi-Score — top centre
-  ctx.textAlign = 'center';
-  ctx.fillStyle = '#ffff00';
-  ctx.fillText('HI: ' + hudState.hiScore, CANVAS_WIDTH / 2, padding);
-
-  // Lives — top right
-  ctx.textAlign = 'right';
-  ctx.fillStyle = '#00ff00';
-  ctx.fillText('LIVES: ' + hudState.lives, CANVAS_WIDTH - padding, padding);
-}
-
-// ─── Bootstrap ───────────────────────────────────────────────────────────────
-requestAnimationFrame(tick);
+requestAnimationFrame(loop);
