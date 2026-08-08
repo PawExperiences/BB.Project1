@@ -14,7 +14,7 @@ filesystem (`file://` URL). No npm, no server required.
 | `gameConfig.js` | Game loop and canvas framework |
 | `input.js` | Keyboard input and the player ship |
 | `player.js` | Keyboard input and the player ship |
-| `invaders.js` | Level 1: the classic grid |
+| `invaders.js` | Sprite rendering and collision detection |
 | `collision.js` | Sprite rendering and collision detection |
 | `level1.js` | Level 1: the classic grid |
 | `level2.js` | Level 2: they shoot back |
@@ -52,37 +52,62 @@ marking this card Done.
 - [ ] `SCORE:` value is displayed on the left of the HUD bar.
 - [ ] `HI:` (hi-score) value is displayed in the centre of the HUD bar.
 - [ ] `LIVES:` value is displayed on the right of the HUD bar.
-- [ ] The game area below the HUD is empty and black (no entities yet — those
-      are added by downstream cards).
+- [ ] The game area below the HUD shows the invader formation (green rectangles
+      arranged in an 11-column × 5-row grid).
 
-### 5. Game Over scene
-- [ ] Open the browser console and run:
-      ```js
-      // Force the game into the gameover scene to test it
-      // (Paste each line separately)
-      ```
-      Because direct scene forcing requires editing the source, instead do:
-      - Temporarily edit `game.js` line `let currentScene = 'title';` to
-        `let currentScene = 'gameover';`, save, and reload.
+### 5. Invader formation movement
+- [ ] After entering the Playing scene, the invader formation moves slowly
+      to the right.
+- [ ] When the rightmost column of living invaders reaches the right edge of
+      the canvas, the formation drops downward and reverses direction (moves left).
+- [ ] When the leftmost column of living invaders reaches the left edge, the
+      formation drops downward and reverses direction again (moves right).
+- [ ] Invaders that have been destroyed are **not** drawn — their grid slot
+      appears empty.
+
+### 6. Player ship and shooting
+- [ ] A cyan ship is visible near the bottom of the canvas.
+- [ ] Pressing **Arrow Left / A** moves the ship left; **Arrow Right / D** moves it right.
+- [ ] Pressing **Space** fires a yellow bullet upward from the ship's nose.
+- [ ] Only one bullet is in flight at a time (firing again while a bullet is
+      active does nothing).
+- [ ] The bullet disappears when it exits the top of the canvas.
+
+### 7. Collision — bullet hits invader
+- [ ] Fire a bullet at an invader.
+- [ ] On overlap: the invader disappears (alive = false, not drawn), the bullet
+      disappears, and a brief orange-white flash rectangle appears at the kill
+      position.
+- [ ] The flash disappears within ~300 ms.
+- [ ] The **SCORE** counter in the HUD increases by 10 for each kill.
+
+### 8. Explosion timing
+- [ ] Fire several shots rapidly at different invaders.
+- [ ] Each kill produces its own independent flash that lasts ~300 ms regardless
+      of when other kills happen.
+
+### 9. Game Over scene
+- [ ] Open the browser console and temporarily edit `game.js` to set
+      `let currentScene = 'gameover';`, save, and reload.
 - [ ] The canvas shows **GAME OVER** in red, centred.
 - [ ] Below it, **SCORE: 0** is shown in white.
 - [ ] Below that, **Press ENTER to restart** is shown in grey.
 - [ ] Press **Enter** — the scene transitions to Title without a page reload.
 - [ ] Revert the `currentScene` edit before committing.
 
-### 6. Game Over → Title reset (score & lives)
+### 10. Game Over → Title reset (score & lives)
 - [ ] While on the Game Over scene, confirm that pressing Enter:
   - Resets `hud.score` to `0`.
   - Resets `hud.lives` to `3` (STARTING_LIVES).
   - Transitions to the Title scene (text **SPACE INVADERS** reappears).
   - Does **not** reload the page.
 
-### 7. Tab-background burst prevention
+### 11. Tab-background burst prevention
 - [ ] On the Title screen, switch to a different browser tab or window.
 - [ ] Wait at least **10 seconds**.
 - [ ] Switch back to the Space Invaders tab.
-- [ ] Open DevTools → Performance or simply observe: the game should resume
-      normally without a visible burst of rapid updates or a frozen frame.
+- [ ] Observe: the game resumes normally without a visible burst of rapid
+      updates or a frozen frame.
 - [ ] Confirm in the console that no errors were thrown during the background
       period.
 
@@ -93,11 +118,21 @@ marking this card Done.
 - **`gameConfig.js`** — single source of truth for all numeric constants.
   Every other module imports from here; never hardcode magic numbers.
 - **`game.js`** — owns the canvas, the `requestAnimationFrame` loop, the scene
-  state machine, the `hud` export, and (temporarily) the ENTER key listener.
-  Once `input.js` is added by the *Keyboard input and the player ship* card,
-  that listener moves there.
+  state machine, the `hud` export, and the ENTER key listener.
+- **`input.js`** — keyboard abstraction; call `initInput()` once at startup,
+  then query `isKeyHeld(code)` anywhere.
+- **`player.js`** — `Player` class; handles movement, clamping, and single
+  in-flight bullet.
+- **`invaders.js`** — `Invader` class, 11 × 5 `formation` array,
+  `updateFormation(dt)`, `drawFormation(ctx)`.
+- **`collision.js`** — AABB pass, `score` export, explosion effect state,
+  `runCollisionPass(player, invaderBullets)`, `updateExplosions(dt)`,
+  `drawExplosions(ctx)`.
 - **Fixed timestep** — `update()` is called in discrete 1/60 s steps regardless
   of how fast or slow the display renders. `render()` is called once per
   animation frame. This decouples physics/logic from display refresh rate.
 - **`MAX_ACCUMULATED_DELTA`** — capped at 5 × TIMESTEP so that returning from
   a backgrounded tab never causes more than five update steps to fire at once.
+- **Collision ordering** — `runCollisionPass` is always called before
+  `updateFormation` and draw calls, ensuring no entity is moved into a
+  pre-existing overlap without detection.

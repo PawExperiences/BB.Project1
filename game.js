@@ -8,11 +8,35 @@ import {
   MAX_ACCUMULATED_DELTA
 } from './gameConfig.js';
 
+import { initInput } from './input.js';
+import { Player }   from './player.js';
+
+import { updateFormation, drawFormation } from './invaders.js';
+import {
+  runCollisionPass,
+  updateExplosions,
+  drawExplosions,
+  score as collisionScore
+} from './collision.js';
+
 // ---------------------------------------------------------------------------
 // Canvas setup
 // ---------------------------------------------------------------------------
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
+
+// ---------------------------------------------------------------------------
+// Input initialisation
+// ---------------------------------------------------------------------------
+initInput();
+
+// ---------------------------------------------------------------------------
+// Player entity (created once, reused across sessions)
+// ---------------------------------------------------------------------------
+const player = new Player();
+
+// Placeholder for future invader-bullet array (Level 2 card populates this)
+const invaderBullets = [];
 
 // ---------------------------------------------------------------------------
 // HUD state — exported so downstream modules can read/write score, lives, etc.
@@ -80,16 +104,21 @@ function renderTitle() {
 // ---------------------------------------------------------------------------
 // Scene: Playing
 // ---------------------------------------------------------------------------
-function updatePlaying(/* dt */) {
-  // Downstream cards fill in entity update logic here:
-  // input.js   — added by 'Keyboard input and the player ship'
-  // player.js  — added by 'Keyboard input and the player ship'
-  // invaders.js — added by 'Level 1: the classic grid'
-  // collision.js — added by 'Sprite rendering and collision detection'
-  // level1.js  — added by 'Level 1: the classic grid'
-  // level2.js  — added by 'Level 2: they shoot back'
-  // level3.js  — added by 'Level 3: shields and formations'
-  // boss.js    — added by 'Boss level: multi-phase finale'
+function updatePlaying(dt) {
+  // Collision pass FIRST — before any movement updates
+  runCollisionPass(player, invaderBullets);
+
+  // Update explosion timers
+  updateExplosions(dt);
+
+  // Update player (movement + firing)
+  player.update(dt);
+
+  // Update invader formation
+  updateFormation(dt);
+
+  // Sync score from collision module into HUD
+  hud.score = collisionScore;
 }
 
 function renderPlaying() {
@@ -99,6 +128,15 @@ function renderPlaying() {
 
   // Draw HUD at the top of the canvas
   renderHUD();
+
+  // Draw invader formation (alive invaders only)
+  drawFormation(ctx);
+
+  // Draw player ship and its bullet
+  player.draw(ctx);
+
+  // Draw explosion effects (above everything else)
+  drawExplosions(ctx);
 }
 
 // ---------------------------------------------------------------------------
