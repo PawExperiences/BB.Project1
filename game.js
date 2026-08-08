@@ -13,8 +13,15 @@ import { CANVAS_WIDTH, CANVAS_HEIGHT, STARTING_LIVES } from './gameConfig.js';
 
 import { initInput } from './input.js';
 import { Player }    from './player.js';
-import { updateFormation, drawFormation, invaders, score as invaderScore, resetFormation } from './invaders.js';
+import {
+  updateFormation,
+  drawFormation,
+  invaders,
+  score as invaderScore,
+  resetFormation,
+} from './invaders.js';
 import { runCollisions } from './collision.js';
+import level1 from './level1.js';
 
 // Initialise keyboard tracking once at startup
 initInput();
@@ -24,6 +31,7 @@ export const hudState = {
   score: 0,
   lives: STARTING_LIVES,
   hiScore: 0,
+  level: 1,
 };
 
 // ─── Canvas / Context ────────────────────────────────────────────────────────
@@ -76,9 +84,12 @@ function onKeyPressed(code) {
       // Reset game state for a fresh run
       hudState.score = 0;
       hudState.lives = STARTING_LIVES;
+      hudState.level = 1;
       invaderBullets.length = 0;
       resetFormation();
       createPlayer();
+      // Initialise level1 with a reference to hudState
+      level1.init(hudState);
       transitionTo('playing');
     } else if (currentScene === 'gameover') {
       transitionTo('title');
@@ -139,17 +150,57 @@ function updateTitle(dt) {
 }
 
 function updatePlaying(dt) {
-  // player.js update called here by card: "Keyboard input and the player ship"
+  // Expose player y for level1 lose-condition check
   if (player) {
-    player.update(dt);
-    hudState.lives = player.lives;
+    hudState.playerY = player.y;
   }
 
-  // invaders.js update called here by card: "Level 1: the classic grid"
+  // player.js update
+  if (player) {
+    player.update(dt);
+    // Sync lives from player into hudState (player card owns lives)
+    player.lives = hudState.lives;
+  }
+
+  // Explosion tick (from invaders.js)
   updateFormation(dt);
 
-  // collision.js update called here by card: "Sprite rendering and collision detection"
-  // Collision pass runs BEFORE draw calls (collide-then-draw order)
+  // level1.js update — handles discrete movement, win/lose conditions
+  level1.update(dt, hudState);
+
+  // Handle level transition signalled by level1
+  if (hudState.level === 2) {
+    // Level 2 not yet implemented; for now treat as a win — go to title
+    // The game loop picks up the signal here.
+    // Reset for next session
+    if (hudState.score > hudState.hiScore) {
+      hudState.hiScore = hudState.score;
+    }
+    hudState.level = 1;
+    transitionTo('title');
+  }
+
+  // Handle game-over when lives reach 0 (can be set by level1 via hudState.lives)
+  if (hudState.lives <= 0) {
+    triggerGameOver();
+    return;
+  }
+
+  // Handle level restart triggered by level1.init() call (lives decremented, init re-called)
+  // level1.init() resets movement state; invaders are rebuilt by resetFormation below.
+  // We detect this by checking if level1.gameState.lives was mutated and init was re-called;
+  // since level1.init sets level1.gameState, we just need to rebuild the formation.
+  // The restart is detected via a flag set by level1 (level1._restarted).
+  if (level1._restarted) {
+    level1._restarted = false;
+    resetFormation();
+    if (player) {
+      player.x = CANVAS_WIDTH / 2;
+      player._bullet = null;
+    }
+  }
+
+  // collision.js update — BEFORE draw calls
   const playerBullets = player && player.bullet ? [player.bullet] : [];
   runCollisions(playerBullets, invaderBullets, invaders, player);
   // If the collision pass deactivated the bullet, sync back to the player
@@ -222,15 +273,19 @@ function renderPlaying() {
     ctx.stroke();
   }
 
-  // invaders.js renders here by card: "Level 1: the classic grid"
+  // invaders.js renders here
   drawFormation(ctx);
 
-  // player.js renders here by card: "Keyboard input and the player ship"
+  // player.js renders here
   if (player) {
     player.draw(ctx);
   }
 
+  // HUD — drawn first so level label sits on top at correct z-order
   renderHUD();
+
+  // level1.js render — draws level label (must not overwrite score/lives)
+  level1.render(ctx, hudState);
 }
 
 // ─── Game Over Scene ──────────────────────────────────────────────────────────

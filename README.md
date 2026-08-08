@@ -212,11 +212,14 @@ repository contains exactly the expected files:
 ### 20 — Formation step-and-drop movement
 
 1. Enter the Playing scene and observe the invader formation.
-2. **Pass:** The formation moves horizontally each frame.
+2. **Pass:** The formation moves horizontally in discrete timed steps.
 3. **Pass:** When the right edge of the rightmost invader reaches the right canvas
-   boundary (x = 768), the entire formation drops by 32 px and begins moving left.
+   boundary (x = 768), the entire formation drops by 32 px (one sprite-height stride)
+   and begins moving left.
 4. **Pass:** When the left edge of the leftmost invader reaches x = 0, the
    formation drops again and reverses to move right.
+5. **Pass:** With all 55 invaders alive the step interval is approximately 800 ms;
+   as invaders are destroyed the interval decreases toward 100 ms with 1 remaining.
 
 ### 21 — Shooting an invader
 
@@ -262,3 +265,35 @@ repository contains exactly the expected files:
 2. **Pass:** In `updatePlaying`, the call to `runCollisions(...)` appears **before**
    any draw call (draw calls are in `renderPlaying`, which is only invoked from
    `render()`, which is called after `update()` completes).
+
+### 25 — Level number on HUD
+
+1. Enter the Playing scene.
+2. **Pass:** The text **"LEVEL 1"** is visible on the canvas below the main HUD row.
+3. **Pass:** The score (top-left), hi-score (top-centre), and lives (top-right)
+   remain fully visible and are not overwritten by the level label.
+
+### 26 — Win condition: all invaders cleared
+
+1. Using the DevTools console, kill all invaders programmatically:
+   ```js
+   import('./invaders.js').then(({ invaders }) => {
+     invaders.forEach(i => { i.alive = false; });
+   });
+   ```
+2. Wait one game tick.
+3. **Pass:** The game transitions away from the Playing scene
+   (returns to Title or advances, signalling `gameState.level = 2`).
+
+### 27 — Lose condition: formation reaches player row
+
+1. Enter the Playing scene.
+2. In the DevTools console, force the formation down to the player row:
+   ```js
+   import('./invaders.js').then(({ invaders }) => {
+     invaders.forEach(i => { i.y += 700; });
+   });
+   ```
+3. Wait one game tick.
+4. **Pass:** `hudState.lives` decrements by 1 and the formation resets to its
+   starting position.
