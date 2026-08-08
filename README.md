@@ -297,3 +297,132 @@ repository contains exactly the expected files:
 3. Wait one game tick.
 4. **Pass:** `hudState.lives` decrements by 1 and the formation resets to its
    starting position.
+
+---
+
+## Level 2 Manual Verification
+
+These steps verify Level 2 behaviour. To reach Level 2, clear Level 1 (kill all
+55 invaders) or jump directly using the console shortcut below.
+
+### L2-0 — Jump to Level 2 via console (shortcut for testing)
+
+1. Start a game (press **Enter** on Title).
+2. In the DevTools console:
+   ```js
+   import('./invaders.js').then(({ invaders }) => {
+     invaders.forEach(i => { i.alive = false; });
+   });
+   ```
+3. Wait one tick.
+4. **Pass:** `hudState.level` becomes `2` and the Playing scene continues
+   (no transition to Title or Game Over).
+
+### L2-1 — Lives carry over from Level 1
+
+1. While in Level 1, note the current `hudState.lives` value.
+2. Clear Level 1 (kill all invaders as above).
+3. **Pass:** `hudState.lives` is the same value after the transition — it is NOT
+   reset to 3.
+
+### L2-2 — Level 2 invader grid is 11×5
+
+1. After transitioning to Level 2, confirm via console:
+   ```js
+   import('./invaders.js').then(({ invaders }) => {
+     const alive = invaders.filter(i => i.alive);
+     console.log('alive:', alive.length);
+   });
+   ```
+2. **Pass:** `alive.length === 55`.
+
+### L2-3 — Formation moves faster in Level 2
+
+1. In Level 1, observe the step interval with 55 invaders alive (~800 ms).
+2. After advancing to Level 2, observe the same full grid.
+3. **Pass:** Steps visually occur approximately 1.5× as often (roughly every 536 ms
+   at 55 alive, vs 800 ms in Level 1).
+
+### L2-4 — Invaders fire downward bullets
+
+1. Enter Level 2 and wait a few seconds.
+2. **Pass:** Small red rectangles appear below the invader formation and travel
+   downward toward the player.
+3. **Pass:** No more than a handful of bullets are on screen at once (each fire
+   event spawns exactly one bullet).
+
+### L2-5 — Invader bullet hits player → life lost, respawn
+
+1. Enter Level 2 and allow an invader bullet to reach the player ship.
+2. **Pass:** `hudState.lives` decrements by 1.
+3. **Pass:** The player ship immediately reappears at the bottom-centre of the
+   canvas (x = 384, y = CANVAS_HEIGHT − 80).
+
+### L2-6 — Invulnerability window and flash
+
+1. After the player is hit and respawns, observe the ship for 2 seconds.
+2. **Pass:** The ship visually flickers (appears and disappears at a regular
+   sub-second interval) for approximately 2 seconds.
+3. **Pass:** During the flicker window, a second invader bullet passing through
+   the player's position does NOT decrement `hudState.lives` again.
+4. After ~2 seconds, the ship stops flickering.
+5. **Pass:** The ship is now solid and the next hit DOES decrement a life.
+
+### L2-7 — UFO appears every 20 seconds
+
+1. Enter Level 2 and start a stopwatch.
+2. **Pass:** A UFO (red rectangle with dome, labelled "UFO") appears along the
+   top edge of the play area approximately 20 seconds after level start.
+3. **Pass:** A second UFO appears approximately 40 seconds after level start.
+
+### L2-8 — UFO alternates entry side
+
+1. Watch the first UFO: **Pass:** it enters from the **left** and travels right.
+2. Watch the second UFO: **Pass:** it enters from the **right** and travels left.
+3. Watch the third UFO: **Pass:** it enters from the **left** again.
+
+### L2-9 — UFO exits silently if not shot
+
+1. Allow a UFO to cross the entire screen without shooting it.
+2. **Pass:** The UFO disappears after exiting the canvas edge.
+3. **Pass:** `hudState.score` does NOT change when the UFO exits.
+
+### L2-10 — Shooting the UFO awards score
+
+1. Shoot a UFO (position under it and press Space).
+2. **Pass:** `hudState.score` increases by one of: 50, 100, 150, or 300.
+3. In the console check:
+   ```js
+   import('./game.js').then(m => console.log('shots:', m.hudState.sessionShotCount));
+   ```
+4. **Pass:** The score increment equals `[50,100,150,300][hudState.sessionShotCount % 4]`
+   at the moment of the hit.
+
+### L2-11 — sessionShotCount is cumulative across levels
+
+1. Fire several shots in Level 1, note the count via console.
+2. Advance to Level 2.
+3. **Pass:** `hudState.sessionShotCount` continues from where it was — it is not
+   reset to 0 on level transition.
+
+### L2-12 — Game Over when lives reach 0
+
+1. In Level 2, allow invader bullets to hit the player until lives reach 0
+   (or force it: `import('./game.js').then(m => { m.hudState.lives = 0; })`
+   — note: the next tick will trigger game over automatically).
+   Alternatively call `triggerGameOver()` directly:
+   ```js
+   import('./game.js').then(m => m.triggerGameOver());
+   ```
+2. **Pass:** The Game Over scene is displayed.
+3. Press **Enter**.
+4. **Pass:** The Title scene is shown. No page reload.
+
+### L2-13 — level2.js has no npm imports or fetch calls
+
+1. Open `level2.js` in DevTools Sources or a text editor.
+2. **Pass:** The only `import` statements reference `./gameConfig.js` and
+   `./invaders.js` (relative paths, no `node_modules` specifiers).
+3. **Pass:** There are no `fetch(...)` calls anywhere in the file.
+4. **Pass:** Opening `index.html` via `file://` works with no network errors in
+   the DevTools Network tab.
