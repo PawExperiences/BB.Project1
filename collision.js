@@ -18,6 +18,17 @@ export function rectsOverlap(a, b) {
 }
 
 /**
+ * checkCollision(a, b)
+ * Alias for rectsOverlap — canonical name used by boss.js and other modules.
+ * @param {{ x: number, y: number, w: number, h: number }} a
+ * @param {{ x: number, y: number, w: number, h: number }} b
+ * @returns {boolean}
+ */
+export function checkCollision(a, b) {
+  return rectsOverlap(a, b);
+}
+
+/**
  * checkBulletVsInvaders(bullet, invaders, onKill)
  * Tests the player bullet against every live invader.
  * On first overlap: marks invader alive=false, marks bullet active=false,
