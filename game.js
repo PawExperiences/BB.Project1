@@ -13,6 +13,8 @@ import { CANVAS_WIDTH, CANVAS_HEIGHT, STARTING_LIVES } from './gameConfig.js';
 
 import { initInput } from './input.js';
 import { Player }    from './player.js';
+import { updateFormation, drawFormation, invaders, score as invaderScore, resetFormation } from './invaders.js';
+import { runCollisions } from './collision.js';
 
 // Initialise keyboard tracking once at startup
 initInput();
@@ -34,6 +36,9 @@ let player = null;
 function createPlayer() {
   player = new Player(CANVAS_WIDTH / 2, CANVAS_HEIGHT - 80);
 }
+
+// ─── Invader bullet array (empty until Level 2 card wires spawning) ───────────
+const invaderBullets = [];
 
 // ─── Scene State Machine ─────────────────────────────────────────────────────
 // Scenes: 'title' | 'playing' | 'gameover'
@@ -71,6 +76,8 @@ function onKeyPressed(code) {
       // Reset game state for a fresh run
       hudState.score = 0;
       hudState.lives = STARTING_LIVES;
+      invaderBullets.length = 0;
+      resetFormation();
       createPlayer();
       transitionTo('playing');
     } else if (currentScene === 'gameover') {
@@ -137,8 +144,21 @@ function updatePlaying(dt) {
     player.update(dt);
     hudState.lives = player.lives;
   }
+
   // invaders.js update called here by card: "Level 1: the classic grid"
+  updateFormation(dt);
+
   // collision.js update called here by card: "Sprite rendering and collision detection"
+  // Collision pass runs BEFORE draw calls (collide-then-draw order)
+  const playerBullets = player && player.bullet ? [player.bullet] : [];
+  runCollisions(playerBullets, invaderBullets, invaders, player);
+  // If the collision pass deactivated the bullet, sync back to the player
+  if (player && player.bullet && playerBullets.length === 0) {
+    player._bullet = null;
+  }
+
+  // Sync score from invaders module into hudState
+  hudState.score = invaderScore;
 }
 
 function updateGameOver(dt) {
@@ -202,11 +222,13 @@ function renderPlaying() {
     ctx.stroke();
   }
 
+  // invaders.js renders here by card: "Level 1: the classic grid"
+  drawFormation(ctx);
+
   // player.js renders here by card: "Keyboard input and the player ship"
   if (player) {
     player.draw(ctx);
   }
-  // invaders.js renders here by card: "Level 1: the classic grid"
 
   renderHUD();
 }

@@ -199,3 +199,66 @@ repository contains exactly the expected files:
    // level3.js added by card: "Level 3: shields and formations"
    // boss.js added by card: "Boss level: multi-phase finale"
    ```
+
+### 19 — Invader formation renders
+
+1. Press **Enter** on the Title screen.
+2. **Pass:** An 11×5 grid of 55 coloured rectangles (32×24 px each) is visible
+   near the top of the canvas, centred horizontally, with 8 px horizontal and
+   8 px vertical gaps between cells.
+3. **Pass:** The rows display distinct colours (e.g. red, orange, yellow, green, cyan
+   from top to bottom).
+
+### 20 — Formation step-and-drop movement
+
+1. Enter the Playing scene and observe the invader formation.
+2. **Pass:** The formation moves horizontally each frame.
+3. **Pass:** When the right edge of the rightmost invader reaches the right canvas
+   boundary (x = 768), the entire formation drops by 32 px and begins moving left.
+4. **Pass:** When the left edge of the leftmost invader reaches x = 0, the
+   formation drops again and reverses to move right.
+
+### 21 — Shooting an invader
+
+1. Enter the Playing scene. Position the ship under an invader.
+2. Press **Space** to fire.
+3. **Pass:** When the yellow bullet's AABB overlaps a living invader:
+   - The invader rectangle disappears.
+   - A brief yellow/white explosion flash appears at that cell for ~8 frames.
+   - The bullet disappears simultaneously.
+   - The SCORE counter in the HUD increments by 1.
+4. **Pass:** Subsequent shots can kill additional invaders, each incrementing the
+   score.
+
+### 22 — `score` export from `invaders.js`
+
+1. In the DevTools console (while in Playing):
+   ```js
+   import('./invaders.js').then(m => console.log('score:', m.score));
+   ```
+2. **Pass:** Returns a number equal to the count of invaders killed so far.
+3. Kill another invader, then repeat the import check.
+4. **Pass:** The value increments correctly.
+
+### 23 — `runCollisions` signature
+
+1. In the DevTools console:
+   ```js
+   import('./collision.js').then(m => console.log(typeof m.runCollisions));
+   ```
+2. **Pass:** Logs `'function'`.
+3. Call it with empty arrays and a mock player:
+   ```js
+   import('./collision.js').then(({ runCollisions }) => {
+     runCollisions([], [], [], { x: 384, y: 800, hit: false });
+     console.log('no crash');
+   });
+   ```
+4. **Pass:** No error is thrown; logs `'no crash'`.
+
+### 24 — Collision pass order (collide-then-draw)
+
+1. Open `game.js` in DevTools Sources.
+2. **Pass:** In `updatePlaying`, the call to `runCollisions(...)` appears **before**
+   any draw call (draw calls are in `renderPlaying`, which is only invoked from
+   `render()`, which is called after `update()` completes).
