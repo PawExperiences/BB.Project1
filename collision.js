@@ -14,6 +14,15 @@ import { formation } from './invaders.js';
 export let score = 0;
 
 // ---------------------------------------------------------------------------
+// addScore(n) — increment score by n.
+// Used by level2.js (and any future level) that manages its own formation
+// but still wants kills reflected in the shared score variable that game.js reads.
+// ---------------------------------------------------------------------------
+export function addScore(n) {
+  score += n;
+}
+
+// ---------------------------------------------------------------------------
 // Points awarded per invader kill
 // ---------------------------------------------------------------------------
 const POINTS_PER_KILL = 10;
