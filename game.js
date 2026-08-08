@@ -1,15 +1,19 @@
 // game.js — main ES module: game loop, scene state machine, HUD
 
-// TODO: import added by card "Keyboard input and the player ship" (input.js)
-// TODO: import added by card "Player ship implementation" (player.js)
-// TODO: import added by card "Invader grid and movement" (invaders.js)
-// TODO: import added by card "Collision detection" (collision.js)
+import { CANVAS_WIDTH, CANVAS_HEIGHT, STARTING_LIVES } from './gameConfig.js';
+import { initInput, isKeyHeld } from './input.js';
+import { Player } from './player.js';
+import { initInvaders, updateInvaders, drawInvaders, invaders, registerExplosion } from './invaders.js';
+import { checkBulletVsInvaders, checkInvaderBulletsVsPlayer } from './collision.js';
 // TODO: import added by card "Level 1" (level1.js)
 // TODO: import added by card "Level 2" (level2.js)
 // TODO: import added by card "Level 3" (level3.js)
 // TODO: import added by card "Boss encounter" (boss.js)
 
-import { CANVAS_WIDTH, CANVAS_HEIGHT, STARTING_LIVES } from './gameConfig.js';
+// ---------------------------------------------------------------------------
+// Named constants for score
+// ---------------------------------------------------------------------------
+const SCORE_PER_KILL = 10;
 
 // ---------------------------------------------------------------------------
 // Canvas setup
@@ -27,6 +31,11 @@ export const hudState = {
 };
 
 // ---------------------------------------------------------------------------
+// Player instance (created fresh on transition to 'playing')
+// ---------------------------------------------------------------------------
+let player = null;
+
+// ---------------------------------------------------------------------------
 // Scene state machine
 // Scenes: 'title' | 'playing' | 'gameover'
 // ---------------------------------------------------------------------------
@@ -37,6 +46,8 @@ function transitionTo(scene) {
     // Reset per-round state
     hudState.score = 0;
     hudState.lives = STARTING_LIVES;
+    player = new Player();
+    initInvaders();
   }
   if (scene === 'title') {
     // Update hi-score when returning to title
@@ -54,8 +65,12 @@ function transitionTo(scene) {
 }
 
 // ---------------------------------------------------------------------------
-// Keyboard input (minimal — only what this module needs for scene transitions)
-// Full input handling will be added by the Keyboard input card.
+// Initialise input
+// ---------------------------------------------------------------------------
+initInput();
+
+// ---------------------------------------------------------------------------
+// Keyboard input (scene transitions)
 // ---------------------------------------------------------------------------
 window.addEventListener('keydown', (e) => {
   if (e.key !== 'Enter') return;
@@ -63,17 +78,12 @@ window.addEventListener('keydown', (e) => {
   if (currentScene === 'title') {
     transitionTo('playing');
   } else if (currentScene === 'gameover') {
-    // Persist hi-score before resetting, then go back to title
     if (hudState.score > hudState.hiScore) {
       hudState.hiScore = hudState.score;
     }
     transitionTo('title');
-  }
-  // During 'playing', Enter is not used for scene transitions here;
-  // game-over transition will be triggered by game logic in later cards.
-  // For now, allow pressing Enter during Playing to simulate Game Over
-  // so the scene machine can be manually verified.
-  else if (currentScene === 'playing') {
+  } else if (currentScene === 'playing') {
+    // Allow Enter during Playing to simulate Game Over for manual testing
     transitionTo('gameover');
   }
 });
@@ -81,24 +91,68 @@ window.addEventListener('keydown', (e) => {
 // ---------------------------------------------------------------------------
 // Fixed-timestep loop constants
 // ---------------------------------------------------------------------------
-const UPDATE_STEP = 1 / 60;          // seconds per logic tick (~16.67 ms)
-const MAX_DELTA   = 0.25;            // delta cap: 250 ms — prevents spiral of death
+const UPDATE_STEP = 1 / 60;   // seconds per logic tick (~16.67 ms)
+const MAX_DELTA   = 0.25;     // delta cap: 250 ms
 
-let lastTimestamp = null;            // wall-clock time of the previous rAF tick
-let accumulator   = 0;               // unprocessed time in seconds
+let lastTimestamp = null;
+let accumulator   = 0;
+
+// ---------------------------------------------------------------------------
+// Collision pass
+// Runs BEFORE update/draw each tick.
+// ---------------------------------------------------------------------------
+function runCollisions() {
+  if (!player) return;
+
+  // Convert player.bullet to the active-flag contract expected by collision.js
+  if (player.bullet !== null) {
+    // Ensure the bullet has an `active` flag; add it lazily if missing
+    if (player.bullet.active === undefined) {
+      player.bullet.active = true;
+    }
+
+    if (player.bullet.active) {
+      checkBulletVsInvaders(player.bullet, invaders, (killedInvader) => {
+        hudState.score += SCORE_PER_KILL;
+        registerExplosion(killedInvader.x, killedInvader.y);
+      });
+    }
+
+    // If bullet was consumed by collision, null it out on the player
+    if (!player.bullet.active) {
+      player.bullet = null;
+    }
+  }
+
+  // Invader-bullets-vs-player (stub — empty array for Level 1)
+  checkInvaderBulletsVsPlayer([], player, () => {
+    // onHit stub: Level 2 will wire real logic here
+  });
+
+  // NOTE (out of scope): game-over when formation reaches the bottom
+  // is intentionally not implemented in this card.
+}
 
 // ---------------------------------------------------------------------------
 // update(dt) — advance game logic by exactly one fixed step
 // dt is always UPDATE_STEP (seconds)
 // ---------------------------------------------------------------------------
-function update(dt) {  // eslint-disable-line no-unused-vars
+function update(dt) {
   if (currentScene !== 'playing') return;
 
-  // TODO: update player   — wired by card "Keyboard input and the player ship"
-  // TODO: update invaders — wired by card "Invader grid and movement"
-  // TODO: update bullets  — wired by collision/player cards
-  // TODO: check collisions — wired by card "Collision detection"
-  // TODO: check level completion — wired by level cards
+  // Shoot flag: ensure new bullets start with active=true
+  if (player.bullet !== null && player.bullet.active === undefined) {
+    player.bullet.active = true;
+  }
+
+  player.update(dt);
+
+  // Re-stamp active flag after player.update (player.update may create a new bullet)
+  if (player.bullet !== null && player.bullet.active === undefined) {
+    player.bullet.active = true;
+  }
+
+  updateInvaders(dt);
 }
 
 // ---------------------------------------------------------------------------
@@ -120,8 +174,6 @@ function render() {
 // Scene renderers
 // ---------------------------------------------------------------------------
 function renderTitle() {
-  // Background already cleared to #000 by clearRect
-
   ctx.textAlign    = 'center';
   ctx.textBaseline = 'middle';
 
@@ -139,11 +191,9 @@ function renderTitle() {
 }
 
 function renderPlaying() {
-  // Canvas is already cleared.
-  // TODO: render player   — wired by card "Player ship implementation"
-  // TODO: render invaders — wired by card "Invader grid and movement"
-  // TODO: render bullets  — wired by player/invader cards
-
+  // Order: invaders (back) → player (front) → HUD (always on top)
+  drawInvaders(ctx);
+  if (player) player.draw(ctx);
   renderHUD();
 }
 
@@ -180,31 +230,27 @@ function renderGameOver() {
 }
 
 // ---------------------------------------------------------------------------
-// Main rAF loop
+// Main rAF loop  —  order per spec: collide → update → draw
 // ---------------------------------------------------------------------------
 function gameLoop(timestamp) {
   if (lastTimestamp === null) {
     lastTimestamp = timestamp;
   }
 
-  // Wall-clock delta in seconds
   let delta = (timestamp - lastTimestamp) / 1000;
   lastTimestamp = timestamp;
 
-  // Delta cap — prevents burst of updates after tab comes back from background
-  if (delta > MAX_DELTA) {
-    delta = MAX_DELTA;
-  }
+  if (delta > MAX_DELTA) delta = MAX_DELTA;
 
   accumulator += delta;
 
-  // Drain accumulator in fixed steps
   while (accumulator >= UPDATE_STEP) {
-    update(UPDATE_STEP);
+    runCollisions();         // 1. collision pass
+    update(UPDATE_STEP);     // 2. update positions
     accumulator -= UPDATE_STEP;
   }
 
-  render();
+  render();                  // 3. draw
 
   requestAnimationFrame(gameLoop);
 }
