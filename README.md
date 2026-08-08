@@ -126,6 +126,101 @@ These steps verify the acceptance criteria for `input.js` and `player.js`.
 
 ---
 
+## Manual Verification — Level 1: The Classic Grid
+
+These steps verify the acceptance criteria for `level1.js`.
+
+### Setup
+
+1. Open `index.html` from the filesystem (`file://` URL).
+2. Open DevTools → Console (F12).
+3. Press **ENTER** to start the Playing scene.
+
+### AC: Formation layout (11 × 5, 48 px cells)
+
+| Step | Expected result |
+|---|---|
+| Observe the canvas after pressing ENTER | Exactly 55 green squares arranged in 11 columns × 5 rows appear near the top of the canvas |
+| In Console: `import('./level1.js').then(m => console.log(m.aliveCount()))` | Prints `55` |
+| In Console: `import('./level1.js').then(m => { const inv = m.getInvaders(); console.log(inv[0].x, inv[0].y, inv[0].width, inv[0].height); })` | Prints the first invader's position and `32 32` (32 × 32 px sprite inside the 48 × 48 cell) |
+
+### AC: Speed scaling — 55 invaders (~800 ms per step)
+
+1. Press ENTER to start a new game. All 55 invaders are present.
+2. Watch the formation move. Use a stopwatch or the DevTools Performance timeline.
+3. Count the number of discrete horizontal jumps over 8 seconds.
+   - **Expected**: approximately 10 steps in 8 seconds (800 ms × 10 = 8 000 ms).
+   - Tolerance: 9–10 steps (±50 ms per step).
+
+### AC: Speed scaling — 1 invader (~100 ms per step)
+
+1. Fire bullets rapidly to destroy 54 invaders, leaving exactly one alive.  
+   *(Alternatively, in Console run:*
+   ```js
+   import('./level1.js').then(m => {
+     const inv = m.getInvaders();
+     inv.slice(0, 54).forEach(i => { i.alive = false; });
+     console.log('remaining alive:', m.aliveCount());
+   });
+   ```
+   *Note: aliveCount() will still read the internal counter; to force the counter, use the game loop's collision path.)*
+2. Observe the last remaining invader.
+3. Count steps over 1 second — **expect approximately 10 steps** (100 ms each, ±20 ms).
+
+### AC: Step interval recalculates immediately on invader destruction
+
+1. Start a game with 55 invaders (slow, ~800 ms).
+2. Destroy several invaders quickly by firing in rapid succession.
+3. Observe that the formation visibly accelerates **within the same play session** — you should not need to wait for the current step to finish before the speed increases.
+
+### AC: Edge-drop and direction reversal
+
+| Step | Expected result |
+|---|---|
+| Watch the formation reach the right canvas boundary | The entire formation drops exactly **48 px** (one cell height) and immediately begins moving left |
+| Watch the formation reach the left canvas boundary | The entire formation drops another 48 px and begins moving right |
+| No invader sprite ever travels off the canvas edge | Confirmed — reversal happens before any invader clears the boundary |
+
+### AC: `'LIFE_LOST'` token
+
+1. Do not shoot any invaders — let the formation descend toward the player ship through repeated edge-drops.
+2. When the bottom row of the formation reaches the top of the player sprite, one of the following occurs (handled by the game loop): the player loses a life, or the Game Over screen appears.
+3. The transition is triggered by `level1.js` returning `'LIFE_LOST'` — confirm by temporarily adding `console.log` inside the game loop's level update handler, or by observing the Lives counter decrement.
+
+### AC: `'NEXT_LEVEL'` token
+
+1. Destroy all 55 invaders (fire enough bullets to clear the formation).
+2. On the frame the last invader is destroyed, the game loop receives `'NEXT_LEVEL'` from `level1.update()`. In the current build this may show the Game Over screen or simply clear the canvas (Level 2 is not yet implemented).
+3. Confirm `aliveCount()` returns `0` in the Console immediately after the last kill.
+
+### AC: `null` return during normal play
+
+1. During normal gameplay (invaders alive, formation not touching player), no life is lost and no win condition fires.
+2. The game continues running frame after frame without scene transitions — confirms `update()` is returning `null` each frame.
+
+### AC: 'LEVEL 1' HUD label
+
+| Step | Expected result |
+|---|---|
+| Press ENTER to start | A small `LEVEL 1` text label appears at the bottom-centre of the canvas (below the player ship) |
+| Label never overlaps the formation or the player area | Confirmed — label is drawn at the very bottom of the canvas |
+| Label is visible every frame (no flickering) | Confirmed |
+
+### AC: Named constant and formula in source
+
+Open `level1.js` in a text editor and verify:
+- `const STEP_DISTANCE = 12;` is present with the comment `// px per horizontal step`.
+- The constants `INTERVAL_MIN`, `INTERVAL_MAX`, `INTERVAL_SPAN`, `ALIVE_SPAN`, and the `stepInterval()` function document the interpolation formula.
+
+### AC: No external dependencies
+
+| Step | Expected result |
+|---|---|
+| Inspect the Network tab in DevTools while the game runs | Zero external requests; all modules load from `file://` |
+| Open `level1.js` source | Only `import` statements referencing `./gameConfig.js` — no npm packages, no CDN URLs |
+
+---
+
 ## Planned File Layout
 
 Below is the complete planned layout for this project.
@@ -139,10 +234,10 @@ input.js        – Keyboard state map                               (player car
 player.js       – Player ship entity, movement, shooting           (player card)
 invaders.js     – Invader grid data and movement logic             (this card)
 collision.js    – AABB collision detection                         (this card)
+level1.js       – Level 1 configuration and wave setup             (card: "Level 1: the classic grid")
 
 — added by later task cards —
 
-level1.js       – Level 1 configuration and wave setup             (card: "Level 1: the classic grid")
 level2.js       – Level 2: invaders fire back                      (card: "Level 2: they shoot back")
 level3.js       – Level 3: shields and tighter formations          (card: "Level 3: shields and formations")
 boss.js         – Boss level: multi-phase finale                   (card: "Boss level: multi-phase finale")
@@ -166,3 +261,8 @@ boss.js         – Boss level: multi-phase finale                   (card: "Bos
 - `initInput()` must be called once before the game loop starts; `game.js` calls it during initialisation.
 - `Player` exposes `bulletActive`, `bulletX`, `bulletY` getters and a `clearBullet()` method for the collision module.
 - `state.playerBullets` and `state.invaderBullets` are the canonical arrays used by `collision.js`; `game.js` mirrors the player's single bullet into `playerBullets` each frame.
+- `level1.js` exports `init(canvas, ctx, playerState)`, `update(deltaTime, playerBullets)`, `draw()`, `aliveCount()`, and `getInvaders()`.
+  - `playerState` must have `{ x, y, width, height }` where `x`/`y` are the **top-left** corner of the player sprite.
+  - `update()` returns `null | 'LIFE_LOST' | 'NEXT_LEVEL'`; the game loop acts on these tokens.
+  - `draw()` must be called from the render phase each frame.
+  - `level1.js` does NOT decrement lives or instantiate the next level — those responsibilities belong to the game loop.
