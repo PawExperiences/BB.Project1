@@ -5,7 +5,7 @@ import { initInput, isKeyHeld } from './input.js';
 import { Player } from './player.js';
 import { initInvaders, updateInvaders, drawInvaders, invaders, registerExplosion } from './invaders.js';
 import { checkBulletVsInvaders, checkInvaderBulletsVsPlayer } from './collision.js';
-// TODO: import added by card "Level 1" (level1.js)
+import { start as startLevel1, stop as stopLevel1, notifyKill as level1NotifyKill } from './level1.js';
 // TODO: import added by card "Level 2" (level2.js)
 // TODO: import added by card "Level 3" (level3.js)
 // TODO: import added by card "Boss encounter" (boss.js)
@@ -22,12 +22,31 @@ const canvas = document.getElementById('gameCanvas');
 const ctx    = canvas.getContext('2d');
 
 // ---------------------------------------------------------------------------
-// HUD state — exported so later modules can import and mutate directly
+// HUD state — exported so later modules can import and mutate directly.
+// hudState.set(key, value) stores extra display fields (e.g. 'level').
 // ---------------------------------------------------------------------------
 export const hudState = {
   score:   0,
   lives:   STARTING_LIVES,
   hiScore: 0,
+  _extra:  {},   // keyed storage for set() calls
+
+  /**
+   * set(key, value)
+   * Stores an arbitrary HUD field.  level1.js (and future level modules)
+   * call hud.set('level', 1) to display the current level number.
+   */
+  set(key, value) {
+    this._extra[key] = value;
+  },
+
+  /**
+   * get(key)
+   * Retrieve a previously set field, or undefined.
+   */
+  get(key) {
+    return this._extra[key];
+  },
 };
 
 // ---------------------------------------------------------------------------
@@ -46,16 +65,23 @@ function transitionTo(scene) {
     // Reset per-round state
     hudState.score = 0;
     hudState.lives = STARTING_LIVES;
+    hudState._extra = {};
     player = new Player();
     initInvaders();
+    // Start Level 1 march loop
+    startLevel1(ctx, hudState);
   }
   if (scene === 'title') {
+    // Stop any active level loop
+    stopLevel1();
     // Update hi-score when returning to title
     if (hudState.score > hudState.hiScore) {
       hudState.hiScore = hudState.score;
     }
   }
   if (scene === 'gameover') {
+    // Stop any active level loop
+    stopLevel1();
     // Persist hi-score
     if (hudState.score > hudState.hiScore) {
       hudState.hiScore = hudState.score;
@@ -63,6 +89,16 @@ function transitionTo(scene) {
   }
   currentScene = scene;
 }
+
+// ---------------------------------------------------------------------------
+// Listen for levelComplete event dispatched by level1.js
+// ---------------------------------------------------------------------------
+window.addEventListener('levelComplete', (e) => {
+  // For now: Level 2 is not yet implemented — return to title with hi-score.
+  // The Level 2 card will replace this handler.
+  console.log('levelComplete received, nextLevel:', e.detail.nextLevel);
+  transitionTo('title');
+});
 
 // ---------------------------------------------------------------------------
 // Initialise input
@@ -115,6 +151,8 @@ function runCollisions() {
       checkBulletVsInvaders(player.bullet, invaders, (killedInvader) => {
         hudState.score += SCORE_PER_KILL;
         registerExplosion(killedInvader.x, killedInvader.y);
+        // Notify Level 1 so the march interval recalculates immediately
+        level1NotifyKill();
       });
     }
 
@@ -129,8 +167,10 @@ function runCollisions() {
     // onHit stub: Level 2 will wire real logic here
   });
 
-  // NOTE (out of scope): game-over when formation reaches the bottom
-  // is intentionally not implemented in this card.
+  // Breach check: if lives drop to zero after level1.js deducts, go to game-over
+  if (hudState.lives <= 0 && currentScene === 'playing') {
+    transitionTo('gameover');
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -206,6 +246,14 @@ function renderHUD() {
 
   ctx.textAlign = 'right';
   ctx.fillText('LIVES: ' + hudState.lives, CANVAS_WIDTH - 12, 12);
+
+  // Display current level if set
+  const level = hudState.get('level');
+  if (level !== undefined) {
+    ctx.textAlign    = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillText('LEVEL: ' + level, CANVAS_WIDTH / 2, 12);
+  }
 }
 
 function renderGameOver() {
