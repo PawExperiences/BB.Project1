@@ -7,21 +7,26 @@ No framework, no bundler, no npm. Open `index.html` directly from the filesystem
 
 ## File Layout
 
-### Files owned by this card (Game loop and canvas framework)
+### Files owned by the Game loop card
 
 | File | Description |
 |------|-------------|
-| `index.html` | Page shell, `<canvas>` element, loads `game.js` as a module |
+| `index.html` | Page shell, `<canvas>` element (800 × 600), loads `game.js` as a module |
 | `game.js` | Fixed-timestep game loop, scene state machine, HUD, `hudState` export |
 | `gameConfig.js` | Shared named constants (canvas size, speeds, lives) |
 | `README.md` | Project documentation (this file) |
+
+### Files owned by the Keyboard input and player ship card
+
+| File | Description |
+|------|-------------|
+| `input.js` | `initInput()`, `isKeyHeld(key)` — keyboard state tracker |
+| `player.js` | `Player` class — movement, shooting, drawing |
 
 ### Files owned by later cards
 
 | File | Owning card |
 |------|-------------|
-| `input.js` | Keyboard input and the player ship |
-| `player.js` | Player ship implementation |
 | `invaders.js` | Invader grid and movement |
 | `collision.js` | Collision detection |
 | `level1.js` | Level 1 |
@@ -46,7 +51,7 @@ Follow these steps to confirm every acceptance criterion after checkout.
 
 ### Prerequisites
 - A modern desktop browser (Chrome 90+, Firefox 88+, or Edge 90+).
-- All four files (`index.html`, `game.js`, `gameConfig.js`, `README.md`) in the same directory.
+- All files (`index.html`, `game.js`, `gameConfig.js`, `input.js`, `player.js`, `README.md`) in the same directory.
 
 ---
 
@@ -55,7 +60,7 @@ Follow these steps to confirm every acceptance criterion after checkout.
 1. In your file manager, double-click `index.html`, **or** drag it into a browser tab,  
    **or** use the browser menu `File → Open File…`.
 2. Confirm the address bar shows a `file://…/index.html` URL.
-3. **Expected:** A black page with a centred black canvas (768 × 896).
+3. **Expected:** A black page with a centred black canvas (800 × 600).
 
 ---
 
@@ -64,122 +69,126 @@ Follow these steps to confirm every acceptance criterion after checkout.
 1. The canvas should immediately display the Title scene.
 2. **Expected:**
    - Green text `SPACE INVADERS` centred horizontally and vertically.
-   - White text `Press ENTER to start` below it, also centred.
+   - White text `Press ENTER to start` below it.
    - Grey text `HI-SCORE: 0` below that.
 
 ---
 
-### 3. Title → Playing transition (Enter key, no reload)
+### 3. Title → Playing transition
 
-1. Press the **Enter** key once.
-2. **Expected:**
-   - The canvas clears (black screen).
-   - The HUD appears in the top-left (`SCORE: 0`) and top-right (`LIVES: 3`).
-   - The browser URL does **not** change; there is no page reload.
+1. Press **Enter**.
+2. **Expected:** Canvas clears to black, HUD shows `SCORE: 0` (top-left) and `LIVES: 3` (top-right). No page reload.
 
 ---
 
-### 4. Fixed-timestep loop running at 60 Hz
+### 4. Verify `gameConfig.js` exports (AC: gameConfig constants)
 
-1. With the Playing scene active, open the browser DevTools console.
-2. Paste and run:
-   ```js
-   let frames = 0;
-   const id = requestAnimationFrame(function count() {
-     frames++;
-     requestAnimationFrame(count);
-   });
-   setTimeout(() => { cancelAnimationFrame(id); console.log('rAF/s:', frames); }, 1000);
-   ```
-3. **Expected:** The logged value is approximately 60 (±5).
-
----
-
-### 5. Delta cap — no burst after tab backgrounding
-
-1. Ensure the Playing scene is active.
-2. Switch to a different browser tab (or minimise) for at least 5 seconds.
-3. Switch back to the game tab.
-4. **Expected:** The game resumes smoothly with no visible "catch-up" stutter;  
-   the HUD score does not jump unexpectedly (stays at 0 in the placeholder build).
-
----
-
-### 6. HUD during Playing scene
-
-1. With the Playing scene active, open DevTools console.
+1. On any page, open DevTools → Console.
 2. Run:
    ```js
-   import('./game.js').then(m => { m.hudState.score = 1500; m.hudState.lives = 2; });
+   import('./gameConfig.js').then(m => console.log(
+     m.CANVAS_WIDTH, m.CANVAS_HEIGHT, m.PLAYER_SPEED, m.BULLET_SPEED, m.INITIAL_LIVES
+   ));
    ```
-   *(Or, if the module is already loaded: `hudState.score = 1500; hudState.lives = 2;`  
-   after importing it in the console.)*
-3. **Expected:** The canvas HUD immediately reflects `SCORE: 1500` and `LIVES: 2`.
+3. **Expected output:** `800 600 200 500 3`
 
 ---
 
-### 7. Playing → Game Over transition
+### 5. Verify `input.js` — key hold and release (AC: isKeyHeld)
 
-1. With the Playing scene active, press **Enter**  
-   *(placeholder shortcut — simulates a game-over event for verification).*
-2. **Expected:**
-   - Red text `GAME OVER` centred on the canvas.
-   - White text `SCORE: <value>` (whatever `hudState.score` was).
-   - Grey text `HI-SCORE: <value>`.
-   - White text `Press ENTER to restart`.
-   - No page reload.
-
----
-
-### 8. Score displayed on Game Over screen
-
-1. Before triggering Game Over (still on Playing scene), run in DevTools console:
+1. Open DevTools → Console.
+2. Run:
    ```js
-   import('./game.js').then(m => { m.hudState.score = 4200; });
+   import('./input.js').then(({ initInput, isKeyHeld }) => {
+     initInput();
+     window._isKeyHeld = isKeyHeld;
+   });
    ```
-2. Press **Enter** to trigger Game Over.
-3. **Expected:** The Game Over scene shows `SCORE: 4200`.
+3. Click on the page so it has focus.
+4. Hold down **ArrowLeft**. In the console run `_isKeyHeld('ArrowLeft')`.  
+   **Expected:** `true`
+5. Release **ArrowLeft**. Run `_isKeyHeld('ArrowLeft')` again.  
+   **Expected:** `false`
 
 ---
 
-### 9. Game Over → Title transition; hi-score retention
+### 6. Verify key-repeat suppression (AC: event.repeat guard)
 
-1. On the Game Over scene, press **Enter**.
-2. **Expected:**
-   - The Title scene re-appears (no page reload).
-   - `HI-SCORE:` on the Title scene shows the highest score seen this session  
-     (e.g. `4200` from step 8 above).
-   - `SCORE` and `LIVES` reset for the next round.
+1. Open `input.js` in a text editor.
+2. Confirm that the `keydown` listener contains `if (event.repeat) return;`.
+3. (Optionally) hold a key for 2+ seconds; run `_isKeyHeld(key)` repeatedly in the console — value stays `true` but never flickers to `false` and back.
 
 ---
 
-### 10. Hi-score persists across multiple cycles
+### 7. Instantiate Player and test movement (AC: PLAYER_SPEED, clamping)
 
-1. Complete the cycle: Title → Playing → Game Over → Title at least twice.
-2. Ensure the second run's score is lower than the first.
-3. **Expected:** The hi-score on the Title scene retains the highest value seen  
-   across all cycles within the same page session.
+1. In DevTools console (Playing scene active), run:
+   ```js
+   import('./input.js').then(({ initInput }) => initInput());
+   import('./player.js').then(({ Player }) => {
+     const p = new Player();
+     window._p = p;
+     console.log('initial x:', p.x, 'lives:', p.lives);
+   });
+   ```
+2. **Expected:** `initial x: 375` (i.e. `(800 - 50) / 2`), `lives: 3`.
+3. Call `_p.update(1)` (1 second of ArrowLeft held via `_isKeyHeld` mock or actual input).  
+   With no keys held: `_p.update(0.1)` → x should be unchanged.  
+   Programmatically verify: after `_p.x = 0; _p.update(0.1)` with ArrowLeft held, x clamps to 0.
+4. Verify right-edge clamp: `_p.x = 760; _p.update(0.1)` with ArrowRight held → x clamps to `750` (`800 - 50`).
 
 ---
 
-### 11. Import stub comments in game.js
+### 8. Single-bullet rule (AC: one bullet at a time)
 
-1. Open `game.js` in a text editor.
-2. Search for `// TODO: import added by card`.
-3. **Expected:** Eight such comments appear, one for each future file:  
-   `input.js`, `player.js`, `invaders.js`, `collision.js`,  
-   `level1.js`, `level2.js`, `level3.js`, `boss.js`.
-4. Confirm none of those eight files exist in the repository.
+1. In DevTools console with a `Player` instance (`_p`):
+   ```js
+   // Simulate Space held: patch isKeyHeld temporarily or use keyboard
+   ```
+2. Press **Space** once (no bullet in flight) → `_p.bullet` should be an object `{ x, y }`.
+3. Call `_p.update(0.016)` while Space is held → `_p.bullet` is still exactly **one** object (not replaced or doubled).
+4. Keep updating until `_p.bullet` becomes `null` (bullet exits top) → press Space again → new bullet created.
 
 ---
 
-### 12. No external dependencies
+### 9. Bullet travel and expiry (AC: BULLET_SPEED, bullet=null at y=0)
 
-1. Inspect `index.html` — confirm there are no `<script src="https://…">` tags,  
-   no CDN links, and no `fetch()` calls.
-2. Confirm there is no `package.json`, `node_modules/`, or bundler config file.
-3. Disconnect from the internet and reload `index.html`.
-4. **Expected:** The game loads and runs identically.
+1. With `_p.bullet` in flight, note its `y` value.
+2. Call `_p.update(0.1)` → bullet.y should decrease by `500 * 0.1 = 50` px.
+3. Set `_p.bullet.y = -11` then call `_p.update(0)` → `_p.bullet` should be `null`  
+   (top edge `y + 12 <= 0`).
+
+---
+
+### 10. Ship drawn procedurally within 50 × 40 px (AC: procedural draw, bounding box)
+
+1. With a `Player` instance, open DevTools and inspect `player.js`.  
+2. Confirm there are no `Image`, `drawImage`, or `src` references — only `ctx.fillRect`,  
+   `ctx.arc`, `ctx.beginPath`, `ctx.fill` etc.
+3. Run `_p.draw(ctx)` (pass in the canvas context).  
+   **Expected:** A green spaceship shape appears near the bottom of the canvas, within a ~50 × 40 px bounding box.
+
+---
+
+### 11. Bullet drawn as small filled rectangle (AC: bullet draw)
+
+1. While `_p.bullet !== null`, call `_p.draw(ctx)`.
+2. **Expected:** A small yellow rectangle (~4 × 12 px) appears centred on the ship's x, above the ship.
+
+---
+
+### 12. ES module syntax + file:// compatibility (AC: ES modules, no bundler)
+
+1. Check that `input.js` and `player.js` each use `export` / `import` at the top level.
+2. Confirm no `require()`, `module.exports`, or CommonJS patterns.
+3. Reload `index.html` from `file://` with network disconnected.  
+   **Expected:** Page loads, title screen displays, no console errors about module loading.
+
+---
+
+### Legacy checks (Game loop card ACs — still valid)
+
+See steps 1–12 of the original README for the full Game loop verification checklist (fixed-timestep loop, HUD, scene transitions, hi-score, etc.). All those checks continue to apply unchanged.
 
 ---
 
