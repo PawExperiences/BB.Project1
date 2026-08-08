@@ -24,12 +24,23 @@ The page loads via a `file://` URL – no local server, no npm install, no build
 | Canvas element | 768 × 896 px black rectangle centred on the page |
 | Title scene | "SPACE INVADERS" and "Press ENTER to start" centred on canvas |
 | ENTER key (title) | Transitions to Playing scene (HUD appears, no page reload) |
-| HUD (playing scene) | Score, Lives, and Hi-Score drawn on canvas |
-| Lives → 0 (console: `hudState.lives = 0`) | Transitions to Game Over scene |
+| HUD (playing scene) | Score and Lives drawn on canvas top-left; Hi-Score top-right |
+| Invader formation | 55 green rectangles in an 11×5 grid, moving horizontally |
+| Formation bounce | When any invader reaches left/right edge, formation drops 16 px and reverses |
+| Shoot invader | Press Space to fire; bullet travels up; hitting an invader removes it and adds 10 to Score |
+| Explosion effect | Brief orange circle appears at the hit invader's centre for ~300 ms |
+| Lives → 0 | Transitions to Game Over scene |
 | Game Over scene | "GAME OVER", final score, "Press ENTER to restart" |
 | ENTER key (game over) | Returns to Title scene, score resets, no page reload |
 | Browser console (F12 → Console) | **No errors or warnings** |
 | Network tab | No external requests; all resources loaded from `file://` |
+
+### Verifying the invader formation
+
+1. Press ENTER to start.
+2. Observe 55 green rectangles arranged in 11 columns × 5 rows near the top of the canvas.
+3. Watch them move: the entire block shifts right, then when the right-most live column touches the right boundary the formation drops 16 px and moves left, and so on.
+4. Press Space to fire — the yellow bullet travels upward. When it overlaps a green rectangle, the invader disappears on the next frame and an orange explosion circle briefly appears at that position. The score increments by 10.
 
 ### Verifying the fixed-timestep loop
 
@@ -117,20 +128,20 @@ These steps verify the acceptance criteria for `input.js` and `player.js`.
 
 ## Planned File Layout
 
-Below is the complete planned layout for this project. Files marked *future* do not exist yet — they will be added by the task card listed.
+Below is the complete planned layout for this project.
 
 ```
 index.html      – Page entry point; <canvas> host                  (game-loop card)
 gameConfig.js   – Shared named constants (canvas size, speeds …)   (game-loop card)
 game.js         – Fixed-timestep loop, scene machine, HUD export   (game-loop card)
 README.md       – This file                                        (game-loop card)
-input.js        – Keyboard state map                               (this card)
-player.js       – Player ship entity, movement, shooting           (this card)
+input.js        – Keyboard state map                               (player card)
+player.js       – Player ship entity, movement, shooting           (player card)
+invaders.js     – Invader grid data and movement logic             (this card)
+collision.js    – AABB collision detection                         (this card)
 
 — added by later task cards —
 
-invaders.js     – Invader grid data and movement logic             (card: "Level 1: the classic grid")
-collision.js    – Sprite rendering and AABB collision detection    (card: "Sprite rendering and collision detection")
 level1.js       – Level 1 configuration and wave setup             (card: "Level 1: the classic grid")
 level2.js       – Level 2: invaders fire back                      (card: "Level 2: they shoot back")
 level3.js       – Level 3: shields and tighter formations          (card: "Level 3: shields and formations")
@@ -153,4 +164,5 @@ boss.js         – Boss level: multi-phase finale                   (card: "Bos
 - Keep all asset paths relative to `index.html` so the `file://` constraint is maintained.
 - `main.js` and `style.css` are legacy skeleton files from the initial commit; they are left untouched.
 - `initInput()` must be called once before the game loop starts; `game.js` calls it during initialisation.
-- `Player` exposes `bulletActive`, `bulletX`, `bulletY` getters and a `clearBullet()` method for the future collision module.
+- `Player` exposes `bulletActive`, `bulletX`, `bulletY` getters and a `clearBullet()` method for the collision module.
+- `state.playerBullets` and `state.invaderBullets` are the canonical arrays used by `collision.js`; `game.js` mirrors the player's single bullet into `playerBullets` each frame.

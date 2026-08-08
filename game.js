@@ -3,16 +3,12 @@
 import { CANVAS_WIDTH, CANVAS_HEIGHT, STARTING_LIVES } from './gameConfig.js';
 import { initInput } from './input.js';
 import { Player } from './player.js';
-
-// ---------------------------------------------------------------------------
-// Placeholder imports — added by later task cards
-// ---------------------------------------------------------------------------
-// invaders.js  added by card: "Level 1: the classic grid"
-// collision.js added by card: "Sprite rendering and collision detection"
-// level1.js    added by card: "Level 1: the classic grid"
-// level2.js    added by card: "Level 2: they shoot back"
-// level3.js    added by card: "Level 3: shields and formations"
-// boss.js      added by card: "Boss level: multi-phase finale"
+import {
+  createFormation,
+  updateFormation,
+  drawFormation,
+} from './invaders.js';
+import { runCollisions } from './collision.js';
 
 // ---------------------------------------------------------------------------
 // Canvas setup
@@ -35,12 +31,31 @@ export const hudState = {
 };
 
 // ---------------------------------------------------------------------------
+// Shared game state object — single source of truth for all entities
+// ---------------------------------------------------------------------------
+const state = {
+  player:        null,
+  playerBullets: [],   // { x, y, width, height } — top-left origin
+  invaderBullets:[],   // same shape; populated by future cards
+  invaders:      [],   // flat array of Invader instances
+  score:         0,
+  explosions:    [],   // { x, y, ttl }
+};
+
+// ---------------------------------------------------------------------------
+// Bullet dimensions (must match player.js internals — keep in sync)
+// ---------------------------------------------------------------------------
+const BULLET_W = 3;
+const BULLET_H = 10;
+
+// ---------------------------------------------------------------------------
 // Player instance — created when a new game starts
 // ---------------------------------------------------------------------------
 let player = null;
 
 function createPlayer() {
   player = new Player(CANVAS_WIDTH / 2, CANVAS_HEIGHT - 60);
+  state.player = player;
   hudState.lives = player.lives;
 }
 
@@ -55,8 +70,7 @@ function enterScene(scene) {
 }
 
 // ---------------------------------------------------------------------------
-// Keyboard input (Enter key for scene transitions — handled separately from
-// the held-key map because it is an edge-triggered action, not held state)
+// Keyboard input (Enter key for scene transitions)
 // ---------------------------------------------------------------------------
 window.addEventListener('keydown', (e) => {
   if (e.code === 'Enter') {
@@ -66,15 +80,23 @@ window.addEventListener('keydown', (e) => {
 
 function handleEnter() {
   if (currentScene === 'title') {
+    // Reset shared state for a new game
+    state.score         = 0;
+    state.playerBullets = [];
+    state.invaderBullets= [];
+    state.explosions    = [];
+    state.invaders      = createFormation();
+
     hudState.score = 0;
     hudState.lives = STARTING_LIVES;
+
     createPlayer();
     enterScene('playing');
   } else if (currentScene === 'gameover') {
     enterScene('title');
-    player = null;
+    player       = null;
+    state.player = null;
   }
-  // 'playing' -> 'gameover' is triggered programmatically (e.g. lives === 0)
 }
 
 // ---------------------------------------------------------------------------
@@ -90,8 +112,8 @@ export function triggerGameOver() {
 // ---------------------------------------------------------------------------
 // Fixed-timestep game loop
 // ---------------------------------------------------------------------------
-const UPDATE_STEP = 1 / 60;   // seconds per logic tick
-const DELTA_CAP   = 0.25;     // 250 ms max accumulated delta
+const UPDATE_STEP = 1 / 60;  // seconds per logic tick
+const DELTA_CAP   = 0.25;    // 250 ms max accumulated delta
 
 let lastTimestamp = null;
 let accumulator   = 0;
@@ -101,7 +123,7 @@ function loop(timestamp) {
     lastTimestamp = timestamp;
   }
 
-  let elapsed = (timestamp - lastTimestamp) / 1000; // convert ms → s
+  let elapsed = (timestamp - lastTimestamp) / 1000;
   lastTimestamp = timestamp;
 
   if (elapsed > DELTA_CAP) {
@@ -122,33 +144,84 @@ function loop(timestamp) {
 
 // ---------------------------------------------------------------------------
 // Update — pure logic, no drawing
+// Loop order: update positions/timers → runCollisions
 // ---------------------------------------------------------------------------
 function update(dt) {
-  if (currentScene === 'playing') {
-    if (player) {
-      player.update(dt);
-      // Keep HUD lives in sync
-      hudState.lives = player.lives;
-    }
+  if (currentScene !== 'playing') return;
 
-    if (hudState.lives <= 0) {
-      triggerGameOver();
+  // 1. Update player position and bullet travel
+  if (player) {
+    player.update(dt);
+    hudState.lives = player.lives;
+
+    // Sync player bullet into the shared playerBullets array so collision
+    // can operate on it.  Player owns one bullet at a time; mirror it.
+    if (player.bulletActive) {
+      // Bullet rect (top-left origin)
+      const bx = player.bulletX - BULLET_W / 2;
+      const by = player.bulletY;
+
+      if (state.playerBullets.length === 0) {
+        // Add the bullet proxy object
+        state.playerBullets.push({ x: bx, y: by, width: BULLET_W, height: BULLET_H, _owner: player });
+      } else {
+        // Update the existing proxy
+        state.playerBullets[0].x = bx;
+        state.playerBullets[0].y = by;
+      }
+    } else {
+      // No bullet in flight — clear the array
+      state.playerBullets.length = 0;
     }
+  }
+
+  // 2. Update formation movement
+  if (state.invaders.length > 0) {
+    updateFormation(state.invaders, canvas, dt);
+  }
+
+  // 3. Advance explosion timers; remove expired ones
+  for (let i = state.explosions.length - 1; i >= 0; i--) {
+    state.explosions[i].ttl -= dt;
+    if (state.explosions[i].ttl <= 0) {
+      state.explosions.splice(i, 1);
+    }
+  }
+
+  // 4. Run collision detection (mutates state)
+  runCollisions(state);
+
+  // If a player bullet was removed by collision, tell the Player instance
+  if (player && player.bulletActive && state.playerBullets.length === 0) {
+    player.clearBullet();
+  }
+
+  // 5. Sync score to HUD
+  hudState.score = state.score;
+
+  // 6. Sync lives; check game-over
+  if (player) {
+    hudState.lives = player.lives;
+  }
+  if (hudState.lives <= 0) {
+    triggerGameOver();
   }
 }
 
 // ---------------------------------------------------------------------------
 // Render — pure drawing, no state mutation
+// Loop order: draw formation → bullets → player → HUD → explosions
 // ---------------------------------------------------------------------------
 function render() {
+  // Clear
   ctx.fillStyle = '#000';
   ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
   if (currentScene === 'title') {
     renderTitle();
   } else if (currentScene === 'playing') {
-    renderHUD();
     renderPlaying();
+    renderHUD();
   } else if (currentScene === 'gameover') {
     renderGameOver();
   }
@@ -171,8 +244,30 @@ function renderTitle() {
 }
 
 function renderPlaying() {
+  // 1. Invader formation
+  if (state.invaders.length > 0) {
+    drawFormation(ctx, state.invaders);
+  }
+
+  // 2. Player bullet (drawn by player.draw)
+  // 3. Player ship
   if (player) {
     player.draw(ctx);
+  }
+
+  // 4. Score display (top-left, in addition to full HUD)
+  // The full HUD (renderHUD) is called separately and already shows score.
+
+  // 5. Explosions
+  renderExplosions();
+}
+
+function renderExplosions() {
+  ctx.fillStyle = '#ffaa00';
+  for (const exp of state.explosions) {
+    ctx.beginPath();
+    ctx.arc(Math.round(exp.x), Math.round(exp.y), 16, 0, Math.PI * 2);
+    ctx.fill();
   }
 }
 
@@ -185,8 +280,8 @@ function renderHUD() {
   ctx.fillStyle    = '#fff';
   ctx.font         = `${LINE}px monospace`;
 
-  ctx.fillText(`SCORE  ${hudState.score}`,  PAD,               PAD);
-  ctx.fillText(`LIVES  ${hudState.lives}`,  PAD,               PAD + LINE + 4);
+  ctx.fillText(`Score: ${hudState.score}`,  PAD,               PAD);
+  ctx.fillText(`Lives: ${hudState.lives}`,  PAD,               PAD + LINE + 4);
 
   ctx.textAlign = 'right';
   ctx.fillText(`HI  ${hudState.hiScore}`,   CANVAS_WIDTH - PAD, PAD);
