@@ -108,10 +108,6 @@ All steps below are performed by opening `index.html` directly in a browser
 
 1. In the DevTools console while in Playing, run:
    ```js
-   let count = 0;
-   const orig = window.__testUpdateCount;
-   // Patch via module re-import is not directly possible;
-   // instead, count animation frames for 1 second:
    let frames = 0;
    const start = performance.now();
    const id = requestAnimationFrame(function f() {
@@ -124,30 +120,72 @@ All steps below are performed by opening `index.html` directly in a browser
    60 Hz display), confirming the loop is driven by `requestAnimationFrame` at
    the display refresh rate with one update step per frame under normal load.
 
-   *Alternative*: Add a temporary `console.count('update')` inside `update()` in
-   `game.js`, reload, wait exactly 1 second, then read the counter — it should
-   read **~60**.
-
 ### 11 — Delta cap prevents burst after backgrounding
 
 1. Open the page in Playing scene.
 2. Switch to a different tab (or minimize) for **3–5 seconds**.
 3. Switch back.
 4. **Pass:** The game resumes smoothly with **no visible stutter or jump**.
-5. **Pass:** To verify programmatically, add `console.log('steps per tick', steps)`
-   inside the `while` drain loop in `game.js` and check the console after
-   returning from background — the maximum value logged should be **≤ 15**
-   (250 ms cap ÷ 16.67 ms/step ≈ 15 steps), not hundreds.
 
-### 12 — No stub/placeholder source files
+### 12 — `initInput()` and `isKeyHeld()` work correctly
 
-1. Inspect the repository root (or the directory containing `index.html`).
-2. **Pass:** Only **four** files are present:
-   `index.html`, `game.js`, `gameConfig.js`, `README.md`.
-3. **Pass:** None of `input.js`, `player.js`, `invaders.js`, `collision.js`,
-   `level1.js`, `level2.js`, `level3.js`, `boss.js` exist yet.
+1. In the DevTools console:
+   ```js
+   import('./input.js').then(({ initInput, isKeyHeld }) => {
+     initInput();
+     window._isKeyHeld = isKeyHeld;
+     console.log('input module loaded');
+   });
+   ```
+2. **Pass:** No errors are thrown; console prints `'input module loaded'`.
+3. Hold down the **A** key and in the console run `window._isKeyHeld('a')`.
+4. **Pass:** Returns `true` while A is held.
+5. Release A and run `window._isKeyHeld('a')` again.
+6. **Pass:** Returns `false` immediately after release.
 
-### 13 — Placeholder comments in `game.js`
+### 13 — isKeyHeld is not fooled by browser key-repeat
+
+1. Hold down the **A** key for 2+ seconds (browser will fire repeated keydown events).
+2. In the console run `window._isKeyHeld('a')`.
+3. **Pass:** Still returns `true` (a single value, not a counter).
+4. Release A; `window._isKeyHeld('a')` returns `false`.
+5. **Pass:** The function returns a boolean, not a number that inflates with repeats.
+
+### 14 — Player ship appears and moves
+
+1. Press **Enter** on the Title screen to enter the Playing scene.
+2. **Pass:** A green procedurally-drawn ship is visible near the bottom of the canvas.
+3. Hold **ArrowLeft** or **A**.
+4. **Pass:** The ship moves left at a steady speed (~200 px/s).
+5. Hold **ArrowRight** or **D**.
+6. **Pass:** The ship moves right at a steady speed (~200 px/s).
+7. **Pass:** The ship never moves off the left or right edge of the canvas.
+
+### 15 — Ship clamping at canvas edges
+
+1. Hold **ArrowLeft** until the ship reaches the left wall.
+2. **Pass:** The ship stops flush with the left edge (left edge = 0); it does not
+   disappear or clip outside the canvas.
+3. Hold **ArrowRight** until the ship reaches the right wall.
+4. **Pass:** The ship stops flush with the right edge (right edge = CANVAS_WIDTH = 768).
+
+### 16 — Firing a single bullet
+
+1. In the Playing scene, press **Space**.
+2. **Pass:** A small bright-yellow filled rectangle appears above the ship and
+   travels upward.
+3. **Pass:** While the bullet is in flight, pressing **Space** again has no effect
+   (no second bullet appears).
+4. **Pass:** When the bullet exits the top of the canvas it disappears and a new
+   **Space** press fires again.
+
+### 17 — No stub/placeholder source files (pre-input card)
+
+This check applied before this card was implemented. Post-implementation the
+repository contains exactly the expected files:
+`index.html`, `game.js`, `gameConfig.js`, `README.md`, `input.js`, `player.js`.
+
+### 18 — Placeholder comments in `game.js`
 
 1. Open `game.js` in a text editor or the DevTools Sources panel.
 2. **Pass:** The file contains exactly these eight comment lines (in any order):
