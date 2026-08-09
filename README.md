@@ -109,6 +109,62 @@ Work through these steps after opening `index.html` from a `file://` URL:
   ```
   Confirm `hudState` has `{ score, lives, hiScore }` properties visible through the HUD.
 
+### `input.js` — Keyboard Input
+- [ ] Open the browser console and run:
+  ```js
+  import('./input.js').then(({ initInput, isKeyHeld }) => {
+    initInput();
+    window._isKeyHeld = isKeyHeld;
+  });
+  ```
+- [ ] Hold down the **ArrowLeft** key and in the console run `_isKeyHeld('ArrowLeft')` — it should return `true`.
+- [ ] Release the key and run `_isKeyHeld('ArrowLeft')` again — it should return `false`.
+- [ ] Confirm that holding a key does **not** produce multiple `true` state changes (browser key-repeat is ignored).
+
+### `player.js` — Ship and Bullet
+
+To manually exercise the Player without waiting for the full game integration,
+paste the following into the browser console **while the Playing scene is active**:
+
+```js
+import('./input.js').then(async ({ initInput, isKeyHeld }) => {
+  initInput();
+  const { Player } = await import('./player.js');
+  const canvas = document.getElementById('gameCanvas');
+  const ctx = canvas.getContext('2d');
+  const p = new Player();
+
+  // Check initial state
+  console.assert(p.lives === 3, 'lives should start at STARTING_LIVES (3)');
+  console.log('Initial x:', p.x, '(should be', 768/2, ')');
+  console.log('Bullet on spawn:', p.bullet, '(should be null)');
+
+  // Quick render test
+  ctx.clearRect(0, 0, 768, 896);
+  p.draw(ctx);
+  console.log('draw() called — check canvas for green ship shape');
+});
+```
+
+- [ ] The console shows **no assertion errors**.
+- [ ] A green ship shape is visible on the canvas, horizontally centred, near the bottom.
+- [ ] The ship has a recognisable cannon-style silhouette (base, body, barrel).
+
+#### Movement
+- [ ] From the Playing scene, press and hold **ArrowLeft** — the ship moves left smoothly.
+- [ ] Press and hold **ArrowRight** / **D** — the ship moves right smoothly.
+- [ ] Hold a direction key continuously: the ship stops at the canvas edge and does not go off-screen.
+- [ ] Release the key: the ship stops immediately.
+
+#### Shooting
+- [ ] Press **Space** — a single small white bullet (≈4 × 12 px) appears at the top of the ship and travels upward.
+- [ ] While the bullet is in flight, pressing **Space** again does **not** fire a second bullet.
+- [ ] The bullet exits the top of the canvas and disappears; pressing **Space** afterwards fires a new bullet.
+
+#### Lives
+- [ ] In the console, create a Player instance and call `p.loseLife()` — confirm `p.lives` decrements from 3 to 2.
+- [ ] Call `p.loseLife()` twice more — confirm it reaches 0 without errors.
+
 ## Tech Stack
 
 - Plain HTML5, CSS3, and ES modules
