@@ -8,7 +8,7 @@ const POINTS_PER_KILL = 10;
 // AABB overlap helper
 // rect shape: { x (left), y (top), width, height }
 // ---------------------------------------------------------------------------
-function aabbOverlap(a, b) {
+export function aabbOverlap(a, b) {
   return (
     a.x         < b.x + b.width  &&
     a.x + a.width  > b.x          &&
