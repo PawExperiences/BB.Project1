@@ -1,11 +1,11 @@
 // game.js — main ES module: game loop, scene state machine, HUD
 import { CANVAS_WIDTH, CANVAS_HEIGHT, STARTING_LIVES } from './gameConfig.js';
+import { initInput } from './input.js';
+import { Player } from './player.js';
 
 // ---------------------------------------------------------------------------
 // Import placeholders for sibling-card modules (not yet created)
 // ---------------------------------------------------------------------------
-// input.js     added by: "Keyboard input and the player ship"
-// player.js    added by: "Keyboard input and the player ship"
 // invaders.js  added by: "Level 1: the classic grid"
 // collision.js added by: "Sprite rendering and collision detection"
 // level1.js    added by: "Level 1: the classic grid"
@@ -18,6 +18,11 @@ import { CANVAS_WIDTH, CANVAS_HEIGHT, STARTING_LIVES } from './gameConfig.js';
 // ---------------------------------------------------------------------------
 const canvas = document.getElementById('gameCanvas');
 const ctx    = canvas.getContext('2d');
+
+// ---------------------------------------------------------------------------
+// Initialise input
+// ---------------------------------------------------------------------------
+initInput();
 
 // ---------------------------------------------------------------------------
 // Shared HUD state — single source of truth; sibling modules import & mutate
@@ -38,7 +43,12 @@ const SCENE_GAMEOVER = 'gameover';
 let currentScene = SCENE_TITLE;
 
 // ---------------------------------------------------------------------------
-// Keyboard input (ENTER key only — full input module added by sibling card)
+// Player instance (created fresh on each Playing scene entry)
+// ---------------------------------------------------------------------------
+let player = null;
+
+// ---------------------------------------------------------------------------
+// Keyboard input (ENTER key only — full input module handles all other keys)
 // ---------------------------------------------------------------------------
 let enterPressed = false;
 
@@ -63,11 +73,13 @@ function transitionTo(scene) {
     // Reset game state when returning to title
     hudState.score = 0;
     hudState.lives = STARTING_LIVES;
+    player = null;
   }
   if (scene === SCENE_PLAYING) {
     // Fresh start for the playing scene
     hudState.score = 0;
     hudState.lives = STARTING_LIVES;
+    player = new Player();
   }
   currentScene = scene;
 }
@@ -84,6 +96,13 @@ function update(dt) {
       break;
 
     case SCENE_PLAYING:
+      // Update player ship (movement, shooting, bullet travel)
+      if (player) {
+        player.update(dt);
+        // Sync HUD lives with player lives
+        hudState.lives = player.lives;
+      }
+
       // Sibling cards will add entity update calls here.
       // Game-over condition: lives reach 0 (sibling cards decrement hudState.lives).
       // For now, ENTER also transitions to Game Over (useful for manual testing).
@@ -139,6 +158,11 @@ function renderTitle() {
 }
 
 function renderPlaying() {
+  // Draw player ship and bullet
+  if (player) {
+    player.draw(ctx);
+  }
+
   // Sibling cards will add entity render calls here.
   renderHUD();
 }
@@ -186,7 +210,6 @@ function renderGameOver() {
 // ---------------------------------------------------------------------------
 const FIXED_STEP    = 1 / 60;          // seconds per update step (~16.67 ms)
 const MAX_DELTA     = 0.250;           // cap at 250 ms to avoid spiral of death
-const FIXED_STEP_MS = FIXED_STEP * 1000;
 
 let lastTimestamp  = null;
 let accumulator    = 0; // seconds
