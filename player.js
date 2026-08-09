@@ -23,6 +23,7 @@ export class Player {
 
     // Active bullet state (null = no bullet in flight)
     // bullet.x is centre-x; bullet.y is top-y of bullet rectangle
+    // bullet.active: true while in flight; collision sets it false to destroy it
     this._bullet = null;
   }
 
@@ -50,19 +51,27 @@ export class Player {
 
     // --- Bullet travel ---
     if (this._bullet !== null) {
-      this._bullet.y -= BULLET_SPEED * dt;
-
-      // Remove bullet once its top edge exits above y = 0
-      if (this._bullet.y + BULLET_HEIGHT < 0) {
+      // If collision detection deactivated the bullet, clear it
+      if (!this._bullet.active) {
         this._bullet = null;
+      } else {
+        this._bullet.y -= BULLET_SPEED * dt;
+
+        // Remove bullet once its top edge exits above y = 0
+        if (this._bullet.y + BULLET_HEIGHT < 0) {
+          this._bullet = null;
+        }
       }
     }
 
     // --- Shooting: only if no bullet currently in flight ---
     if (this._bullet === null && isKeyHeld(' ')) {
       this._bullet = {
-        x: this.x,                       // centre-x matches ship centre
-        y: this.y - BULLET_HEIGHT,       // top of bullet sits at top of ship
+        x:      this.x,                  // centre-x matches ship centre
+        y:      this.y - BULLET_HEIGHT,  // top of bullet sits at top of ship
+        width:  BULLET_WIDTH,
+        height: BULLET_HEIGHT,
+        active: true,
       };
     }
   }
@@ -98,7 +107,7 @@ export class Player {
     ctx.fill();
 
     // --- Active bullet ---
-    if (this._bullet !== null) {
+    if (this._bullet !== null && this._bullet.active) {
       ctx.fillStyle = '#ffffff';
       // Centre the bullet rect on bullet.x
       ctx.fillRect(
@@ -120,7 +129,7 @@ export class Player {
 
   /**
    * Returns the active bullet object (or null) for use by collision detection.
-   * Shape: { x: centreX, y: topY }
+   * Shape: { x: centreX, y: topY, width, height, active }
    */
   get bullet() {
     return this._bullet;

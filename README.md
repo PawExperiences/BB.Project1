@@ -11,8 +11,8 @@ A classic Space Invaders game built with hand-written HTML, CSS, and ES modules 
 | `gameConfig.js` | Game loop and canvas framework | Shared constants (dimensions, speeds, lives) |
 | `input.js` | Keyboard input and the player ship | Keyboard input abstraction |
 | `player.js` | Keyboard input and the player ship | Player ship entity (movement, shooting) |
-| `invaders.js` | Level 1: the classic grid | Invader grid logic |
-| `collision.js` | Sprite rendering and collision detection | AABB collision detection, sprite rendering helpers |
+| `invaders.js` | Sprite rendering and collision detection | Invader grid logic, movement, explosion effects, score |
+| `collision.js` | Sprite rendering and collision detection | AABB collision detection |
 | `level1.js` | Level 1: the classic grid | Level 1 setup and wave configuration |
 | `level2.js` | Level 2: they shoot back | Level 2 — invaders fire bullets |
 | `level3.js` | Level 3: shields and formations | Level 3 — shields and new formations |
@@ -40,12 +40,12 @@ A classic Space Invaders game built with hand-written HTML, CSS, and ES modules 
 
 ```js
 import { hudState } from './game.js';
-// hudState.score   — current score (starts at 0)
+// hudState.score   — current score (starts at 0; synced from invaders.js each frame)
 // hudState.lives   — remaining lives (starts at STARTING_LIVES = 3)
 // hudState.hiScore — all-time high score for the session (never resets)
 ```
 
-Sibling modules **import and mutate** this object directly. It is the single source of truth — do not create a second score variable elsewhere.
+Sibling modules **import and mutate** this object directly. It is the single source of truth for lives and hi-score. The score is now owned by `invaders.js` (as a plain `let score` export) and synced into `hudState.score` every frame.
 
 ## Manual Verification Checklist
 
@@ -70,6 +70,19 @@ Work through these steps after opening `index.html` from a `file://` URL:
 - [ ] The HUD shows **HI: 0** at the top centre.
 - [ ] The HUD shows **LIVES: 3** in the top-right corner.
 - [ ] The frame rate is smooth (approximately 60 fps).
+
+### Invader Grid
+- [ ] An 11×5 grid of 55 filled green rectangles is visible immediately when the Playing scene starts.
+- [ ] The formation moves laterally (left/right) each frame.
+- [ ] When any invader reaches the left or right canvas edge, the entire formation reverses direction and drops down by one row-height.
+- [ ] Dead invaders are not drawn.
+
+### Shooting Invaders
+- [ ] Press **Space** to fire a bullet upward.
+- [ ] When the bullet overlaps an invader's bounding box, the invader disappears.
+- [ ] A small orange/yellow rectangle flashes at the invader's last position for approximately 20 frames.
+- [ ] The **SCORE** in the HUD increments by 10 for each invader destroyed.
+- [ ] After shooting all 55 invaders, the SCORE reads **550** and no invaders remain on screen.
 
 ### Playing → Game Over Transition
 - [ ] Pressing **ENTER** from the Playing scene transitions to the Game Over scene (manual test shortcut).
@@ -100,14 +113,6 @@ Work through these steps after opening `index.html` from a `file://` URL:
   - `PLAYER_SPEED: 200`
   - `BULLET_SPEED: 500`
   - `STARTING_LIVES: 3`
-
-### `hudState` Export
-- [ ] In the browser console, run:
-  ```js
-  // game.js is already the running module; access hudState via the module system
-  // or verify by reading from the HUD display on screen.
-  ```
-  Confirm `hudState` has `{ score, lives, hiScore }` properties visible through the HUD.
 
 ### `input.js` — Keyboard Input
 - [ ] Open the browser console and run:

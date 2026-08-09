@@ -2,12 +2,12 @@
 import { CANVAS_WIDTH, CANVAS_HEIGHT, STARTING_LIVES } from './gameConfig.js';
 import { initInput } from './input.js';
 import { Player } from './player.js';
+import { invaders, drawInvaders, updateInvaders, score } from './invaders.js';
+import { runCollisions } from './collision.js';
 
 // ---------------------------------------------------------------------------
 // Import placeholders for sibling-card modules (not yet created)
 // ---------------------------------------------------------------------------
-// invaders.js  added by: "Level 1: the classic grid"
-// collision.js added by: "Sprite rendering and collision detection"
 // level1.js    added by: "Level 1: the classic grid"
 // level2.js    added by: "Level 2: they shoot back"
 // level3.js    added by: "Level 3: shields and formations"
@@ -103,9 +103,22 @@ function update(dt) {
         hudState.lives = player.lives;
       }
 
-      // Sibling cards will add entity update calls here.
-      // Game-over condition: lives reach 0 (sibling cards decrement hudState.lives).
-      // For now, ENTER also transitions to Game Over (useful for manual testing).
+      // Update invader formation
+      updateInvaders(dt);
+
+      // Build bullets array from the single player bullet (may be null)
+      {
+        const bullets = player && player.bullet ? [player.bullet] : [];
+        runCollisions(invaders, bullets, player);
+      }
+
+      // Sync score from invaders module into hudState
+      // (score is a plain let export; we read its current value each frame)
+      // Note: ES module live bindings mean `score` reflects the latest value.
+      hudState.score = score;
+
+      // Game-over condition: lives reach 0.
+      // ENTER also transitions to Game Over (useful for manual testing).
       if (consumeEnter() || hudState.lives <= 0) {
         if (hudState.score > hudState.hiScore) {
           hudState.hiScore = hudState.score;
@@ -163,7 +176,10 @@ function renderPlaying() {
     player.draw(ctx);
   }
 
-  // Sibling cards will add entity render calls here.
+  // Draw invader formation and explosion effects
+  drawInvaders(ctx);
+
+  // Draw HUD (reads score from invaders.js live binding via hudState)
   renderHUD();
 }
 
@@ -172,7 +188,7 @@ function renderHUD() {
   ctx.textBaseline = 'top';
   ctx.font         = '20px monospace';
 
-  // Score — top left
+  // Score — top left (reads from hudState which is synced from invaders.js score)
   ctx.textAlign = 'left';
   ctx.fillStyle = '#ffffff';
   ctx.fillText('SCORE: ' + hudState.score, padding, padding);
