@@ -5,21 +5,30 @@ A Java 21 / Maven / Swing calculator, built test-first with JUnit 5.
 ## Build
 
 ```
-mvn -B test
+mvn -B package
 ```
 
-## Planned layout
+`mvn -B package` passes with all tests enabled (none are skipped) and
+produces `target/calculator-0.1.0.jar`, a single executable JAR with
+`Main-Class: com.buildboard.calculator.Main` in its manifest.
 
-This card only sets up the Maven skeleton (`pom.xml`, the source
-directories, and a placeholder `SkeletonTest`). The files below are
-owned by later cards and are not created here:
+## Run
+
+```
+java -jar target/calculator-0.1.0.jar
+```
+
+No `-cp`/`-classpath` argument is needed -- the project has no runtime
+dependencies, so the JAR runs standalone.
+
+## Layout
 
 - `src/main/java/com/buildboard/calculator/Evaluator.java` -- expression
-  evaluation core (card: "Expression evaluation core, tests first").
+  evaluation core.
 - `src/test/java/com/buildboard/calculator/EvaluatorTest.java` -- tests
-  for the evaluator (card: "Expression evaluation core, tests first").
+  for the evaluator.
 - `src/main/java/com/buildboard/calculator/CalculatorWindow.java` --
-  Swing UI (card: "Swing calculator window").
+  Swing UI.
 - `src/main/java/com/buildboard/calculator/Main.java` -- application
-  entry point and runnable-JAR packaging (card: "Package as a runnable
-  JAR").
+  entry point; shows `CalculatorWindow` on the Swing Event Dispatch
+  Thread and is packaged as the runnable JAR's `Main-Class`.
