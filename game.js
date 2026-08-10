@@ -1,7 +1,7 @@
 import { CANVAS_WIDTH, CANVAS_HEIGHT, STARTING_LIVES } from './gameConfig.js';
+import { initInput } from './input.js';
+import { Player } from './player.js';
 
-// Future: input beyond ENTER (movement/fire keys) -- owned by "Input handling" card
-// Future: import { createPlayer, updatePlayer, renderPlayer } from './player.js'; -- owned by "Player movement & shooting" card
 // Future: import { createInvaders, updateInvaders, renderInvaders } from './invaders.js'; -- owned by "Invaders" card
 // Future: import { checkCollisions } from './collision.js'; -- owned by "Collision detection" card
 // Future: import { runLevel1 } from './level1.js'; -- owned by "Level 1" card
@@ -28,9 +28,15 @@ const SCENES = {
 
 let currentScene = SCENES.TITLE;
 
+const PLAYER_START_X = CANVAS_WIDTH / 2;
+const PLAYER_START_Y = CANVAS_HEIGHT - 60;
+
+let player = new Player(PLAYER_START_X, PLAYER_START_Y);
+
 function startPlaying() {
   hudState.score = 0;
   hudState.lives = STARTING_LIVES;
+  player = new Player(PLAYER_START_X, PLAYER_START_Y);
   currentScene = SCENES.PLAYING;
 }
 
@@ -58,6 +64,8 @@ function updateTitle(dt) {
 }
 
 function updatePlaying(dt) {
+  player.update(dt);
+
   if (hudState.lives <= 0) {
     endGame();
   }
@@ -99,6 +107,7 @@ function renderTitle() {
 }
 
 function renderPlaying() {
+  player.draw(ctx);
   renderHud();
 }
 
@@ -154,4 +163,5 @@ function loop(timestamp) {
   requestAnimationFrame(loop);
 }
 
+initInput();
 requestAnimationFrame(loop);
