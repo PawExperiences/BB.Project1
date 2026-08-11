@@ -4,6 +4,7 @@
 #include <string>
 
 #include "prime.h"
+#include "sieve.h"
 
 namespace {
 
@@ -52,6 +53,22 @@ bool process_token(const std::string& token) {
 } // namespace
 
 int main(int argc, char* argv[]) {
+    if (argc > 1 && std::string(argv[1]) == "--upto") {
+        if (argc != 3) {
+            std::cerr << "usage: prime_tester --upto N\n";
+            return 1;
+        }
+        long long n = 0;
+        if (!parse_integer(argv[2], n)) {
+            std::cerr << "not a number: " << argv[2] << "\n";
+            return 1;
+        }
+        for (long long p : primes_up_to(n)) {
+            std::cout << p << "\n";
+        }
+        return 0;
+    }
+
     bool had_error = false;
 
     if (argc > 1) {
