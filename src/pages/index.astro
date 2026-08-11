@@ -1,5 +1,6 @@
 ---
 import quotes from "../data/quotes.json";
+import printStylesheetHref from "../styles/print.css?url";
 
 const quote = quotes[Math.floor(Math.random() * quotes.length)];
 ---
@@ -60,6 +61,7 @@ const quote = quotes[Math.floor(Math.random() * quotes.length)];
         color: #888c96;
       }
     </style>
+    <link rel="stylesheet" href={printStylesheetHref} media="print" />
   </head>
   <body>
     <figure class="quote">

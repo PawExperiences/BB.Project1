@@ -1,0 +1,20 @@
+/* Print styles for the quote page: ink-friendly black-on-white output in a
+   12pt serif typeface. Nothing is hidden -- every element visible on screen
+   stays visible when printed; this file only restyles for paper. */
+
+@media print {
+  * {
+    color: black !important;
+    background: none !important;
+    background-color: white !important;
+    background-image: none !important;
+  }
+
+  html,
+  body {
+    background: white !important;
+    color: black !important;
+    font-family: serif !important;
+    font-size: 12pt !important;
+  }
+}
