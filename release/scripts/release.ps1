@@ -1,67 +1,65 @@
-# Idempotent release script: tags, packages, and publishes the GitHub release for v0.5.0.
+# Idempotently tag and publish a GitHub release for this project.
+#
+# Usage: powershell -File release/scripts/release.ps1
+#
+# Environment variables:
+#   RELEASE_VERSION   Version to release, e.g. "0.4.0" (default: 0.4.0)
+#   RELEASE_NAME      Human release title (default: "e2e calculator cc <version>")
+#   GIT_REMOTE        Git remote to push the tag to (default: origin)
+#   GITHUB_REPO       "owner/repo" slug for the GitHub release (default: PawExperiences/BB.Project1)
+#   CHANGELOG_FILE    Path to changelog excerpt to use as the release body (default: CHANGELOG.md)
+#   DRY_RUN           If set to "1", print actions without executing them
+#
+# Requires: git in PATH, and the GitHub CLI ("gh", authenticated) to publish
+# the GitHub release. If "gh" is not available, the script tags and pushes
+# the tag only, and prints the manual "gh release create" command to run.
+
 $ErrorActionPreference = "Stop"
 
-$Version = "0.5.0"
-$Tag = "v$Version"
-$RepoSlug = $env:REPO_SLUG
+$Version = $env:RELEASE_VERSION
+if (-not $Version) { $Version = "0.4.0" }
+if ($Version.StartsWith("v")) { $Tag = $Version } else { $Tag = "v$Version" }
+$Remote = $env:GIT_REMOTE
+if (-not $Remote) { $Remote = "origin" }
+$RepoSlug = $env:GITHUB_REPO
 if (-not $RepoSlug) { $RepoSlug = "PawExperiences/BB.Project1" }
-$ArtifactName = "space-invaders-cc-$Version.zip"
-$ArtifactFiles = @("index.html", "gameConfig.js", "game.js", "input.js", "player.js", "README.md")
+$ReleaseName = $env:RELEASE_NAME
+if (-not $ReleaseName) { $ReleaseName = "e2e calculator cc $Version" }
+$ChangelogFile = $env:CHANGELOG_FILE
+if (-not $ChangelogFile) { $ChangelogFile = "CHANGELOG.md" }
+$DryRun = $env:DRY_RUN -eq "1"
 
-$Root = (git rev-parse --show-toplevel).Trim()
-Set-Location $Root
-
-Write-Host "+ checking working tree is clean"
-$status = git status --porcelain
-if ($status) {
-    Write-Error "working tree is not clean; commit or stash changes before releasing"
-    exit 1
-}
-
-git rev-parse --verify --quiet $Tag *> $null
-if ($LASTEXITCODE -eq 0) {
-    Write-Host "tag $Tag already exists locally, skipping creation"
-} else {
-    Write-Host "+ git tag -a $Tag -m 'Release $Tag'"
-    git tag -a $Tag -m "Release $Tag"
-}
-
-$remoteTags = git ls-remote --tags origin $Tag
-if ($remoteTags -match [regex]::Escape($Tag)) {
-    Write-Host "tag $Tag already exists on origin, skipping push"
-} else {
-    Write-Host "+ git push origin $Tag"
-    git push origin $Tag
-}
-
-if (Test-Path $ArtifactName) {
-    Write-Host "artifact $ArtifactName already exists, skipping packaging"
-} else {
-    Write-Host "+ packaging $ArtifactName"
-    $existing = $ArtifactFiles | Where-Object { Test-Path $_ }
-    Compress-Archive -Path $existing -DestinationPath $ArtifactName -Force
-    Write-Host "packaged artifact at $Root\$ArtifactName"
-}
-
-$NotesFile = $null
-if (Test-Path "release/RELEASE_NOTES.md") {
-    $NotesFile = "release/RELEASE_NOTES.md"
-} elseif (Test-Path "CHANGELOG.md") {
-    $NotesFile = "CHANGELOG.md"
-}
-
-gh release view $Tag --repo $RepoSlug *> $null
-if ($LASTEXITCODE -eq 0) {
-    Write-Host "GitHub release $Tag already exists, skipping creation"
-} else {
-    if ($NotesFile) {
-        Write-Host "+ gh release create $Tag $ArtifactName --notes-file $NotesFile"
-        gh release create $Tag $ArtifactName --repo $RepoSlug --title "e2e space invaders cc $Version" --notes-file $NotesFile
-    } else {
-        Write-Host "+ gh release create $Tag $ArtifactName --notes 'Release $Tag'"
-        gh release create $Tag $ArtifactName --repo $RepoSlug --title "e2e space invaders cc $Version" --notes "Release $Tag. See CHANGELOG.md for details."
+function Invoke-Step {
+    param([string[]]$CommandParts)
+    Write-Host ("+ " + ($CommandParts -join " "))
+    if (-not $DryRun) {
+        & $CommandParts[0] $CommandParts[1..($CommandParts.Length - 1)]
+        if ($LASTEXITCODE -ne 0) { throw "Command failed: $($CommandParts -join ' ')" }
     }
-    Write-Host "published GitHub release $Tag"
 }
 
-Write-Host "release $Tag complete"
+$existingTags = (git tag --list $Tag)
+if ($existingTags -eq $Tag) {
+    Write-Host "Tag $Tag already exists locally; skipping tag creation."
+} else {
+    Write-Host "Creating annotated tag $Tag at HEAD..."
+    Invoke-Step @("git", "tag", "-a", $Tag, "-m", $ReleaseName)
+}
+
+Write-Host "Pushing tag $Tag to $Remote (additive; never deletes or rewrites history)..."
+Invoke-Step @("git", "push", $Remote, $Tag)
+
+$ghPath = Get-Command gh -ErrorAction SilentlyContinue
+if (-not $ghPath) {
+    Write-Host "gh CLI not found. To publish the GitHub release manually, run:"
+    Write-Host "  gh release create $Tag --repo $RepoSlug --title `"$ReleaseName`" --notes-file $ChangelogFile"
+    exit 0
+}
+
+Write-Host "Creating GitHub release $Tag via gh CLI..."
+if (Test-Path $ChangelogFile) {
+    Invoke-Step @("gh", "release", "create", $Tag, "--repo", $RepoSlug, "--title", $ReleaseName, "--notes-file", $ChangelogFile)
+} else {
+    Invoke-Step @("gh", "release", "create", $Tag, "--repo", $RepoSlug, "--title", $ReleaseName, "--notes", $ReleaseName)
+}
+Write-Host "Done."

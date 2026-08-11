@@ -1,117 +1,66 @@
 #!/usr/bin/env python3
-"""Idempotent release script: tags, packages, and publishes the GitHub release for v0.5.0."""
+"""Idempotently tag and publish a GitHub release for this project.
+
+Usage:
+    python3 release/scripts/release.py
+
+Environment variables:
+    RELEASE_VERSION   Version to release, e.g. "0.4.0" (default: 0.4.0)
+    RELEASE_NAME      Human release title (default: "e2e calculator cc <version>")
+    GIT_REMOTE        Git remote to push the tag to (default: origin)
+    GITHUB_REPO       "owner/repo" slug for the GitHub release (default: PawExperiences/BB.Project1)
+    CHANGELOG_FILE    Path to changelog excerpt to use as the release body (default: CHANGELOG.md)
+    DRY_RUN           If set to "1", print actions without executing them
+
+Requires: git in PATH, and the GitHub CLI ("gh", authenticated) to publish the
+GitHub release. If "gh" is not available, the script tags and pushes the tag
+only, and prints the manual "gh release create" command to run.
+"""
 import os
 import subprocess
 import sys
-import zipfile
-
-VERSION = "0.5.0"
-TAG = "v" + VERSION
-REPO_SLUG = os.environ.get("REPO_SLUG", "PawExperiences/BB.Project1")
-ARTIFACT_FILES = ["index.html", "gameConfig.js", "game.js", "input.js", "player.js", "README.md"]
-ARTIFACT_NAME = "space-invaders-cc-%s.zip" % VERSION
-NOTES_CANDIDATES = ["release/RELEASE_NOTES.md", "CHANGELOG.md"]
+import shutil
 
 
-def run(cmd, check=True, capture=False):
+def run(cmd, dry_run=False):
     print("+ " + " ".join(cmd))
-    result = subprocess.run(cmd, check=False, text=True, capture_output=capture)
-    if check and result.returncode != 0:
-        sys.exit("command failed: %s" % " ".join(cmd))
-    return result
-
-
-def repo_root():
-    r = run(["git", "rev-parse", "--show-toplevel"], capture=True)
-    return r.stdout.strip()
-
-
-def ensure_clean_tree():
-    r = run(["git", "status", "--porcelain"], capture=True)
-    if r.stdout.strip():
-        sys.exit("working tree is not clean; commit or stash changes before releasing")
-
-
-def tag_exists_locally(tag):
-    r = run(["git", "rev-parse", "--verify", "--quiet", tag], check=False, capture=True)
-    return r.returncode == 0
-
-
-def tag_exists_remotely(tag):
-    r = run(["git", "ls-remote", "--tags", "origin", tag], capture=True)
-    return tag in r.stdout
-
-
-def create_tag(tag):
-    if tag_exists_locally(tag):
-        print("tag %s already exists locally, skipping creation" % tag)
-    else:
-        run(["git", "tag", "-a", tag, "-m", "Release %s" % tag])
-        print("created annotated tag %s" % tag)
-
-
-def push_tag(tag):
-    if tag_exists_remotely(tag):
-        print("tag %s already exists on origin, skipping push" % tag)
-    else:
-        run(["git", "push", "origin", tag])
-        print("pushed tag %s to origin" % tag)
-
-
-def build_artifact(root):
-    dest = os.path.join(root, ARTIFACT_NAME)
-    if os.path.exists(dest):
-        print("artifact %s already exists, skipping packaging" % dest)
-        return dest
-    with zipfile.ZipFile(dest, "w", zipfile.ZIP_DEFLATED) as zf:
-        for name in ARTIFACT_FILES:
-            path = os.path.join(root, name)
-            if os.path.exists(path):
-                zf.write(path, arcname=name)
-            else:
-                print("warning: expected file missing, skipped: %s" % name)
-    print("packaged artifact at %s" % dest)
-    return dest
-
-
-def find_notes(root):
-    for candidate in NOTES_CANDIDATES:
-        path = os.path.join(root, candidate)
-        if os.path.exists(path):
-            return path
-    return None
-
-
-def release_exists(tag):
-    r = run(["gh", "release", "view", tag, "--repo", REPO_SLUG], check=False, capture=True)
-    return r.returncode == 0
-
-
-def create_release(tag, artifact, notes_path):
-    if release_exists(tag):
-        print("GitHub release %s already exists, skipping creation" % tag)
-        return
-    cmd = ["gh", "release", "create", tag, artifact,
-           "--repo", REPO_SLUG,
-           "--title", "e2e space invaders cc %s" % VERSION]
-    if notes_path:
-        cmd += ["--notes-file", notes_path]
-    else:
-        cmd += ["--notes", "Release %s. See CHANGELOG.md for details." % tag]
-    run(cmd)
-    print("published GitHub release %s" % tag)
+    if dry_run:
+        return ""
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        sys.stderr.write(result.stderr)
+        raise SystemExit(result.returncode)
+    return result.stdout.strip()
 
 
 def main():
-    root = repo_root()
-    os.chdir(root)
-    ensure_clean_tree()
-    create_tag(TAG)
-    push_tag(TAG)
-    artifact = build_artifact(root)
-    notes_path = find_notes(root)
-    create_release(TAG, artifact, notes_path)
-    print("release %s complete" % TAG)
+    version = os.environ.get("RELEASE_VERSION", "0.4.0")
+    tag = version if version.startswith("v") else "v" + version
+    remote = os.environ.get("GIT_REMOTE", "origin")
+    repo_slug = os.environ.get("GITHUB_REPO", "PawExperiences/BB.Project1")
+    release_name = os.environ.get("RELEASE_NAME", "e2e calculator cc " + version)
+    changelog_file = os.environ.get("CHANGELOG_FILE", "CHANGELOG.md")
+    dry_run = os.environ.get("DRY_RUN") == "1"
+
+    existing_tags = run(["git", "tag", "--list", tag])
+    if existing_tags.strip() == tag:
+        print("Tag %s already exists locally; skipping tag creation." % tag)
+    else:
+        print("Creating annotated tag %s at HEAD..." % tag)
+        run(["git", "tag", "-a", tag, "-m", release_name], dry_run=dry_run)
+
+    print("Pushing tag %s to %s (additive; never deletes or rewrites history)..." % (tag, remote))
+    run(["git", "push", remote, tag], dry_run=dry_run)
+
+    if shutil.which("gh") is None:
+        print("gh CLI not found. To publish the GitHub release manually, run:")
+        print('  gh release create %s --repo %s --title "%s" --notes-file %s' % (tag, repo_slug, release_name, changelog_file))
+        return
+
+    print("Creating GitHub release %s via gh CLI..." % tag)
+    notes_arg = ["--notes-file", changelog_file] if os.path.isfile(changelog_file) else ["--notes", release_name]
+    run(["gh", "release", "create", tag, "--repo", repo_slug, "--title", release_name] + notes_arg, dry_run=dry_run)
+    print("Done.")
 
 
 if __name__ == "__main__":

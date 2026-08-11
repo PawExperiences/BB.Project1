@@ -1,3 +1,19 @@
+## 0.4.0 -- e2e calculator cc 0.4.0
+
+## [0.4.0] - Pending verification
+
+### Note
+No commits or bundled tasks for the "e2e calculator" application were found in the supplied range. The git log/diffstat given for this release (2f42bad..ec76b45) contains only work from an unrelated prior project ("e2e space invaders", already shipped as its own 0.5.0) followed by a repository reset that deletes it (785 deletions, 0 additions, across CHANGELOG.md, README.md, docs/releases/0-5-0.md, game.js, gameConfig.js, index.html, input.js, player.js, and the old release/scripts/*). There is no calculator source, test, or doc file anywhere in this diff.
+
+### Added
+- Nothing calculator-related — no additions appear in the supplied diff.
+
+### Changed
+- Repository reset (`2f42bad chore: reset for the next e2e project`): removed the previous project's app files, README, CHANGELOG, docs, and release helper scripts (net -785 lines) in preparation for this project.
+
+### Fixed
+- Nothing to report — no calculator functionality exists yet in this range to have fixed anything.
+
 ## 0.5.0 -- e2e space invaders cc 0.5.0
 
 # Changelog

@@ -1,69 +1,60 @@
 #!/bin/sh
-# Idempotent release script: tags, packages, and publishes the GitHub release for v0.5.0.
+# Idempotently tag and publish a GitHub release for this project.
+#
+# Usage: sh release/scripts/release.sh
+#
+# Environment variables:
+#   RELEASE_VERSION   Version to release, e.g. "0.4.0" (default: 0.4.0)
+#   RELEASE_NAME      Human release title (default: "e2e calculator cc <version>")
+#   GIT_REMOTE        Git remote to push the tag to (default: origin)
+#   GITHUB_REPO       "owner/repo" slug for the GitHub release (default: PawExperiences/BB.Project1)
+#   CHANGELOG_FILE    Path to changelog excerpt to use as the release body (default: CHANGELOG.md)
+#   DRY_RUN           If set to "1", print actions without executing them
+#
+# Requires: git in PATH, and the GitHub CLI ("gh", authenticated) to publish
+# the GitHub release. If "gh" is not available, the script tags and pushes
+# the tag only, and prints the manual "gh release create" command to run.
+
 set -eu
 
-VERSION="0.5.0"
-TAG="v$VERSION"
-REPO_SLUG="${REPO_SLUG:-PawExperiences/BB.Project1}"
-ARTIFACT_NAME="space-invaders-cc-$VERSION.zip"
-ARTIFACT_FILES="index.html gameConfig.js game.js input.js player.js README.md"
+VERSION="${RELEASE_VERSION:-0.4.0}"
+case "$VERSION" in
+  v*) TAG="$VERSION" ;;
+  *) TAG="v$VERSION" ;;
+esac
+REMOTE="${GIT_REMOTE:-origin}"
+REPO_SLUG="${GITHUB_REPO:-PawExperiences/BB.Project1}"
+RELEASE_NAME="${RELEASE_NAME:-e2e calculator cc $VERSION}"
+CHANGELOG_FILE="${CHANGELOG_FILE:-CHANGELOG.md}"
+DRY_RUN="${DRY_RUN:-0}"
 
-ROOT=$(git rev-parse --show-toplevel)
-cd "$ROOT"
+run() {
+  echo "+ $*"
+  if [ "$DRY_RUN" != "1" ]; then
+    "$@"
+  fi
+}
 
-echo "+ checking working tree is clean"
-if [ -n "$(git status --porcelain)" ]; then
-    echo "working tree is not clean; commit or stash changes before releasing" >&2
-    exit 1
-fi
-
-if git rev-parse --verify --quiet "$TAG" >/dev/null; then
-    echo "tag $TAG already exists locally, skipping creation"
+if git tag --list "$TAG" | grep -qx "$TAG"; then
+  echo "Tag $TAG already exists locally; skipping tag creation."
 else
-    echo "+ git tag -a $TAG -m 'Release $TAG'"
-    git tag -a "$TAG" -m "Release $TAG"
+  echo "Creating annotated tag $TAG at HEAD..."
+  run git tag -a "$TAG" -m "$RELEASE_NAME"
 fi
 
-if git ls-remote --tags origin "$TAG" | grep -q "$TAG"; then
-    echo "tag $TAG already exists on origin, skipping push"
+echo "Pushing tag $TAG to $REMOTE (additive; never deletes or rewrites history)..."
+run git push "$REMOTE" "$TAG"
+
+if ! command -v gh >/dev/null 2>&1; then
+  echo "gh CLI not found. To publish the GitHub release manually, run:"
+  echo "  gh release create $TAG --repo $REPO_SLUG --title \"$RELEASE_NAME\" --notes-file $CHANGELOG_FILE"
+  exit 0
+fi
+
+echo "Creating GitHub release $TAG via gh CLI..."
+if [ -f "$CHANGELOG_FILE" ]; then
+  run gh release create "$TAG" --repo "$REPO_SLUG" --title "$RELEASE_NAME" --notes-file "$CHANGELOG_FILE"
 else
-    echo "+ git push origin $TAG"
-    git push origin "$TAG"
+  run gh release create "$TAG" --repo "$REPO_SLUG" --title "$RELEASE_NAME" --notes "$RELEASE_NAME"
 fi
-
-if [ -f "$ARTIFACT_NAME" ]; then
-    echo "artifact $ARTIFACT_NAME already exists, skipping packaging"
-else
-    echo "+ packaging $ARTIFACT_NAME"
-    if command -v zip >/dev/null 2>&1; then
-        # shellcheck disable=SC2086
-        zip -q "$ARTIFACT_NAME" $ARTIFACT_FILES
-    else
-        # shellcheck disable=SC2086
-        tar czf "${ARTIFACT_NAME%.zip}.tar.gz" $ARTIFACT_FILES
-        ARTIFACT_NAME="${ARTIFACT_NAME%.zip}.tar.gz"
-    fi
-    echo "packaged artifact at $ROOT/$ARTIFACT_NAME"
-fi
-
-NOTES_FILE=""
-if [ -f "release/RELEASE_NOTES.md" ]; then
-    NOTES_FILE="release/RELEASE_NOTES.md"
-elif [ -f "CHANGELOG.md" ]; then
-    NOTES_FILE="CHANGELOG.md"
-fi
-
-if gh release view "$TAG" --repo "$REPO_SLUG" >/dev/null 2>&1; then
-    echo "GitHub release $TAG already exists, skipping creation"
-else
-    if [ -n "$NOTES_FILE" ]; then
-        echo "+ gh release create $TAG $ARTIFACT_NAME --notes-file $NOTES_FILE"
-        gh release create "$TAG" "$ARTIFACT_NAME" --repo "$REPO_SLUG" --title "e2e space invaders cc $VERSION" --notes-file "$NOTES_FILE"
-    else
-        echo "+ gh release create $TAG $ARTIFACT_NAME --notes 'Release $TAG'"
-        gh release create "$TAG" "$ARTIFACT_NAME" --repo "$REPO_SLUG" --title "e2e space invaders cc $VERSION" --notes "Release $TAG. See CHANGELOG.md for details."
-    fi
-    echo "published GitHub release $TAG"
-fi
-
-echo "release $TAG complete"
+echo "Done."
