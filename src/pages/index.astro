@@ -1,6 +1,7 @@
 ---
 import quotes from '../data/quotes.json';
 import { pick } from '../lib/pick';
+import printStylesheetUrl from '../styles/print.css?url';
 
 const buildDate = new Date().toISOString().slice(0, 10);
 const quote = pick(quotes, buildDate);
@@ -12,6 +13,7 @@ const quote = pick(quotes, buildDate);
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Quote</title>
+    <link rel="stylesheet" href={printStylesheetUrl} media="print" />
   </head>
   <body>
     <main class="quote-container">

@@ -14,4 +14,17 @@ npm ci
 npm run build
 ```
 
-This generates the static site in `dist/`. Open `dist/index.html` to view the result.
+Running `npm ci && npm run build` builds the static site and writes the output to `dist/index.html`.
+
+## Adding a new quote
+
+Quotes live in `src/data/quotes.json`, an array of objects with `text` and `author` fields. To add a new quote, append an object in the same shape to that array:
+
+```json
+{
+  "text": "Your quote here.",
+  "author": "Quote Author"
+}
+```
+
+At build time, `src/pages/index.astro` deterministically selects one quote from `src/data/quotes.json` via `pick()` (`src/lib/pick.ts`), seeded by the build date, so no further wiring is needed after adding an entry.
