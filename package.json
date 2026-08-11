@@ -3,7 +3,8 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "build": "tsc"
+    "build": "tsc",
+    "example": "npm run build && node examples/badge.mjs"
   },
   "devDependencies": {
     "typescript": "^5.4"
