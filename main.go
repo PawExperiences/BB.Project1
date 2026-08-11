@@ -1,55 +1,25 @@
 package main
 
 import (
-	"bufio"
-	"bytes"
 	"fmt"
-	"io"
 	"os"
 )
-
-type counts struct {
-	lines int
-	words int
-	bytes int
-}
-
-func countAll(r io.Reader) (counts, error) {
-	data, err := io.ReadAll(r)
-	if err != nil {
-		return counts{}, err
-	}
-
-	lines := bytes.Count(data, []byte("\n"))
-
-	words := 0
-	scanner := bufio.NewScanner(bytes.NewReader(data))
-	scanner.Split(bufio.ScanWords)
-	for scanner.Scan() {
-		words++
-	}
-	if err := scanner.Err(); err != nil {
-		return counts{}, err
-	}
-
-	return counts{lines: lines, words: words, bytes: len(data)}, nil
-}
 
 func main() {
 	args := os.Args[1:]
 	exitCode := 0
 
 	if len(args) == 0 {
-		c, err := countAll(os.Stdin)
+		c, err := Count(os.Stdin)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "wordcount: -: %v\n", err)
 			os.Exit(1)
 		}
-		fmt.Printf("%d\t%d\t%d\t%s\n", c.lines, c.words, c.bytes, "-")
+		fmt.Printf("%d\t%d\t%d\t%s\n", c.Lines, c.Words, c.Bytes, "-")
 		os.Exit(0)
 	}
 
-	var total counts
+	var total Counts
 	processed := 0
 
 	for _, name := range args {
@@ -60,7 +30,7 @@ func main() {
 			continue
 		}
 
-		c, err := countAll(f)
+		c, err := Count(f)
 		f.Close()
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "wordcount: %s: %v\n", name, err)
@@ -68,16 +38,16 @@ func main() {
 			continue
 		}
 
-		fmt.Printf("%d\t%d\t%d\t%s\n", c.lines, c.words, c.bytes, name)
+		fmt.Printf("%d\t%d\t%d\t%s\n", c.Lines, c.Words, c.Bytes, name)
 
-		total.lines += c.lines
-		total.words += c.words
-		total.bytes += c.bytes
+		total.Lines += c.Lines
+		total.Words += c.Words
+		total.Bytes += c.Bytes
 		processed++
 	}
 
 	if len(args) > 1 {
-		fmt.Printf("%d\t%d\t%d\ttotal\n", total.lines, total.words, total.bytes)
+		fmt.Printf("%d\t%d\t%d\ttotal\n", total.Lines, total.Words, total.Bytes)
 	}
 
 	os.Exit(exitCode)
