@@ -11,10 +11,14 @@ import {
   STARTING_LIVES,
 } from './gameConfig.js';
 import { isKeyHeld } from './input.js';
+import { hud } from './game.js';
 
 const SHIP_WIDTH = 48;
 const SHIP_HEIGHT = 32;
-const SHIP_MARGIN_BOTTOM = 24;
+// Exported so level cards that respawn the player (e.g. Level 2's
+// invader-bullet hit response) can recompute this same fixed start
+// position without redefining it.
+export const SHIP_MARGIN_BOTTOM = 24;
 const BULLET_WIDTH = 4;
 const BULLET_HEIGHT = 16;
 
@@ -53,6 +57,10 @@ export class Player {
         x: this.x + this.width / 2 - BULLET_WIDTH / 2,
         y: this.y,
       };
+      // Cumulative session shot count -- Level 2's bonus UFO scoring tier
+      // is indexed off this running total, started here and never reset
+      // between levels.
+      hud.shotsFired += 1;
     }
   }
 
