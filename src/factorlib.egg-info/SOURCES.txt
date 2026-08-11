@@ -1,0 +1,10 @@
+README.md
+pyproject.toml
+src/factorlib/__init__.py
+src/factorlib/factor.py
+src/factorlib/py.typed
+src/factorlib.egg-info/PKG-INFO
+src/factorlib.egg-info/SOURCES.txt
+src/factorlib.egg-info/dependency_links.txt
+src/factorlib.egg-info/top_level.txt
+tests/test_factor.py
