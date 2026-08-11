@@ -10,6 +10,8 @@ import {
 } from './gameConfig.js';
 import { initInput } from './input.js';
 import { Player } from './player.js';
+import { InvaderFormation } from './invaders.js';
+import { collide, drawExplosions } from './collision.js';
 
 // Named export so sibling cards (input/player, collision, levels, boss) can
 // read and mutate the HUD as gameplay happens.
@@ -34,11 +36,13 @@ const ctx = canvas.getContext('2d');
 
 initInput();
 let player = new Player();
+let invaderFormation = new InvaderFormation();
 
 function startGame() {
   hud.score = 0;
   hud.lives = STARTING_LIVES;
   player = new Player();
+  invaderFormation = new InvaderFormation();
   scene = SCENES.PLAYING;
 }
 
@@ -74,10 +78,12 @@ window.addEventListener('keydown', (event) => {
 function update(dt) {
   if (scene === SCENES.PLAYING) {
     player.update(dt);
+    invaderFormation.update(dt);
+    // Collision must fully resolve before this frame's render pass below.
+    collide(dt, player, invaderFormation);
   }
-  // invaders.js, level1.js/level2.js/level3.js (future cards): spawn and advance enemy waves here.
+  // level1.js/level2.js/level3.js (future cards): spawn and advance enemy waves here.
   // boss.js (future card): update the boss encounter here.
-  // collision.js (future card): detect hits, update hud.score/hud.lives here.
 }
 
 function drawBackground() {
@@ -115,9 +121,11 @@ function renderTitle() {
 
 function renderPlaying() {
   drawHUD();
+  invaderFormation.draw(ctx);
   player.draw(ctx);
-  // invaders.js, level1.js/level2.js/level3.js, boss.js (future cards):
-  // render the rest of the playfield (enemies, enemy bullets) here.
+  drawExplosions(ctx);
+  // level1.js/level2.js/level3.js, boss.js (future cards): render the rest
+  // of the playfield (enemy bullets, shields, boss) here.
 }
 
 function renderGameOver() {
