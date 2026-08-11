@@ -35,3 +35,11 @@ unit raises `ValueError`. Passing a unit string that isn't supported raises `Key
 - `kg` — kilogram
 - `oz` — ounce
 - `lb` — pound
+
+## Worked examples
+
+| Input     | Output           |
+| --------- | ---------------- |
+| `1 mile`  | `1609.344 m`      |
+| `1 kg`    | `1000.0 g`        |
+| `1 lb`    | `453.59237 g`     |
