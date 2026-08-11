@@ -1,7 +1,9 @@
 ---
 import quotes from '../data/quotes.json';
+import { pick } from '../lib/pick';
 
-const quote = quotes[Math.floor(Math.random() * quotes.length)];
+const buildDate = new Date().toISOString().slice(0, 10);
+const quote = pick(quotes, buildDate);
 ---
 
 <!doctype html>
