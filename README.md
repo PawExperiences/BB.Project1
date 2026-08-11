@@ -23,3 +23,14 @@ An unrecognised unit raises `KeyError`.
 **Length** (base unit: metres): `m`, `km`, `cm`, `mm`, `inch`, `ft`, `mile`
 
 **Mass** (base unit: grams): `g`, `kg`, `oz`, `lb`
+
+## Examples
+
+```python
+>>> convert(1, "km", "m")
+1000.0
+>>> convert(1, "inch", "cm")
+2.54
+>>> convert(1, "lb", "g")
+453.59237
+```
