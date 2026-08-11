@@ -1,0 +1,63 @@
+---
+import quotes from '../data/quotes.json';
+
+const quote = quotes[Math.floor(Math.random() * quotes.length)];
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Quote</title>
+  </head>
+  <body>
+    <main class="quote-container">
+      <blockquote class="quote-text">{quote.text}</blockquote>
+      <p class="quote-author">— {quote.author}</p>
+    </main>
+    <style>
+      :global(html),
+      :global(body) {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        background-color: #121212;
+        color: #f5f5f5;
+        font-family:
+          system-ui,
+          -apple-system,
+          'Segoe UI',
+          Roboto,
+          Helvetica,
+          Arial,
+          sans-serif;
+      }
+
+      .quote-container {
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        padding: 2rem;
+        box-sizing: border-box;
+      }
+
+      .quote-text {
+        margin: 0 0 1rem 0;
+        max-width: 40rem;
+        font-size: 1.75rem;
+        font-style: italic;
+        line-height: 1.4;
+      }
+
+      .quote-author {
+        margin: 0;
+        font-size: 1rem;
+        color: #9a9a9a;
+      }
+    </style>
+  </body>
+</html>
