@@ -11,6 +11,7 @@ import {
 import { initInput } from './input.js';
 import { Player } from './player.js';
 import { Level1 } from './level1.js';
+import { Level2 } from './level2.js';
 import { collide, drawExplosions } from './collision.js';
 
 // Named export so sibling cards (input/player, collision, levels, boss) can
@@ -20,6 +21,10 @@ export const hud = {
   lives: STARTING_LIVES,
   hiScore: 0,
   level: 1,
+  // Cumulative shots fired this session (player.js increments this on every
+  // shot). Started here in Level 1, never reset between levels -- Level 2's
+  // bonus UFO scoring tier is indexed off this running total.
+  shotsFired: 0,
 };
 
 const SCENES = {
@@ -39,14 +44,19 @@ initInput();
 let player = new Player();
 let level1 = new Level1();
 let level1Active = true;
+let level2 = null;
+let level2Active = false;
 
 function startGame() {
   hud.score = 0;
   hud.lives = STARTING_LIVES;
   hud.level = 1;
+  hud.shotsFired = 0;
   player = new Player();
   level1 = new Level1();
   level1Active = true;
+  level2 = null;
+  level2Active = false;
   scene = SCENES.PLAYING;
 }
 
@@ -85,14 +95,23 @@ function update(dt) {
     if (level1Active) {
       const result = level1.update(dt, player);
       if (result === 'cleared') {
+        // No level-select screen: Level 1 clearing drops straight into
+        // Level 2, carrying the existing player/hud state over unchanged.
         level1Active = false;
         hud.level = 2;
+        level2 = new Level2();
+        level2Active = true;
       }
+    } else if (level2Active) {
+      level2.update(dt, player);
     }
     // Collision must fully resolve before this frame's render pass below.
+    // level2.js resolves its own collisions internally; this call remains a
+    // harmless no-op against Level 1's (by then empty) formation once
+    // Level 1 is cleared.
     collide(dt, player, level1.formation);
   }
-  // level2.js/level3.js (future cards): spawn and advance enemy waves here.
+  // level3.js (future card): spawn and advance enemy waves here.
   // boss.js (future card): update the boss encounter here.
 }
 
@@ -132,11 +151,17 @@ function renderTitle() {
 
 function renderPlaying() {
   drawHUD();
-  level1.draw(ctx);
-  player.draw(ctx);
+  if (level1Active) {
+    level1.draw(ctx);
+    player.draw(ctx);
+  } else if (level2Active) {
+    // Level2.draw() also draws the player itself, so it can hide/flash the
+    // ship during its post-respawn invulnerability window.
+    level2.draw(ctx, player);
+  }
   drawExplosions(ctx);
-  // level2.js/level3.js, boss.js (future cards): render the rest of the
-  // playfield (enemy bullets, shields, boss) here.
+  // level3.js, boss.js (future cards): render the rest of the playfield
+  // (shields, boss) here.
 }
 
 function renderGameOver() {
