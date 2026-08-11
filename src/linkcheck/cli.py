@@ -65,11 +65,24 @@ def main(argv=None):
             lines = handle.read().splitlines()
     except OSError as exc:
         print(f"linkcheck: {exc.strerror}: {args.path}", file=sys.stderr)
-        return 1
+        return 2
 
+    links_found = sum(1 for _ in extract_targets(lines))
     broken = find_broken_links(lines)
     for lineno, target, reason in broken:
         print(f"{lineno}:{target}: {reason}")
+
+    print(
+        "\n".join(
+            [
+                "Summary:",
+                "  files scanned: 1",
+                f"  links found: {links_found}",
+                f"  broken links: {len(broken)}",
+            ]
+        ),
+        file=sys.stderr,
+    )
 
     return 1 if broken else 0
 

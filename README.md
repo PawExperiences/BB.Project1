@@ -43,7 +43,18 @@ For every broken target, one line is printed to stdout in the format:
 ```
 
 where `<reason>` is one of `empty target`, `disallowed scheme`, `contains
-space`, or `absolute path`.
+space`, or `absolute path`. stdout carries only this machine-parseable
+output — nothing else is ever written there.
 
-The process exits with status `1` if any broken links were found, and `0`
-otherwise.
+After a run completes, a human-readable summary reporting the number of
+files scanned, links found, and broken links is printed to **stderr**. It
+never appears on stdout, so scripts consuming stdout do not need to filter
+it out.
+
+## Exit codes
+
+| Code | Meaning |
+| ---- | ------- |
+| `0`  | The run completed and no broken links were found. |
+| `1`  | The run completed and at least one broken link was found. |
+| `2`  | The CLI was invoked incorrectly — a missing required argument, a nonexistent/unreadable input path, or an unrecognized option. No run summary is printed in this case. |
