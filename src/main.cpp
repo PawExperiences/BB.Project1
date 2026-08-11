@@ -5,6 +5,7 @@
 #include <string_view>
 
 #include "prime.h"
+#include "sieve.h"
 
 namespace {
 
@@ -39,9 +40,25 @@ bool process_token(std::string_view raw) {
     return true;
 }
 
+int run_upto_mode(std::string_view arg) {
+    long long n;
+    if (!parse_token(arg, n)) {
+        std::cerr << "not a number: " << arg << "\n";
+        return 1;
+    }
+    for (long long p : primes_up_to(n)) {
+        std::cout << p << "\n";
+    }
+    return 0;
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
+    if (argc == 3 && std::string_view(argv[1]) == "--upto") {
+        return run_upto_mode(argv[2]);
+    }
+
     bool had_error = false;
 
     if (argc > 1) {
