@@ -10,4 +10,5 @@ export function registerTodosRoutes(app: FastifyInstance): void {
 
   app.get('/todos', controller.list);
   app.post('/todos', controller.create);
+  app.delete('/todos/:id', controller.remove);
 }

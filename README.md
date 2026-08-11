@@ -82,6 +82,13 @@ Creates a new todo.
   { "error": "title is required and must be a string" }
   ```
 
+### `DELETE /todos/:id`
+
+Deletes the todo matching `:id`.
+
+- **Response (success)**: `204 No Content` with an empty body. The todo is durably removed and no longer appears in `GET /todos`.
+- **Response (not found)**: `404 Not Found` if `:id` does not match an existing todo. This includes ids that aren't valid positive integers (e.g. alphabetic, decimal, negative, or empty) — those are treated the same as "not found" rather than a `400 Bad Request`.
+
 ### Anything else
 
-Any request to a path or method not covered above (e.g. `GET /unknown`, `DELETE /todos/1`) returns `404 Not Found`.
+Any request to a path or method not covered above (e.g. `GET /unknown`) returns `404 Not Found`.
