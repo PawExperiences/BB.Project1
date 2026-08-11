@@ -1,0 +1,44 @@
+/*
+ * Print stylesheet for mdpdf-generated HTML.
+ * Link this from the generated document and print/export to PDF from a
+ * browser (File > Print > Save as PDF) to produce the final output.
+ */
+
+@page {
+  size: A4;
+  margin: 2cm;
+}
+
+body {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 11pt;
+  line-height: 1.5;
+  color: #1a1a1a;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: Georgia, 'Times New Roman', serif;
+  page-break-after: avoid;
+  break-after: avoid-page;
+}
+
+code, pre {
+  font-family: 'Courier New', Consolas, monospace;
+  background-color: #f5f5f5;
+}
+
+code {
+  padding: 0.1em 0.3em;
+  border-radius: 3px;
+}
+
+pre {
+  padding: 0.75em;
+  overflow-x: auto;
+  border-radius: 3px;
+}
+
+pre code {
+  padding: 0;
+  background-color: transparent;
+}
