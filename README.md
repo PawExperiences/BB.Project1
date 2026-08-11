@@ -5,20 +5,15 @@ A small Java 21 + Swing calculator app, built with Maven.
 ## Build
 
 ```
-mvn -B test
+mvn -B package
 ```
 
-## Planned layout
+This runs all tests (none disabled/skipped) and, on success, produces
+`target/calculator-0.1.0.jar` with `Main-Class: com.buildboard.calculator.Main`
+set in the jar manifest via `maven-jar-plugin`.
 
-This card only bootstraps the Maven skeleton (`pom.xml`, directory layout, and
-a trivial placeholder test). The following files are planned for upcoming
-cards and do not exist yet:
+## Run
 
-- `src/main/java/com/buildboard/calculator/Evaluator.java` -- the expression
-  evaluator (domain logic, no UI imports, so it stays independently testable).
-- `src/test/java/com/buildboard/calculator/EvaluatorTest.java` -- JUnit 5
-  tests for the evaluator, written before the implementation.
-- `src/main/java/com/buildboard/calculator/CalculatorWindow.java` -- the
-  Swing UI that wraps the evaluator.
-- `src/main/java/com/buildboard/calculator/Main.java` -- the application
-  entry point, and the `Main-Class` for the runnable JAR.
+```
+java -jar target/calculator-0.1.0.jar
+```
