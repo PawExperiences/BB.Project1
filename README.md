@@ -21,6 +21,7 @@ deliberately failing (red) test that pins down the target public API:
 
 ```python
 import factorlib
+
 factorlib.prime_factors(12) == [2, 2, 3]
 ```
 
