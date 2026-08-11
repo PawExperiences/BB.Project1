@@ -33,6 +33,18 @@ For each input, a single tab-separated line is printed:
 When more than one input is given, a final line is printed summing the
 counts across all successfully processed inputs, using `total` as the name.
 
+## Observed behaviour
+
+The table below documents `<lines>\t<words>\t<bytes>` for a few edge-case
+inputs (verified by `count_test.go`):
+
+| Input | Lines | Words | Bytes | Notes |
+| --- | --- | --- | --- | --- |
+| *(empty input)* | 0 | 0 | 0 | No data at all. |
+| `hello world` (no trailing newline) | 0 | 2 | 11 | Lines counts `\n` bytes, so input with no trailing newline reports 0 lines. |
+| `foo   bar\n` (repeated spaces) | 1 | 2 | 10 | Consecutive spaces are treated as a single delimiter; words are not over-counted. |
+| `日本語\n` (multi-byte UTF-8) | 1 | 1 | 10 | 3 kanji characters + `\n` encode to 10 bytes but only 4 runes — `<bytes>` counts raw bytes, not characters. |
+
 ## Errors
 
 If a named file cannot be opened, `wordcount` reports
