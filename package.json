@@ -1,26 +1,11 @@
 {
   "name": "badge-maker",
   "version": "0.1.0",
-  "description": "CLI tool that generates status badges as SVG",
   "type": "module",
-  "main": "dist/index.js",
-  "bin": {
-    "badge-maker": "dist/index.js"
-  },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "lint": "eslint .",
-    "format": "prettier --check .",
-    "test": "vitest run"
+    "build": "tsc"
   },
-  "license": "MIT",
   "devDependencies": {
-    "@eslint/js": "^10.0.1",
-    "@types/node": "^26.2.0",
-    "eslint": "^10.8.1",
-    "prettier": "^3.9.6",
-    "typescript": "^5.9.3",
-    "typescript-eslint": "^8.67.0",
-    "vitest": "^4.1.10"
+    "typescript": "^5.4"
   }
 }
