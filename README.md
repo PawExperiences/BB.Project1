@@ -17,8 +17,8 @@ no bundler, no package manager. Open `index.html` directly from disk
 | `collision.js` | Sprites / collision card | shipped |
 | `level1.js` | Level 1 card | shipped |
 | `level2.js` | Level 2 card | shipped |
-| `level3.js` | Level 3 card | planned |
-| `boss.js` | Boss card | planned |
+| `level3.js` | Level 3 card | shipped |
+| `boss.js` | Boss card | shipped |
 
 The Game loop and canvas framework card shipped `index.html`, `gameConfig.js`
 and `game.js` with placeholder comments marking where player/enemy/collision
@@ -58,7 +58,39 @@ grants 2 seconds of flashing invulnerability during which further hits are
 ignored. It does not create, stub, or implement any of the files above
 marked "planned" -- each is its own reviewable PR from a sibling card, and
 it does not add a level-select screen or a Level 2 -> Level 3 transition,
-both out of scope for this card.
+both out of scope for this card. This card (Boss level: multi-phase finale)
+fills in `boss.js` and wires it into `game.js` as Level 4, using the exact
+same level-number dispatch pattern already used for levels 1-3: once
+`level3.update()` reports `'cleared'`, `game.js` advances the HUD to
+"Level 4" and starts the boss fight with no manual step required. The boss
+is a single 160x80px enemy drawn entirely with canvas primitives (no image
+assets), holding a fixed vertical position while drifting horizontally at
+90 px/s and reversing the instant its bounding box reaches either canvas
+edge. It starts with 10 HP shown as a health bar spanning the top of the
+canvas, decremented by exactly 1 per confirmed player-bullet hit (detected
+via `collision.js`'s `aabbIntersects`, the same shared collision primitive
+level2.js/level3.js already use -- `boss.js` implements no parallel
+collision logic of its own). It fires a three-bullet spread (straight down,
+and 20 degrees left/right of straight down, all at 260 px/s) from its
+center point, every 1500ms while above the Phase 2 HP threshold and every
+700ms from the instant it reaches that threshold onward, with no further
+phase changes. Any boss bullet touching the player is sudden death: the run
+ends immediately via the game's existing Game Over -> Title -> Level 1
+restart flow (unchanged, just triggered from here). Reducing the boss to 0
+HP instead shows a new win screen with the run's final score and an ENTER
+control that returns to Title exactly like Game Over's does, from which a
+fresh ENTER starts a new run at Level 1.
+
+Known pre-existing gap outside this card's scope: `level2.js`'s `update()`
+never returns `'cleared'`, and no prior card wired a Level 2 -> Level 3
+transition into `game.js` (`level3.js`'s own header notes both were left
+for "a sibling card" to do, and no card has). This card wires the Level 2
+-> Level 3 and Level 3 -> Boss dispatch branches into `game.js` in the same
+shape as the working Level 1 -> Level 2 branch, but until `level2.js` is
+fixed to report `'cleared'`, Level 3 (and therefore the boss fight) cannot
+currently be reached by playing through from Level 1. Steps 18+ below
+assume that gap is closed, or exercise the boss fight by temporarily
+starting the game at Level 3/4 during manual testing.
 
 ## Manual verification
 
@@ -143,3 +175,31 @@ both out of scope for this card.
     the scene switches to the same Game Over screen as from Level 1
     ("GAME OVER", final score, "Press ENTER to restart"), and pressing
     **ENTER** there returns to Title exactly as it does today.
+18. Level 3 -> Boss entry: once Level 3 is cleared (every starting invader
+    destroyed), confirm `LEVEL 4` appears in the HUD immediately with no
+    level-select screen, and the boss appears -- no manual step required.
+19. Boss rendering/size/health bar: confirm a single large enemy
+    (roughly 160x80px), drawn only with flat-color canvas shapes (no image
+    assets), appears clear of the HUD text, and a health bar spans the top
+    of the canvas, fully filled at the start of the fight (10/10 HP).
+20. Boss movement: confirm the boss drifts sideways at a steady speed,
+    reversing direction the instant its edge reaches either side of the
+    canvas, and never changes its vertical position for the whole fight.
+21. Boss attack pattern: confirm the boss fires three bullets at once from
+    its center roughly every 1.5 seconds while HP is above the Phase 2
+    threshold: one falling straight down, one angled slightly left, one
+    angled slightly right, all travelling at the same speed.
+22. Boss damage/health bar: shoot the boss with the player's bullet.
+    Confirm each confirmed hit removes exactly 1 HP, the health bar
+    visibly shrinks immediately, and the bullet is consumed.
+23. Phase 2 transition: reduce boss HP to 5. Confirm the firing interval
+    visibly speeds up to roughly every 0.7 seconds from that point on, with
+    no further rate change for the rest of the fight.
+24. Sudden death: let any boss bullet touch the player ship. Confirm the
+    run ends immediately -- the scene switches straight to the Game Over
+    screen with the run's final score, and pressing **ENTER** twice
+    (Game Over -> Title -> Start) returns to a fresh Level 1.
+25. Victory: reduce boss HP to 0. Confirm a win screen appears
+    ("YOU WIN", the run's final score, "Press ENTER to restart"), and
+    pressing **ENTER** twice returns to a fresh Level 1 with score and
+    lives reset.

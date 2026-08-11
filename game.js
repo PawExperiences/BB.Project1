@@ -12,6 +12,8 @@ import { initInput } from './input.js';
 import { Player } from './player.js';
 import { Level1 } from './level1.js';
 import { Level2 } from './level2.js';
+import { Level3 } from './level3.js';
+import { Boss } from './boss.js';
 import { collide, drawExplosions } from './collision.js';
 
 // Named export so sibling cards (input/player, collision, levels, boss) can
@@ -31,6 +33,7 @@ const SCENES = {
   TITLE: 'TITLE',
   PLAYING: 'PLAYING',
   GAME_OVER: 'GAME_OVER',
+  WIN: 'WIN',
 };
 
 let scene = SCENES.TITLE;
@@ -46,6 +49,10 @@ let level1 = new Level1();
 let level1Active = true;
 let level2 = null;
 let level2Active = false;
+let level3 = null;
+let level3Active = false;
+let boss = null;
+let bossActive = false;
 
 function startGame() {
   hud.score = 0;
@@ -57,6 +64,10 @@ function startGame() {
   level1Active = true;
   level2 = null;
   level2Active = false;
+  level3 = null;
+  level3Active = false;
+  boss = null;
+  bossActive = false;
   scene = SCENES.PLAYING;
 }
 
@@ -65,6 +76,15 @@ function endGame() {
     hud.hiScore = hud.score;
   }
   scene = SCENES.GAME_OVER;
+}
+
+// Boss defeated: same final-score bookkeeping as endGame(), but a distinct
+// scene so the win screen can be shown instead of "GAME OVER".
+function winGame() {
+  if (hud.score > hud.hiScore) {
+    hud.hiScore = hud.score;
+  }
+  scene = SCENES.WIN;
 }
 
 function returnToTitle() {
@@ -86,6 +106,8 @@ window.addEventListener('keydown', (event) => {
     endGame();
   } else if (scene === SCENES.GAME_OVER) {
     returnToTitle();
+  } else if (scene === SCENES.WIN) {
+    returnToTitle();
   }
 });
 
@@ -103,16 +125,45 @@ function update(dt) {
         level2Active = true;
       }
     } else if (level2Active) {
-      level2.update(dt, player);
+      // NOTE: level2.js's update() never returns 'cleared' today (a
+      // pre-existing gap from the Level 2/Level 3 cards, outside this
+      // card's scope to fix -- see README), so this branch is currently
+      // unreachable in play. Wired here in the same dispatch shape as the
+      // other levels so it activates once that gap is closed upstream.
+      const result = level2.update(dt, player);
+      if (result === 'cleared') {
+        level2Active = false;
+        hud.level = 3;
+        level3 = new Level3();
+        level3Active = true;
+      }
+    } else if (level3Active) {
+      const result = level3.update(dt, player);
+      if (result === 'cleared') {
+        level3Active = false;
+        hud.level = 4;
+        boss = new Boss();
+        bossActive = true;
+      }
+    } else if (bossActive) {
+      const result = boss.update(dt, player);
+      if (result === 'playerHit') {
+        // Sudden death: any boss projectile touching the player ends the
+        // run immediately via the game's existing restart/reset mechanism
+        // (Playing -> Game Over -> ENTER -> Title -> ENTER -> Level 1).
+        bossActive = false;
+        endGame();
+      } else if (result === 'victory') {
+        bossActive = false;
+        winGame();
+      }
     }
     // Collision must fully resolve before this frame's render pass below.
-    // level2.js resolves its own collisions internally; this call remains a
-    // harmless no-op against Level 1's (by then empty) formation once
-    // Level 1 is cleared.
+    // level2.js/level3.js/boss.js resolve their own collisions internally;
+    // this call remains a harmless no-op against Level 1's (by then empty)
+    // formation once Level 1 is cleared.
     collide(dt, player, level1.formation);
   }
-  // level3.js (future card): spawn and advance enemy waves here.
-  // boss.js (future card): update the boss encounter here.
 }
 
 function drawBackground() {
@@ -158,14 +209,23 @@ function renderPlaying() {
     // Level2.draw() also draws the player itself, so it can hide/flash the
     // ship during its post-respawn invulnerability window.
     level2.draw(ctx, player);
+  } else if (level3Active) {
+    level3.draw(ctx, player);
+  } else if (bossActive) {
+    // Boss.draw() also draws the health bar and the player itself.
+    boss.draw(ctx, player);
   }
   drawExplosions(ctx);
-  // level3.js, boss.js (future cards): render the rest of the playfield
-  // (shields, boss) here.
 }
 
 function renderGameOver() {
   drawCenteredText('GAME OVER', canvas.height / 2 - 60, 'bold 40px monospace');
+  drawCenteredText(`Final Score: ${hud.score}`, canvas.height / 2, '24px monospace');
+  drawCenteredText('Press ENTER to restart', canvas.height / 2 + 50, '20px monospace', '#aaaaaa');
+}
+
+function renderWin() {
+  drawCenteredText('YOU WIN', canvas.height / 2 - 60, 'bold 40px monospace', '#3cff6e');
   drawCenteredText(`Final Score: ${hud.score}`, canvas.height / 2, '24px monospace');
   drawCenteredText('Press ENTER to restart', canvas.height / 2 + 50, '20px monospace', '#aaaaaa');
 }
@@ -179,6 +239,8 @@ function render() {
     renderPlaying();
   } else if (scene === SCENES.GAME_OVER) {
     renderGameOver();
+  } else if (scene === SCENES.WIN) {
+    renderWin();
   }
 }
 
