@@ -14,4 +14,15 @@ export class TodosRepository {
     this.todos.push(todo);
     return todo;
   }
+
+  remove(id: number): boolean {
+    const index = this.todos.findIndex((todo) => todo.id === id);
+
+    if (index === -1) {
+      return false;
+    }
+
+    this.todos.splice(index, 1);
+    return true;
+  }
 }

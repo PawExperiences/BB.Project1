@@ -1,6 +1,6 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import type { TodosService } from '../services/todos.service.js';
-import { createTodoSchema } from '../schemas/todo.schema.js';
+import { createTodoSchema, todoIdParamSchema } from '../schemas/todo.schema.js';
 
 export class TodosController {
   constructor(private readonly service: TodosService) {}
@@ -19,5 +19,23 @@ export class TodosController {
 
     const todo = this.service.createTodo(result.data.title);
     reply.code(201).send(todo);
+  };
+
+  remove = (request: FastifyRequest, reply: FastifyReply): void => {
+    const result = todoIdParamSchema.safeParse(request.params);
+
+    if (!result.success) {
+      reply.code(404).send();
+      return;
+    }
+
+    const deleted = this.service.deleteTodo(result.data.id);
+
+    if (!deleted) {
+      reply.code(404).send();
+      return;
+    }
+
+    reply.code(204).send();
   };
 }

@@ -11,4 +11,8 @@ export class TodosService {
   createTodo(title: string): Todo {
     return this.repository.create(title);
   }
+
+  deleteTodo(id: number): boolean {
+    return this.repository.remove(id);
+  }
 }
