@@ -43,6 +43,19 @@ When more than one file argument is supplied, an additional final line is
 printed after the per-file lines, summing the counts across all successfully
 processed inputs, with `total` as its name.
 
+## Usage examples
+
+The table below shows the exact output of `wordcount` (piped via stdin, so
+`name` is `-`) for four input scenarios, matching the cases covered by the
+automated tests in `count_test.go`:
+
+| Input | Output |
+| --- | --- |
+| Empty input (no bytes) | `0	0	0	-` |
+| Single line, no trailing newline: `hello world` | `0	2	11	-` |
+| Line with repeated/multiple consecutive spaces: `hello   world\n` | `1	2	14	-` |
+| Line with a multi-byte UTF-8 character: `héllo\n` (6 characters, 7 bytes) | `1	1	7	-` |
+
 ## Errors
 
 If a named file cannot be opened, the program writes:
