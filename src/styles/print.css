@@ -1,0 +1,17 @@
+/*
+ * Print-only styles, loaded via <link media="print"> so they never affect
+ * on-screen rendering. Goal: legible, ink-friendly output on paper — black
+ * text on a plain white page, no backgrounds. Nothing here hides content.
+ */
+
+* {
+  background: none !important;
+  color: #000 !important;
+  font-family: Georgia, 'Times New Roman', Times, serif !important;
+  font-size: 12pt !important;
+}
+
+html,
+body {
+  background-color: #fff !important;
+}

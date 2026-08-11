@@ -1,5 +1,6 @@
 ---
 import quotes from '../data/quotes.json';
+import printStylesHref from '../styles/print.css?url';
 
 const quote = quotes[Math.floor(Math.random() * quotes.length)];
 ---
@@ -10,6 +11,7 @@ const quote = quotes[Math.floor(Math.random() * quotes.length)];
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Quote</title>
+    <link rel="stylesheet" href={printStylesHref} media="print" />
     <style>
       :root {
         color-scheme: dark;
