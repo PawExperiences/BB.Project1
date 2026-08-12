@@ -63,7 +63,18 @@ For every broken target, one line is printed to stdout:
 ```
 
 where `<line>` is the 1-indexed source line number of the link or reference
-definition, and `<target>` is the raw target string as extracted.
+definition, and `<target>` is the raw target string as extracted. stdout is
+reserved for this output and is unaffected by anything below, so it stays
+safe to pipe or parse.
 
-The process exits with code `1` if one or more broken targets were found,
-and `0` otherwise.
+After a scan completes, a one-line human-readable summary — files scanned,
+total links found, and total broken links — is printed to **stderr**. It
+never appears on stdout.
+
+#### Exit codes
+
+| Code | Meaning |
+| ---- | ------- |
+| `0`  | The scan completed and found no broken links. |
+| `1`  | The scan completed and found one or more broken links. |
+| `2`  | Usage error (missing argument, unrecognized option, or a target path that doesn't exist/can't be read). No scan was performed and no summary is printed. |
