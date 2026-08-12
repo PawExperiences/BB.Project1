@@ -63,9 +63,22 @@ in the order the targets were encountered in the file:
 <line>:<target>: <reason>
 ```
 
-## Exit codes
+stdout is reserved for this machine-parseable output only. After a scan
+runs to completion, `linkcheck` also writes a one-line summary to
+**stderr** with the number of files scanned, links found, and broken
+links, e.g.:
 
-- `0` -- no broken links were found; no broken-link lines are printed.
-- `1` -- one or more broken links were found.
-- non-zero, non-`1` (e.g. `2`) -- the given file path does not exist or
-  could not be read as text; an error message is printed to stderr.
+```
+linkcheck: files scanned: 1, links found: 5, broken links: 2
+```
+
+## Exit status
+
+`linkcheck` uses its exit status as a stable, parse-free contract for
+scripts and CI:
+
+- `0` -- the scan completed and found no broken links (clean).
+- `1` -- the scan completed and found one or more broken links.
+- `2` -- the CLI itself was invoked incorrectly (a usage error, e.g. a
+  missing or invalid argument, or a file path that does not exist or
+  could not be read as text). No scan summary is printed in this case.

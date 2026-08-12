@@ -58,14 +58,22 @@ def main(argv=None):
         print(f"linkcheck: error: could not read {args.file}: {exc}", file=sys.stderr)
         return 2
 
-    found_broken = False
+    links_found = 0
+    broken_links = 0
     for lineno, target in extract_targets(text):
+        links_found += 1
         reason = classify(target)
         if reason is not None:
-            found_broken = True
+            broken_links += 1
             print(f"{lineno}:{target}: {reason}")
 
-    return 1 if found_broken else 0
+    print(
+        f"linkcheck: files scanned: 1, links found: {links_found}, "
+        f"broken links: {broken_links}",
+        file=sys.stderr,
+    )
+
+    return 1 if broken_links else 0
 
 
 if __name__ == "__main__":
