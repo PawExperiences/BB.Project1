@@ -1,0 +1,9 @@
+README.md
+pyproject.toml
+src/linkcheck/__init__.py
+src/linkcheck/cli.py
+src/linkcheck.egg-info/PKG-INFO
+src/linkcheck.egg-info/SOURCES.txt
+src/linkcheck.egg-info/dependency_links.txt
+src/linkcheck.egg-info/entry_points.txt
+src/linkcheck.egg-info/top_level.txt
