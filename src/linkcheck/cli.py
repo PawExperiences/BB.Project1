@@ -48,14 +48,21 @@ def main():
         print(f"linkcheck: cannot read {path}: {exc}", file=sys.stderr)
         return 2
 
-    broken = False
-    for lineno, target in extract_targets(lines):
+    targets = extract_targets(lines)
+    broken_count = 0
+    for lineno, target in targets:
         reason = check_target(target)
         if reason is not None:
-            broken = True
+            broken_count += 1
             print(f"{lineno}:{target}: {reason}")
 
-    return 1 if broken else 0
+    print(
+        f"linkcheck: 1 file scanned, {len(targets)} link(s) found, "
+        f"{broken_count} broken",
+        file=sys.stderr,
+    )
+
+    return 1 if broken_count else 0
 
 
 if __name__ == "__main__":
