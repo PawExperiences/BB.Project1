@@ -1,35 +1,36 @@
 # e2e standup poster
 
-## `Empty`
+A small, self-contained standup card. It renders the current date and three
+sections — Yesterday, Today, Blockers — sourced from a single hardcoded data
+object in `src/App.tsx`. When Blockers is empty, the section shows the word
+"none" in a muted color instead of an empty list.
 
-`src/Empty.tsx` is a muted, de-emphasized placeholder for sections that have
-nothing to show (e.g. an empty "Blockers" or "Today" list on the standup
-card). It has no dependency on other components.
+## Install
 
-### Props
-
-| Prop    | Type     | Default  | Description                                             |
-| ------- | -------- | -------- | -------------------------------------------------------- |
-| `label` | `string` | `'None'` | Text to render instead of the default `"None"` placeholder. |
-
-```ts
-interface EmptyProps {
-  label?: string
-}
+```
+npm ci
 ```
 
-### Usage
+## Develop
 
-```tsx
-<Empty label="No blockers" />
+```
+npm run dev
 ```
 
-Renders:
-
-```html
-<span class="text-sm text-gray-400">No blockers</span>
-```
+Starts the Vite dev server with hot reload.
 
 ## Build
 
-Running `npm ci && npm run build` builds the project and writes `dist/index.html`.
+```
+npm run build
+```
+
+Bundles the app, writing output to `dist/index.html`.
+
+## Preview
+
+```
+npm run preview
+```
+
+Serves the production build from `dist/` locally.

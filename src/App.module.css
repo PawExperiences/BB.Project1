@@ -1,0 +1,52 @@
+.card {
+  max-width: 32rem;
+  margin: 2rem auto;
+  padding: 1.5rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.5rem;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
+  color: #1a202c;
+  background: #ffffff;
+}
+
+.heading {
+  margin: 0 0 1.25rem;
+  font-size: 1.25rem;
+}
+
+.section {
+  margin-bottom: 1rem;
+}
+
+.section:last-child {
+  margin-bottom: 0;
+}
+
+.label {
+  margin: 0 0 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #718096;
+}
+
+.list {
+  margin: 0;
+  padding-left: 1.25rem;
+}
+
+.list li {
+  margin-bottom: 0.25rem;
+}
+
+.muted {
+  margin: 0;
+  color: #a0aec0;
+  font-style: italic;
+}
