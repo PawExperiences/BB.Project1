@@ -2,9 +2,9 @@ import { CANVAS_WIDTH, CANVAS_HEIGHT, STARTING_LIVES } from './gameConfig.js';
 import { initInput } from './input.js';
 import { Player } from './player.js';
 import { Level1, LEVEL_NUMBER } from './level1.js';
+import { Level2 } from './level2.js';
 import { collide } from './collision.js';
 
-// Future: import { level2 } from './level2.js';
 // Future: import { level3 } from './level3.js';
 // Future: import { Boss } from './boss.js';
 
@@ -38,11 +38,15 @@ window.addEventListener('keydown', (event) => {
 });
 
 // Exported so the manual verification steps in the README can reach the
-// live player, level1 and invaders instances from the devtools console.
-// `invaders` is kept as a direct alias of `level1.invaders` (the same
-// instance) for backwards-compatible console access.
+// live player, level1, level2 and invaders instances from the devtools
+// console. `invaders` is kept as a direct alias of `level1.invaders` (the
+// same instance) for backwards-compatible console access. `level2` is null
+// until Level 1 is cleared; the same Player instance (and hence its
+// `shotCount`) and the shared `hudState.lives` carry through that handoff
+// unchanged, since neither is recreated when `level2` is created below.
 export let player = new Player();
 export let level1 = new Level1();
+export let level2 = null;
 export let invaders = level1.invaders;
 
 function resetRun() {
@@ -51,6 +55,7 @@ function resetRun() {
   hudState.level = LEVEL_NUMBER;
   player = new Player();
   level1 = new Level1();
+  level2 = null;
   invaders = level1.invaders;
 }
 
@@ -75,8 +80,17 @@ function update(dt) {
 
   if (currentScene === SCENES.PLAYING) {
     player.update(dt);
-    level1.update(dt, player, hudState);
-    collide(player, invaders, hudState);
+
+    if (level2) {
+      level2.update(dt, player, hudState);
+    } else {
+      level1.update(dt, player, hudState);
+      collide(player, invaders, hudState);
+      if (level1.completed) {
+        level2 = new Level2();
+      }
+    }
+
     if (hudState.lives <= 0) {
       hudState.hiScore = Math.max(hudState.hiScore, hudState.score);
       currentScene = SCENES.GAME_OVER;
@@ -113,7 +127,11 @@ function renderTitle() {
 
 function renderPlaying() {
   drawBackground();
-  level1.draw(ctx);
+  if (level2) {
+    level2.draw(ctx);
+  } else {
+    level1.draw(ctx);
+  }
   player.draw(ctx);
   drawHud();
 }
