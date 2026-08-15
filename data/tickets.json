@@ -1,0 +1,38 @@
+[
+  {
+    "key": "BB-101",
+    "title": "Set up project repository",
+    "status": "Done",
+    "assignee": "Alex Chen"
+  },
+  {
+    "key": "BB-102",
+    "title": "Design kanban board layout",
+    "status": "Done",
+    "assignee": "Priya Nair"
+  },
+  {
+    "key": "BB-103",
+    "title": "Build ticket list scaffold",
+    "status": "In Progress",
+    "assignee": "Alex Chen"
+  },
+  {
+    "key": "BB-104",
+    "title": "Wire up ticket status grouping",
+    "status": "In Progress",
+    "assignee": "Jordan Lee"
+  },
+  {
+    "key": "BB-105",
+    "title": "Write README for onboarding",
+    "status": "To Do",
+    "assignee": "Priya Nair"
+  },
+  {
+    "key": "BB-106",
+    "title": "Plan Tailwind styling pass",
+    "status": "To Do",
+    "assignee": "Jordan Lee"
+  }
+]
