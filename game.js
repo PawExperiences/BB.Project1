@@ -1,9 +1,9 @@
 import { CANVAS_WIDTH, CANVAS_HEIGHT, STARTING_LIVES } from './gameConfig.js';
 import { initInput } from './input.js';
 import { Player } from './player.js';
+import { Invaders } from './invaders.js';
+import { collide } from './collision.js';
 
-// Future: import { Invaders } from './invaders.js';
-// Future: import { checkCollisions } from './collision.js';
 // Future: import { level1 } from './level1.js';
 // Future: import { level2 } from './level2.js';
 // Future: import { level3 } from './level3.js';
@@ -37,12 +37,16 @@ window.addEventListener('keydown', (event) => {
   }
 });
 
-let player = new Player();
+// Exported so the manual verification steps in the README can reach the
+// live player and invaders instances from the devtools console.
+export let player = new Player();
+export let invaders = new Invaders();
 
 function resetRun() {
   hudState.score = 0;
   hudState.lives = STARTING_LIVES;
   player = new Player();
+  invaders = new Invaders();
 }
 
 function handleSceneTransitions() {
@@ -66,7 +70,8 @@ function update(dt) {
 
   if (currentScene === SCENES.PLAYING) {
     player.update(dt);
-    // Invaders/collision gameplay update is added by later cards.
+    invaders.update(dt);
+    collide(player, invaders, hudState);
     if (hudState.lives <= 0) {
       hudState.hiScore = Math.max(hudState.hiScore, hudState.score);
       currentScene = SCENES.GAME_OVER;
@@ -102,8 +107,8 @@ function renderTitle() {
 
 function renderPlaying() {
   drawBackground();
+  invaders.draw(ctx);
   player.draw(ctx);
-  // Invaders/level/boss rendering is added by later cards.
   drawHud();
 }
 
