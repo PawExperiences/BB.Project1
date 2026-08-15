@@ -1,4 +1,6 @@
 import { CANVAS_WIDTH, CANVAS_HEIGHT, STARTING_LIVES } from './gameConfig.js';
+import { initInput } from './input.js';
+import { Player } from './player.js';
 
 // --- Canvas setup -----------------------------------------------------
 
@@ -26,6 +28,9 @@ export const SCENES = Object.freeze({
 });
 
 let scene = SCENES.TITLE;
+
+initInput();
+const player = new Player();
 
 function goToPlaying() {
   hud.score = 0;
@@ -71,7 +76,7 @@ function update(dt) {
       // No gameplay update logic on the title screen.
       break;
     case SCENES.PLAYING:
-      // Player movement/shooting: owned by the "Player & Input" card (input.js, player.js)
+      player.update(dt);
       // Invader formation/movement: owned by the "Invaders" card (invaders.js)
       // Collision detection (bullets/invaders/player): owned by the "Collision" card (collision.js)
       // Level content/progression: owned by the level1.js / level2.js / level3.js cards
@@ -112,8 +117,9 @@ function renderTitle() {
 }
 
 function renderPlaying() {
-  // Gameplay visuals (player ship, invaders, bullets, ...) are drawn by
-  // the sibling cards listed in update(). This card only draws the HUD.
+  // Gameplay visuals (invaders, ...) are drawn by the sibling cards listed
+  // in update(). This card draws the player ship/bullet and the HUD.
+  player.draw(ctx);
   renderHud();
 }
 
