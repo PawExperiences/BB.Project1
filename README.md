@@ -20,7 +20,7 @@ intentionally **not** created, stubbed, or imported here.
 | `player.js`      | Player & Input                       | **created** |
 | `invaders.js`    | Invaders                             | **created** |
 | `collision.js`   | Collision detection                  | **created** |
-| `level1.js`      | Level 1                              | not yet created |
+| `level1.js`      | Level 1                              | **created** |
 | `level2.js`      | Level 2                              | not yet created |
 | `level3.js`      | Level 3                              | not yet created |
 | `boss.js`        | Boss                                 | not yet created |
@@ -129,6 +129,46 @@ resolve under `file://`).
   `renderPlaying()`. The loop and canvas machinery themselves are
   unchanged, per "Game loop and canvas framework".
 
+## Level 1: the classic grid (this card)
+
+- `level1.js`: exports a `Level1` class with `update(dt, player)` / `draw(ctx)`
+  / a `cleared` flag, matching the same per-frame contract as `Player` and
+  `InvaderFormation`. Owns the level-1-specific formation lifecycle; it does
+  not re-implement invader sprites, the grid layout, or collision detection --
+  those stay owned by `invaders.js` and `collision.js` (from "Sprite
+  rendering and collision detection"):
+  - On construction (and every restart) spawns a fresh `InvaderFormation`
+    (11x5, 55 invaders) from `invaders.js`, reusing its data/`draw()` as-is.
+  - Steps the whole formation sideways at a fixed interval (rather than
+    `InvaderFormation`'s own continuous per-frame movement, which this card
+    does not use) that ramps linearly with how many invaders are still
+    alive: ~800ms with all 55 alive down to ~100ms with 1 alive
+    (`interval = 100 + (aliveCount - 1) * 700 / 54`), recalculated every
+    frame from the live invader count.
+  - Whenever the formation's leading edge would cross the canvas boundary on
+    its next step, it reverses direction and drops the whole formation down
+    by exactly one invader-cell height instead of stepping sideways that
+    step.
+  - Each frame, checks whether any invader has reached the player ship's
+    y-position. If so: calls `player.loseLife()` and mirrors the result into
+    `hud.lives` (the same hook `collision.js` already uses), calls `game.js`'s
+    `triggerGameOver()` if lives reach `0`, and immediately respawns a fresh
+    full 11x5 formation with the step interval reset to ~800ms.
+- `game.js`: adds a `level` counter and a level dispatcher in the `Playing`
+  branch of `update()`/`renderPlaying()`:
+  - `level === 1` routes to the `Level1` instance's `update()`/`draw()`, runs
+    the existing `collision.update(dt, player, level1.formation)` pass
+    against its formation, and advances `level` to `2` once `level1.cleared`
+    is `true`.
+  - Any other `level` value (i.e. `2`, since `level2.js` does not exist yet)
+    falls through to the existing `default` branch, which calls
+    `triggerGameOver()` -- a placeholder for the "Level 2: they shoot back"
+    card to replace with real level-2 content.
+  - The `Level1` instance is created (and re-created) in `goToPlaying()`, so
+    every fresh playthrough (including replaying after a `GameOver`) starts
+    `level` back at `1` with a brand-new formation.
+  - `renderHud()` now also prints `Level: <n>` centered at the top of the HUD.
+
 ## Manual verification path
 
 This stack has no test runner, no server, and no build step by design (see
@@ -202,16 +242,48 @@ Steps (verify in **Firefox**):
     `Score: 0` and `Lives: 3` again (reset), while any non-zero hi-score
     from step 11 is preserved.
 
+**Level 1: the classic grid** (continue from a fresh `Playing` scene, e.g.
+press ENTER from `Title` again):
+
+13. Confirm the HUD shows `Level: 1` centered at the top for the entire time
+    Level 1 is running, and that the 11x5 invader formation from step 4 is
+    present and stepping sideways (rather than sliding continuously).
+14. Shoot invaders (as in step 8) and confirm the formation's sideways
+    stepping visibly speeds up as more invaders are destroyed -- slow
+    (roughly one step per ~0.8s) near the start, and noticeably faster
+    (roughly one step per ~0.1s) once only a few invaders remain.
+15. Let the formation reach a canvas edge (left or right). Confirm the
+    entire formation drops down by one invader-row's height and reverses
+    horizontal direction, then resumes stepping sideways in the new
+    direction -- it should never overlap or cross the canvas edge.
+16. To observe the life-loss/restart path without waiting for the full
+    formation to descend naturally, open devtools console and run:
+    `const m = await import('./game.js');` then, once in `Playing`,
+    force an invader down to the player's row (this requires access to the
+    live `Level1` instance; if it isn't exposed for debugging, instead let
+    play continue until an invader naturally reaches the player ship's row).
+    Confirm: `Lives:` in the HUD drops by exactly one, and immediately a
+    fresh full 11x5 formation appears at the top of the screen with the
+    sideways step visibly back to its slow (~800ms) starting pace.
+17. Destroy all 55 invaders in a single Level 1 run (shooting each one, per
+    step 8) without letting any reach the player's row. Confirm that the
+    instant the last invader is destroyed, the screen transitions straight
+    to the `GameOver` scene (level 2 has no content yet, so the dispatcher's
+    default branch shows Game Over as a placeholder for the future "Level 2:
+    they shoot back" card). Press **ENTER** to confirm it returns to `Title`,
+    and that playing again starts a fresh Level 1 (`Level: 1`, a full 11x5
+    formation, HUD reset).
+
 ### Automated sanity check performed by the coder agent
 
 This sandboxed environment has no GUI browser available (headless Chromium
 and Firefox both failed to launch here due to missing system libraries, and
 package installation is blocked in this sandbox), so the coder agent could
 not literally double-click `index.html` in a windowed browser. As a
-substitute, `game.js`, `invaders.js`, `collision.js` and `player.js` were
-exercised programmatically with plain Node ES module imports (scratch
-tooling, not part of this repo) using a stubbed `document.getElementById`
-canvas/context, confirming:
+substitute, `game.js`, `invaders.js`, `collision.js`, `player.js` and
+`level1.js` were exercised programmatically with plain Node ES module
+imports (scratch tooling, not part of this repo) using a stubbed
+`document.getElementById` canvas/context, confirming:
 
 - the canvas is sized `768x896` from `gameConfig.js` and the exported `hud`
   object starts at `{ score: 0, lives: 3, hiScore: 0 }`;
@@ -233,6 +305,27 @@ canvas/context, confirming:
   syncs `hud.lives` to `player.lives`, and consumes the bullet;
 - driving `player.lives` to `0` via that same path calls the imported
   `triggerGameOver()` (observed via the resulting scene state).
+- `game.js` and `level1.js` also import from each other (a second circular
+  ES module reference, alongside the existing `game.js`/`collision.js` one)
+  and load without a temporal-dead-zone error regardless of which of the two
+  is imported first -- verified both ways, since `level1.js`'s use of `hud`
+  and `triggerGameOver` is confined to method bodies, and `game.js` only
+  constructs a `Level1` lazily inside `goToPlaying()` rather than at module
+  top level;
+- `new Level1()` spawns a fresh 55-invader formation; the reference step
+  interval formula (`100 + (aliveCount - 1) * 700 / 54`) evaluates to `800`
+  at 55 alive and `100` at 1 alive;
+- repeatedly calling `update(dt, player)` with a fixed `dt = 1/60s` steps the
+  formation sideways in fixed increments (not a continuous slide), and
+  forcing the formation to the canvas edge and continuing to call `update()`
+  drops the whole formation down by exactly one invader-cell height (`24px`)
+  and reverses `direction` on the step that crosses the boundary;
+- placing an invader at the player's `y` and calling `update(dt, player)`
+  calls `player.loseLife()`, and the formation is immediately replaced with
+  a fresh full 55-invader formation (`level1.formation.invaders.length` back
+  to `55`);
+- emptying `level1.formation.invaders` and calling `update()` sets
+  `level1.cleared = true`.
 
 This does not replace a real visual check. **The manual steps above should
 still be run by a human (or the QA agent) in an actual Firefox window**
