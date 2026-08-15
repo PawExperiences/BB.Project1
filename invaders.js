@@ -4,6 +4,11 @@
 // bullets that a later card ("Level 2: they shoot back") will populate;
 // collision.js reads/writes this array generically, but no spawning or
 // shooting AI is implemented here.
+//
+// The step interval is a mutable instance property (`stepIntervalMs`) rather
+// than a fixed constant, and `reset()` restores a fresh full-strength grid in
+// place, so a level module (e.g. level1.js) can drive the formation's pace
+// and restart it without this class knowing anything about levels.
 
 import { CANVAS_WIDTH } from './gameConfig.js';
 
@@ -16,9 +21,11 @@ const INVADER_V_SPACING = 40;
 const INVADER_START_X = (CANVAS_WIDTH - ((INVADER_COLS - 1) * INVADER_H_SPACING + INVADER_WIDTH)) / 2;
 const INVADER_START_Y = 80;
 
-const STEP_INTERVAL = 0.5; // seconds between formation steps
+const DEFAULT_STEP_INTERVAL_MS = 500; // standalone default; levels override this via stepIntervalMs
 const H_STEP = 12; // pixels moved sideways per step
-const DROP_STEP = 24; // pixels dropped when the formation hits an edge and reverses
+// One invader-cell height: the vertical pitch of the grid, i.e. the distance
+// dropped when the formation reverses at an edge.
+const DROP_STEP = INVADER_V_SPACING;
 
 const EXPLOSION_DURATION = 0.2; // seconds an explosion is shown before the invader is fully gone
 
@@ -27,6 +34,12 @@ const EXPLOSION_COLOR = '#ffcc00';
 
 export class Invaders {
   constructor() {
+    this.reset();
+  }
+
+  // Restores a full-strength 11x5 grid at the starting position/speed, in
+  // place. Used both for initial construction and for a level restart.
+  reset() {
     this.invaders = [];
     for (let row = 0; row < INVADER_ROWS; row++) {
       for (let col = 0; col < INVADER_COLS; col++) {
@@ -42,6 +55,7 @@ export class Invaders {
     this.offsetY = 0;
     this.direction = 1;
     this.stepTimer = 0;
+    this.stepIntervalMs = DEFAULT_STEP_INTERVAL_MS;
   }
 
   getAliveInvaders() {
@@ -72,9 +86,10 @@ export class Invaders {
       }
     }
 
+    const stepIntervalSeconds = this.stepIntervalMs / 1000;
     this.stepTimer += dt;
-    if (this.stepTimer >= STEP_INTERVAL) {
-      this.stepTimer -= STEP_INTERVAL;
+    if (this.stepTimer >= stepIntervalSeconds) {
+      this.stepTimer -= stepIntervalSeconds;
       this._step();
     }
   }

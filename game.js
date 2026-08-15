@@ -1,10 +1,9 @@
 import { CANVAS_WIDTH, CANVAS_HEIGHT, STARTING_LIVES } from './gameConfig.js';
 import { initInput } from './input.js';
 import { Player } from './player.js';
-import { Invaders } from './invaders.js';
+import { Level1, LEVEL_NUMBER } from './level1.js';
 import { collide } from './collision.js';
 
-// Future: import { level1 } from './level1.js';
 // Future: import { level2 } from './level2.js';
 // Future: import { level3 } from './level3.js';
 // Future: import { Boss } from './boss.js';
@@ -23,10 +22,11 @@ const SCENES = {
 let currentScene = SCENES.TITLE;
 
 // Exported so later cards (player, invaders, collision, etc.) can import
-// and mutate score/lives/hiScore as gameplay progresses.
+// and mutate score/lives/level/hiScore as gameplay progresses.
 export const hudState = {
   score: 0,
   lives: STARTING_LIVES,
+  level: LEVEL_NUMBER,
   hiScore: 0,
 };
 
@@ -38,15 +38,20 @@ window.addEventListener('keydown', (event) => {
 });
 
 // Exported so the manual verification steps in the README can reach the
-// live player and invaders instances from the devtools console.
+// live player, level1 and invaders instances from the devtools console.
+// `invaders` is kept as a direct alias of `level1.invaders` (the same
+// instance) for backwards-compatible console access.
 export let player = new Player();
-export let invaders = new Invaders();
+export let level1 = new Level1();
+export let invaders = level1.invaders;
 
 function resetRun() {
   hudState.score = 0;
   hudState.lives = STARTING_LIVES;
+  hudState.level = LEVEL_NUMBER;
   player = new Player();
-  invaders = new Invaders();
+  level1 = new Level1();
+  invaders = level1.invaders;
 }
 
 function handleSceneTransitions() {
@@ -70,7 +75,7 @@ function update(dt) {
 
   if (currentScene === SCENES.PLAYING) {
     player.update(dt);
-    invaders.update(dt);
+    level1.update(dt, player, hudState);
     collide(player, invaders, hudState);
     if (hudState.lives <= 0) {
       hudState.hiScore = Math.max(hudState.hiScore, hudState.score);
@@ -97,6 +102,7 @@ function drawHud() {
   ctx.textAlign = 'left';
   ctx.fillText(`SCORE: ${hudState.score}`, 16, 28);
   ctx.fillText(`LIVES: ${hudState.lives}`, 16, 52);
+  ctx.fillText(`LEVEL: ${hudState.level}`, 16, 76);
 }
 
 function renderTitle() {
@@ -107,7 +113,7 @@ function renderTitle() {
 
 function renderPlaying() {
   drawBackground();
-  invaders.draw(ctx);
+  level1.draw(ctx);
   player.draw(ctx);
   drawHud();
 }
