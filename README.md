@@ -17,3 +17,25 @@ Then open http://localhost:3000.
 
 For local development with hot reload, use `npm run dev` instead of
 `npm run build` / `npm start`.
+
+`npm ci && npm run build` must succeed as the project's build/verify step.
+
+## tickets.json data shape
+
+`data/tickets.json` is an array of ticket objects. Each ticket has the
+following shape:
+
+```json
+{
+  "key": "BB-101",
+  "title": "Set up project repository",
+  "status": "Done",
+  "assignee": "Alex Chen"
+}
+```
+
+- `key` — string, the unique ticket identifier.
+- `title` — string, the ticket's title.
+- `status` — string, one of `"To Do"`, `"In Progress"`, `"Done"`.
+- `assignee` — string, the assignee's full display name. May be an empty
+  string when the ticket is unassigned.

@@ -1,4 +1,5 @@
 import tickets from "../data/tickets.json";
+import Chip from "./Chip";
 
 type Ticket = {
   key: string;
@@ -36,17 +37,7 @@ export default function Home() {
                 }}
               >
                 <span>{ticket.title}</span>
-                <span
-                  style={{
-                    marginLeft: "auto",
-                    fontSize: "0.75rem",
-                    backgroundColor: "#eee",
-                    borderRadius: "999px",
-                    padding: "0.15rem 0.6rem",
-                  }}
-                >
-                  {ticket.assignee}
-                </span>
+                <Chip assignee={ticket.assignee} />
               </div>
             ))}
           </section>
