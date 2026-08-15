@@ -5,8 +5,10 @@ const SHIP_WIDTH = 40;
 const SHIP_HEIGHT = 24;
 const SHIP_Y = CANVAS_HEIGHT - 60;
 
-const BULLET_WIDTH = 4;
-const BULLET_HEIGHT = 14;
+// Exported so later cards (e.g. collision.js) can build an AABB for the
+// player's bullet without redefining its size.
+export const BULLET_WIDTH = 4;
+export const BULLET_HEIGHT = 14;
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
