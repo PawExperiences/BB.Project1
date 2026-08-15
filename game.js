@@ -1,7 +1,7 @@
 import { CANVAS_WIDTH, CANVAS_HEIGHT, STARTING_LIVES } from './gameConfig.js';
 import { initInput } from './input.js';
 import { Player } from './player.js';
-import { InvaderFormation } from './invaders.js';
+import { Level1 } from './level1.js';
 import * as collision from './collision.js';
 
 // --- Canvas setup -----------------------------------------------------
@@ -33,11 +33,19 @@ let scene = SCENES.TITLE;
 
 initInput();
 const player = new Player();
-const invaders = new InvaderFormation();
+
+// Level dispatcher: `level` selects which level module's update()/draw()
+// runs during the Playing scene. Only level 1 exists so far -- level 2+
+// (level2.js, level3.js, boss.js) are sibling cards not yet built, so the
+// dispatcher below falls through to the Game Over scene as a placeholder.
+let level = 1;
+let level1 = null; // constructed on level start, in goToPlaying()
 
 function goToPlaying() {
   hud.score = 0;
   hud.lives = STARTING_LIVES;
+  level = 1;
+  level1 = new Level1();
   scene = SCENES.PLAYING;
 }
 
@@ -80,12 +88,23 @@ function update(dt) {
       break;
     case SCENES.PLAYING:
       player.update(dt);
-      invaders.update(dt);
-      // Collision pass runs after movement, strictly before rendering
-      // ("collide, then draw").
-      collision.update(dt, player, invaders);
-      // Level content/progression: owned by the level1.js / level2.js / level3.js cards
-      // Boss encounter: owned by the "Boss" card (boss.js)
+      switch (level) {
+        case 1:
+          level1.update(dt, player);
+          // Collision pass runs after movement, strictly before rendering
+          // ("collide, then draw").
+          collision.update(dt, player, level1.formation);
+          if (level1.cleared) {
+            level = 2;
+          }
+          break;
+        default:
+          // level2.js / level3.js (and the boss encounter) are sibling
+          // cards not yet built -- fall through to the Game Over scene
+          // until the "Level 2: they shoot back" card replaces this branch.
+          triggerGameOver();
+          break;
+      }
       break;
     case SCENES.GAME_OVER:
       // No gameplay update logic on the game-over screen.
@@ -122,7 +141,9 @@ function renderTitle() {
 }
 
 function renderPlaying() {
-  invaders.draw(ctx);
+  if (level === 1) {
+    level1.draw(ctx);
+  }
   collision.draw(ctx);
   player.draw(ctx);
   renderHud();
@@ -148,6 +169,9 @@ function renderHud() {
   ctx.textAlign = 'left';
   ctx.fillText(`Score: ${hud.score}`, 16, 28);
   ctx.fillText(`Hi-Score: ${hud.hiScore}`, 16, 50);
+
+  ctx.textAlign = 'center';
+  ctx.fillText(`Level: ${level}`, canvas.width / 2, 28);
 
   ctx.textAlign = 'right';
   ctx.fillText(`Lives: ${hud.lives}`, canvas.width - 16, 28);
