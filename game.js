@@ -4,6 +4,7 @@ import { Player } from './player.js';
 import { Level1 } from './level1.js';
 import { Level2 } from './level2.js';
 import { Level3 } from './level3.js';
+import { Level4 } from './boss.js';
 import * as collision from './collision.js';
 
 // --- Canvas setup -----------------------------------------------------
@@ -29,6 +30,7 @@ export const SCENES = Object.freeze({
   TITLE: 'Title',
   PLAYING: 'Playing',
   GAME_OVER: 'GameOver',
+  WIN: 'Win',
 });
 
 let scene = SCENES.TITLE;
@@ -37,13 +39,14 @@ initInput();
 const player = new Player();
 
 // Level dispatcher: `level` selects which level module's update()/draw()
-// runs during the Playing scene. Level 1, 2 and 3 exist so far -- the boss
-// level (boss.js) is a sibling card not yet built, so the dispatcher below
-// falls through to the Game Over scene as a placeholder once level 3 clears.
+// runs during the Playing scene, ordered 1 -> 2 -> 3 -> 4 (the boss, from
+// boss.js). Each level is constructed the instant the previous one's
+// `cleared` flag fires, mirrored below in update()'s switch.
 let level = 1;
 let level1 = null; // constructed on level start, in goToPlaying()
 let level2 = null; // constructed once Level 1 clears, in update()
 let level3 = null; // constructed once Level 2 clears, in update()
+let level4 = null; // constructed once Level 3 clears, in update()
 
 function goToPlaying() {
   hud.score = 0;
@@ -52,15 +55,22 @@ function goToPlaying() {
   level1 = new Level1();
   level2 = null;
   level3 = null;
+  level4 = null;
   scene = SCENES.PLAYING;
 }
 
-// Exposed for future cards (e.g. collision.js) to call once lives reach 0.
-// This card only wires the transition itself, not the condition that
-// triggers it.
+// Exposed for other cards (collision.js, boss.js) to call once lives reach
+// 0 -- or, for the boss's sudden-death rule, immediately regardless of
+// remaining lives.
 export function triggerGameOver() {
   hud.hiScore = Math.max(hud.hiScore, hud.score);
   scene = SCENES.GAME_OVER;
+}
+
+// Exposed for boss.js to call once the boss's HP reaches 0.
+export function triggerWin() {
+  hud.hiScore = Math.max(hud.hiScore, hud.score);
+  scene = SCENES.WIN;
 }
 
 function goToTitle() {
@@ -74,7 +84,7 @@ window.addEventListener('keydown', (event) => {
 
   if (scene === SCENES.TITLE) {
     goToPlaying();
-  } else if (scene === SCENES.GAME_OVER) {
+  } else if (scene === SCENES.GAME_OVER || scene === SCENES.WIN) {
     goToTitle();
   }
 });
@@ -123,18 +133,25 @@ function update(dt) {
           collision.update(dt, player, level3.formation);
           if (level3.cleared) {
             level = 4;
+            // Player lives/shotsFired carry over unchanged, same pattern as
+            // the earlier level handoffs above.
+            level4 = new Level4();
           }
           break;
-        default:
-          // The boss encounter (boss.js) is a sibling card not yet built --
-          // fall through to the Game Over scene until that card replaces
-          // this branch.
-          triggerGameOver();
+        case 4:
+          // The boss is the finale -- its own module calls triggerWin()/
+          // triggerGameOver() directly once the fight resolves, so there's
+          // no `cleared`-driven handoff to a Level 5 here.
+          level4.update(dt, player);
+          collision.update(dt, player, level4.formation);
           break;
       }
       break;
     case SCENES.GAME_OVER:
       // No gameplay update logic on the game-over screen.
+      break;
+    case SCENES.WIN:
+      // No gameplay update logic on the win screen.
       break;
   }
 }
@@ -152,6 +169,9 @@ function render() {
       break;
     case SCENES.GAME_OVER:
       renderGameOver();
+      break;
+    case SCENES.WIN:
+      renderWin();
       break;
   }
 }
@@ -174,6 +194,8 @@ function renderPlaying() {
     level2.draw(ctx);
   } else if (level === 3) {
     level3.draw(ctx);
+  } else if (level === 4) {
+    level4.draw(ctx);
   }
   collision.draw(ctx);
   player.draw(ctx);
@@ -186,6 +208,20 @@ function renderGameOver() {
 
   ctx.font = '48px monospace';
   ctx.fillText('GAME OVER', canvas.width / 2, canvas.height / 2 - 40);
+
+  ctx.font = '24px monospace';
+  ctx.fillText(`Score: ${hud.score}`, canvas.width / 2, canvas.height / 2 + 10);
+
+  ctx.font = '20px monospace';
+  ctx.fillText('Press ENTER to restart', canvas.width / 2, canvas.height / 2 + 50);
+}
+
+function renderWin() {
+  ctx.fillStyle = '#fff';
+  ctx.textAlign = 'center';
+
+  ctx.font = '48px monospace';
+  ctx.fillText('YOU WIN', canvas.width / 2, canvas.height / 2 - 40);
 
   ctx.font = '24px monospace';
   ctx.fillText(`Score: ${hud.score}`, canvas.width / 2, canvas.height / 2 + 10);
