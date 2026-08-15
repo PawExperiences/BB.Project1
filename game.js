@@ -1,7 +1,7 @@
 import { CANVAS_WIDTH, CANVAS_HEIGHT, STARTING_LIVES } from './gameConfig.js';
+import { initInput } from './input.js';
+import { Player } from './player.js';
 
-// Future: import { handleInput } from './input.js';
-// Future: import { Player } from './player.js';
 // Future: import { Invaders } from './invaders.js';
 // Future: import { checkCollisions } from './collision.js';
 // Future: import { level1 } from './level1.js';
@@ -11,6 +11,8 @@ import { CANVAS_WIDTH, CANVAS_HEIGHT, STARTING_LIVES } from './gameConfig.js';
 
 const canvas = document.getElementById('game-canvas');
 const ctx = canvas.getContext('2d');
+
+initInput();
 
 const SCENES = {
   TITLE: 'TITLE',
@@ -35,9 +37,12 @@ window.addEventListener('keydown', (event) => {
   }
 });
 
+let player = new Player();
+
 function resetRun() {
   hudState.score = 0;
   hudState.lives = STARTING_LIVES;
+  player = new Player();
 }
 
 function handleSceneTransitions() {
@@ -60,7 +65,8 @@ function update(dt) {
   handleSceneTransitions();
 
   if (currentScene === SCENES.PLAYING) {
-    // Gameplay update (movement, shooting, invaders, collisions) is added by later cards.
+    player.update(dt);
+    // Invaders/collision gameplay update is added by later cards.
     if (hudState.lives <= 0) {
       hudState.hiScore = Math.max(hudState.hiScore, hudState.score);
       currentScene = SCENES.GAME_OVER;
@@ -96,7 +102,8 @@ function renderTitle() {
 
 function renderPlaying() {
   drawBackground();
-  // Sprite/level/boss rendering is added by later cards.
+  player.draw(ctx);
+  // Invaders/level/boss rendering is added by later cards.
   drawHud();
 }
 
