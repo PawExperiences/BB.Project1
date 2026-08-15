@@ -22,7 +22,7 @@ intentionally **not** created, stubbed, or imported here.
 | `collision.js`   | Collision detection                  | **created** |
 | `level1.js`      | Level 1                              | **created** |
 | `level2.js`      | Level 2                              | **created** |
-| `level3.js`      | Level 3                              | not yet created |
+| `level3.js`      | Level 3                              | **created** |
 | `boss.js`        | Boss                                 | not yet created |
 
 Everywhere `game.js` will eventually wire one of the files above in, it
@@ -232,6 +232,61 @@ resolve under `file://`).
   `Level2` instance at that point while reusing the same `player` object, so
   `player.lives` and `player.shotsFired` carry over unchanged.
 
+## Level 3: shields and formations (this card)
+
+- `level3.js`: exports a `Level3` class with `update(dt, player)` / `draw(ctx)`
+  / a `cleared` flag, matching the same per-frame contract as `Level1` and
+  `Level2`. Starts from the same `InvaderFormation` (11x5, 55 invaders) and
+  the same fixed-interval step/edge-drop/reversal ramp as Level 1 (not
+  Level 2's 1.5x speed-up), and reuses Level 2's global-timer column-fire
+  pattern for invader return fire -- but pushes those bullets into
+  `formation.bullets` (rather than a level-owned array like Level 2's),
+  so `collision.js`'s existing generic invader-bullet-vs-player pass handles
+  the player-hit/life-loss path unmodified instead of Level 3
+  re-implementing Level 2's respawn/invulnerability state machine:
+  - **Shield bunkers**: four bunkers, evenly spaced horizontally across the
+    canvas width, positioned with their top edge at ~80% of canvas height.
+    Each is a 4x4 grid of 8px cells (16 cells/bunker, 64 total), built once
+    in the constructor (not `spawn()`, so damage persists across a
+    life-loss restart -- bunkers never regenerate mid-level) and rendered as
+    solid filled cells in a single colour. A cell is removed the instant a
+    player bullet, an invader bullet, or an invader's own body overlaps it;
+    a bullet that hits a cell is consumed on impact (removed before it can
+    also register against an invader/the player the same frame), while an
+    invader that touches a cell is *not* destroyed by that contact. Bunkers
+    never interact with the player ship and never affect the existing
+    reach-the-player's-row game-over path.
+  - **Formation split**: while fewer than 28 of the 55 starting invaders are
+    destroyed, the formation steps as one rigid 11x5 group, identical to
+    Level 1. The instant the destroyed count first reaches 28 (tracked as
+    `55 - formation.invaders.length`, so it reacts to `collision.js`
+    removing invaders on the *same* frame's next `update()`), every
+    survivor is tagged with the group its starting column belongs to (`left`
+    = originally columns 1-6, `right` = originally columns 7-11) and each
+    group's sweep direction is reset once -- `left` to leftward, `right` to
+    rightward (both outward). From then on each group steps, edge-reverses,
+    and descends independently off only its own surviving invaders'
+    horizontal extent, using the same step-interval ramp (by total alive
+    count) as the pre-split formation, so both groups always move at the
+    same speed as each other and as before the split.
+  - Clearing every invader in both groups (i.e. `formation.invaders` reaches
+    length `0`) sets `cleared = true`, the same signal Level 1 and Level 2
+    use.
+- `game.js`: gains the `level3.js` import and a `level === 3` branch in both
+  `update()`'s level dispatcher and `renderPlaying()`, mirroring the
+  existing `level === 1`/`level === 2` branches: runs
+  `level3.update(dt, player)` then the existing
+  `collision.update(dt, player, level3.formation)` pass (still used for
+  player-bullet-vs-invader, and now also for invader-bullet-vs-player since
+  Level 3 bullets live in `formation.bullets`), advances `level` to `4` once
+  `level3.cleared` (handing off to the not-yet-built boss level via the
+  existing `default` placeholder branch, exactly as Level 2 handed off to
+  Level 3 previously), and draws `level3.draw(ctx)` in `renderPlaying()`
+  when `level === 3`. `Level2 -> Level3` happens automatically the instant
+  `level2.cleared` becomes `true` (no level-select screen), constructing the
+  `Level3` instance at that point while reusing the same `player` object, so
+  `player.lives` and `player.shotsFired` carry over unchanged.
+
 ## Manual verification path
 
 This stack has no test runner, no server, and no build step by design (see
@@ -378,10 +433,51 @@ useful for checking lives carry over):
     behavior is reused unmodified, not touched by this card).
 24. Destroy every invader in Level 2's grid without losing all lives. Confirm
     the HUD's `Level:` readout advances to `3` the instant the last invader
-    is destroyed (there is no Level 3 content yet, so the dispatcher's
-    `default` branch will immediately show `GameOver` as a placeholder --
-    confirm that happens rather than the game hanging or erroring, which
-    confirms the `2 -> 3` transition itself is reachable).
+    is destroyed, a fresh 11x5 invader formation appears, and four solid
+    rectangular shield bunkers are visible above the player ship, evenly
+    spaced left-to-right and positioned roughly 80% of the way down the
+    canvas.
+
+**Level 3: shields and formations** (continue from having just reached
+Level 3 in step 24):
+
+25. Confirm the HUD shows `Level: 3` and the formation steps sideways the
+    same way Level 1's did (discrete steps, edge-drop + reversal, never
+    crossing the canvas edge), moving as a single rigid 11x5 block.
+26. Fire at a bunker (rather than an invader). Confirm the hit cell
+    disappears immediately (a small ~8px square notch in the bunker) and
+    your bullet is consumed there -- it does not continue through to hit an
+    invader behind it. Keep firing at the same bunker from different angles
+    and confirm it visibly erodes cell-by-cell rather than disappearing all
+    at once.
+27. Watch for invader return fire (same cadence as Level 2, roughly 0.8-2s
+    apart). Confirm a bullet that passes through a bunker's footprint
+    removes the cell it touches and disappears there, and a bullet that
+    passes through a gap where cells have already been destroyed continues
+    down toward the player.
+28. Let the formation descend (via edge bounces) until it visibly overlaps a
+    bunker's row. Confirm invader bodies passing through a bunker erode its
+    cells the same way projectiles do, and that an invader is *not*
+    destroyed merely by touching a bunker.
+29. Confirm a bunker never blocks the player ship's movement (the ship can
+    move freely underneath/through a bunker's horizontal position) and that
+    an invader reaching the player's row still costs a life and respawns a
+    fresh formation exactly as in Level 1 -- bunker damage should persist
+    unchanged across that respawn (not reset/regenerate).
+30. Destroy invaders (avoiding letting the formation reach the player) until
+    the kill count reaches roughly half (28 of the 55 starting invaders).
+    Confirm that at that moment the remaining invaders visibly split into
+    two clusters -- the left cluster immediately starts moving leftward and
+    the right cluster immediately starts moving rightward (both outward) --
+    and that from then on each cluster independently steps, edge-reverses,
+    and descends based only on its own edges, at the same speed as the
+    other cluster.
+31. Destroy every invader in both the left and right clusters. Confirm the
+    HUD's `Level:` readout advances to `4` the instant the last invader in
+    either cluster is destroyed (there is no boss level content yet, so the
+    dispatcher's `default` branch will immediately show `GameOver` as a
+    placeholder -- confirm that happens rather than the game hanging or
+    erroring, which confirms the `3 -> 4` transition itself is reachable).
 
 ### Automated sanity check performed by the coder agent
 
@@ -468,6 +564,31 @@ harness, confirming:
   `update(dt, player)` with `player.lives = 1` costs the last life and
   calls the imported `triggerGameOver()`, mirroring Level 1's reach-row
   handling through the same hit path bullets use.
+
+`level3.js` was exercised the same way, via the same stubbed-DOM Node
+harness, confirming:
+
+- `game.js` and `level3.js` also import from each other without a
+  temporal-dead-zone error, the same circular-reference pattern as
+  `level1.js`/`level2.js`;
+- `new Level3()` spawns a fresh 55-invader formation and exactly 4 bunkers,
+  each with 16 live cells (64 total);
+- repeatedly calling `update(dt, player)` steps the whole formation sideways
+  together (matching Level 1's pattern) while fewer than 28 invaders are
+  destroyed, and `split` stays `false`;
+- removing 28 invaders directly (simulating `collision.js` splicing them out
+  across prior frames) and calling `update(dt, player)` once sets
+  `split = true`, tags every survivor's `group` as `'left'` or `'right'`,
+  and sets `leftDirection = -1` / `rightDirection = 1`;
+- placing a player bullet exactly on a live bunker cell and calling
+  `checkPlayerBulletVsBunkers(player)` clears that cell and nulls
+  `player.bullet` (consumed, not passed through);
+- placing an invader body exactly over a bunker's cells and calling
+  `checkInvaderBodyVsBunkers()` clears the overlapping cells without
+  removing the invader itself;
+- emptying `level3.formation.invaders` and calling `update()` sets
+  `level3.cleared = true`, the same signal `game.js` reads to advance
+  `level` to `4`.
 
 This does not replace a real visual check. **The manual steps above should
 still be run by a human (or the QA agent) in an actual Firefox window**

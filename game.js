@@ -3,6 +3,7 @@ import { initInput } from './input.js';
 import { Player } from './player.js';
 import { Level1 } from './level1.js';
 import { Level2 } from './level2.js';
+import { Level3 } from './level3.js';
 import * as collision from './collision.js';
 
 // --- Canvas setup -----------------------------------------------------
@@ -36,12 +37,13 @@ initInput();
 const player = new Player();
 
 // Level dispatcher: `level` selects which level module's update()/draw()
-// runs during the Playing scene. Level 1 and 2 exist so far -- level 3+
-// (level3.js, boss.js) are sibling cards not yet built, so the dispatcher
-// below falls through to the Game Over scene as a placeholder.
+// runs during the Playing scene. Level 1, 2 and 3 exist so far -- the boss
+// level (boss.js) is a sibling card not yet built, so the dispatcher below
+// falls through to the Game Over scene as a placeholder once level 3 clears.
 let level = 1;
 let level1 = null; // constructed on level start, in goToPlaying()
 let level2 = null; // constructed once Level 1 clears, in update()
+let level3 = null; // constructed once Level 2 clears, in update()
 
 function goToPlaying() {
   hud.score = 0;
@@ -49,6 +51,7 @@ function goToPlaying() {
   level = 1;
   level1 = new Level1();
   level2 = null;
+  level3 = null;
   scene = SCENES.PLAYING;
 }
 
@@ -110,12 +113,22 @@ function update(dt) {
           collision.update(dt, player, level2.formation);
           if (level2.cleared) {
             level = 3;
+            // Player lives/shotsFired carry over unchanged, same pattern as
+            // the Level 1 -> Level 2 handoff above.
+            level3 = new Level3();
+          }
+          break;
+        case 3:
+          level3.update(dt, player);
+          collision.update(dt, player, level3.formation);
+          if (level3.cleared) {
+            level = 4;
           }
           break;
         default:
-          // level3.js (and the boss encounter) are sibling cards not yet
-          // built -- fall through to the Game Over scene until that card
-          // replaces this branch.
+          // The boss encounter (boss.js) is a sibling card not yet built --
+          // fall through to the Game Over scene until that card replaces
+          // this branch.
           triggerGameOver();
           break;
       }
@@ -159,6 +172,8 @@ function renderPlaying() {
     level1.draw(ctx);
   } else if (level === 2) {
     level2.draw(ctx);
+  } else if (level === 3) {
+    level3.draw(ctx);
   }
   collision.draw(ctx);
   player.draw(ctx);
