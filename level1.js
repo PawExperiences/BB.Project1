@@ -16,11 +16,12 @@ const GRID_ROWS = 5;
 const INVADER_COUNT = GRID_COLS * GRID_ROWS; // 55
 
 // intervalMs = 100 + (aliveCount - 1) * (700 / 54): ~800ms at 55 alive,
-// ~100ms at 1 alive, scaling linearly in between.
+// ~100ms at 1 alive, scaling linearly in between. Exported so level2.js can
+// reuse the same curve, scaled by its own speed multiplier.
 const MIN_STEP_INTERVAL_MS = 100;
 const STEP_INTERVAL_RANGE_MS = 700;
 
-function stepIntervalForAliveCount(aliveCount) {
+export function stepIntervalForAliveCount(aliveCount) {
   return MIN_STEP_INTERVAL_MS + (aliveCount - 1) * (STEP_INTERVAL_RANGE_MS / (INVADER_COUNT - 1));
 }
 

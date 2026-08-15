@@ -1,6 +1,9 @@
 // Generic AABB collision pass, reused for both combat pairings this game
 // currently needs: player bullet vs invader, and invader-owned bullet vs
-// player. One overlap function, no per-pairing duplication.
+// player. One overlap function, no per-pairing duplication. `overlaps` is
+// exported so level2.js can reuse the same AABB test for pairings this
+// module doesn't know about (the bonus UFO, invulnerability-aware player
+// hits) without duplicating the math.
 
 const INVADER_KILL_SCORE = 10;
 
@@ -10,7 +13,7 @@ const INVADER_KILL_SCORE = 10;
 const PLAYER_BULLET_WIDTH = 4;
 const PLAYER_BULLET_HEIGHT = 14;
 
-function overlaps(a, b) {
+export function overlaps(a, b) {
   return (
     a.x < b.x + b.width &&
     a.x + a.width > b.x &&

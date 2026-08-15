@@ -1,5 +1,10 @@
 // The player ship: movement, edge clamping, procedural drawing, a
-// single in-flight bullet, and the player's lives counter.
+// single in-flight bullet, the player's lives counter, the session-wide
+// cumulative shot counter (used by level2.js's UFO scoring tiers, so it
+// must never reset across a level transition, only on a fresh run), and
+// post-respawn invulnerability. Respawn/invulnerability are driven by the
+// Level card that detects the hit (currently level2.js); this module only
+// owns the resulting position reset, timer and flash rendering.
 
 import {
   CANVAS_WIDTH,
@@ -17,6 +22,9 @@ const PLAYER_Y = CANVAS_HEIGHT - 60;
 const BULLET_WIDTH = 4;
 const BULLET_HEIGHT = 14;
 
+const RESPAWN_INVULNERABILITY_SECONDS = 2;
+const INVULNERABILITY_FLASH_INTERVAL_SECONDS = 0.1;
+
 export class Player {
   constructor() {
     this.x = CANVAS_WIDTH / 2 - PLAYER_WIDTH / 2;
@@ -25,6 +33,8 @@ export class Player {
     this.height = PLAYER_HEIGHT;
     this.bullet = null;
     this.lives = STARTING_LIVES;
+    this.shotCount = 0;
+    this.invulnerableTimer = 0;
   }
 
   getLives() {
@@ -36,12 +46,31 @@ export class Player {
     return this.lives;
   }
 
+  getShotCount() {
+    return this.shotCount;
+  }
+
+  // Resets the ship to the fixed bottom-centre start position and grants
+  // RESPAWN_INVULNERABILITY_SECONDS of invulnerability. Called by a Level
+  // card after it decides a hit costs a life; this method never decides
+  // that itself.
+  respawn() {
+    this.x = CANVAS_WIDTH / 2 - PLAYER_WIDTH / 2;
+    this.y = PLAYER_Y;
+    this.invulnerableTimer = RESPAWN_INVULNERABILITY_SECONDS;
+  }
+
+  isInvulnerable() {
+    return this.invulnerableTimer > 0;
+  }
+
   fire() {
     if (this.bullet) return;
     this.bullet = {
       x: this.x + this.width / 2 - BULLET_WIDTH / 2,
       y: this.y,
     };
+    this.shotCount += 1;
   }
 
   update(dt) {
@@ -68,11 +97,23 @@ export class Player {
         this.bullet = null;
       }
     }
+
+    if (this.invulnerableTimer > 0) {
+      this.invulnerableTimer = Math.max(0, this.invulnerableTimer - dt);
+    }
   }
 
   draw(ctx) {
-    this._drawShip(ctx);
+    if (!this.isInvulnerable() || this._isFlashVisible()) {
+      this._drawShip(ctx);
+    }
     this._drawBullet(ctx);
+  }
+
+  // Toggles on/off every INVULNERABILITY_FLASH_INTERVAL_SECONDS as
+  // invulnerableTimer counts down, producing a blink effect.
+  _isFlashVisible() {
+    return Math.floor(this.invulnerableTimer / INVULNERABILITY_FLASH_INTERVAL_SECONDS) % 2 === 0;
   }
 
   _drawShip(ctx) {
