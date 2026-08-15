@@ -4,11 +4,14 @@ import { isKeyHeld } from './input.js';
 const SHIP_WIDTH = 40;
 const SHIP_HEIGHT = 24;
 const SHIP_Y = CANVAS_HEIGHT - 60;
+const SHIP_START_X = CANVAS_WIDTH / 2 - SHIP_WIDTH / 2;
 
 // Exported so later cards (e.g. collision.js) can build an AABB for the
 // player's bullet without redefining its size.
 export const BULLET_WIDTH = 4;
 export const BULLET_HEIGHT = 14;
+
+const FLASH_INTERVAL_MS = 150; // ship flicker rate while invulnerable
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
@@ -16,15 +19,37 @@ function clamp(value, min, max) {
 
 export class Player {
   constructor() {
-    this.x = CANVAS_WIDTH / 2 - SHIP_WIDTH / 2;
+    this.x = SHIP_START_X;
     this.y = SHIP_Y;
     this.width = SHIP_WIDTH;
     this.height = SHIP_HEIGHT;
     this.lives = STARTING_LIVES;
     this.bullet = null; // { x, y } while a shot is in flight, else null
+    // Total shots fired across the whole session (not reset between
+    // levels/restarts within a run) -- consumed by later cards (e.g.
+    // "Level 2: they shoot back") for deterministic bonus-UFO scoring.
+    this.shotsFired = 0;
+    this.invulnerableMs = 0; // remaining post-respawn invulnerability time
+  }
+
+  get invulnerable() {
+    return this.invulnerableMs > 0;
+  }
+
+  // Moves the ship back to its fixed start position and grants temporary
+  // invulnerability. Used by levels whose invaders can shoot back (e.g.
+  // "Level 2: they shoot back") after the player is hit.
+  respawn(invulnerableMs) {
+    this.x = SHIP_START_X;
+    this.y = SHIP_Y;
+    this.invulnerableMs = invulnerableMs;
   }
 
   update(dt) {
+    if (this.invulnerableMs > 0) {
+      this.invulnerableMs = Math.max(0, this.invulnerableMs - dt * 1000);
+    }
+
     if (isKeyHeld('ArrowLeft') || isKeyHeld('a') || isKeyHeld('A')) {
       this.x -= PLAYER_SPEED * dt;
     }
@@ -43,11 +68,18 @@ export class Player {
         x: this.x + this.width / 2 - BULLET_WIDTH / 2,
         y: this.y - BULLET_HEIGHT,
       };
+      this.shotsFired++;
     }
   }
 
   draw(ctx) {
-    this.drawShip(ctx);
+    // While invulnerable, flicker the ship on/off instead of drawing it
+    // solid every frame; the bullet and lives readout are unaffected.
+    const hiddenThisFlicker =
+      this.invulnerable && Math.floor(this.invulnerableMs / FLASH_INTERVAL_MS) % 2 === 0;
+    if (!hiddenThisFlicker) {
+      this.drawShip(ctx);
+    }
 
     if (this.bullet) {
       ctx.fillStyle = '#0f0';

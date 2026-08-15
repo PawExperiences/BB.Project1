@@ -21,7 +21,7 @@ intentionally **not** created, stubbed, or imported here.
 | `invaders.js`    | Invaders                             | **created** |
 | `collision.js`   | Collision detection                  | **created** |
 | `level1.js`      | Level 1                              | **created** |
-| `level2.js`      | Level 2                              | not yet created |
+| `level2.js`      | Level 2                              | **created** |
 | `level3.js`      | Level 3                              | not yet created |
 | `boss.js`        | Boss                                 | not yet created |
 
@@ -158,16 +158,79 @@ resolve under `file://`).
   branch of `update()`/`renderPlaying()`:
   - `level === 1` routes to the `Level1` instance's `update()`/`draw()`, runs
     the existing `collision.update(dt, player, level1.formation)` pass
-    against its formation, and advances `level` to `2` once `level1.cleared`
-    is `true`.
-  - Any other `level` value (i.e. `2`, since `level2.js` does not exist yet)
+    against its formation, and advances `level` to `2` (constructing a new
+    `Level2` instance) once `level1.cleared` is `true`.
+  - Any other `level` value (i.e. `3`, since `level3.js` does not exist yet)
     falls through to the existing `default` branch, which calls
-    `triggerGameOver()` -- a placeholder for the "Level 2: they shoot back"
-    card to replace with real level-2 content.
+    `triggerGameOver()` -- a placeholder for the future "Level 3" card to
+    replace with real level-3 content.
   - The `Level1` instance is created (and re-created) in `goToPlaying()`, so
     every fresh playthrough (including replaying after a `GameOver`) starts
     `level` back at `1` with a brand-new formation.
   - `renderHud()` now also prints `Level: <n>` centered at the top of the HUD.
+
+## Level 2: they shoot back (this card)
+
+- `level2.js`: exports a `Level2` class with `update(dt, player)` / `draw(ctx)`
+  / a `cleared` flag, matching the same per-frame contract as `Level1`. Reuses
+  `InvaderFormation` from `invaders.js` for the grid data/draw() (the same
+  11x5 layout as Level 1) instead of re-implementing it:
+  - Steps the formation sideways on the same edge-drop/reversal pattern as
+    Level 1, but using Level 1's step-interval ramp with every resulting
+    interval multiplied by `0.67`, so the whole speed-up curve runs ~1.5x
+    faster throughout (not just at its endpoints).
+  - Invaders shoot back via a single global timer (re-armed at a new random
+    interval between 800ms-2000ms after every shot, never one timer per
+    column). Each time it fires, invaders are grouped into columns by their
+    shared `x` (the whole formation always moves rigidly together, so column
+    membership never needs tracking separately), a column with survivors is
+    picked uniformly at random, and its lowest surviving invader (the one
+    closest to the player) fires. Bullets are owned by `Level2` itself (a
+    `bullets` array separate from `InvaderFormation.bullets`, which stays
+    empty) and fall straight down at 300px/s.
+  - Every 20 seconds (only counted while no UFO is currently on screen) a
+    bonus UFO spawns and crosses the screen at 120px/s, entering from
+    alternating sides on successive spawns (left, then right, then left...).
+    A player bullet that overlaps it scores `tiers[player.shotsFired % 4]`
+    points (`[50, 100, 150, 300]`) -- deterministic, never randomly rolled --
+    and consumes both the bullet and the UFO before `collision.js`'s
+    player-bullet-vs-invader pass runs the same frame, so one bullet never
+    scores twice.
+  - Player hits (an invader bullet reaching the player, or the formation
+    reaching the player's row) cost exactly one life and call the new
+    `player.respawn(invulnerableMs)` hook (see `player.js` below), *unless*
+    `player.invulnerable` is already `true`, in which case the hit is
+    ignored outright: no life lost, no invulnerability restart. Reaching
+    `0` lives calls the existing `triggerGameOver()` hook instead of
+    respawning.
+  - Clearing every invader sets `cleared = true`, the same signal Level 1
+    uses, so `game.js` can advance `level` the same way both times.
+- `player.js`: touched only to add what Level 2's hit/respawn/invulnerability
+  state machine needs, without changing any of Level 1's behavior (these are
+  all purely additive -- Level 1 never sets them):
+  - `shotsFired`: incremented every time a new bullet is fired, tracked on
+    the long-lived `Player` instance so it naturally carries over, unreset,
+    from Level 1 into Level 2 (and beyond) -- consumed by `level2.js` for
+    deterministic UFO scoring.
+  - `respawn(invulnerableMs)`: resets the ship back to its fixed spawn
+    position (`x` = horizontally centered, `y` = `SHIP_Y`, both unchanged
+    from the constructor's start position) and grants `invulnerableMs` of
+    invulnerability.
+  - `invulnerable` (a getter) and an internal `invulnerableMs` countdown,
+    ticked down in `update(dt)`; while it's `> 0`, `draw(ctx)` flickers the
+    ship on/off (skipping just `drawShip()`, not the bullet or the `Lives:`
+    readout) instead of drawing it solid every frame.
+- `game.js`: gains the `level2.js` import and a `level === 2` branch in both
+  `update()`'s level dispatcher and `renderPlaying()`, mirroring the existing
+  `level === 1` branch in each: runs `level2.update(dt, player)` then the
+  existing `collision.update(dt, player, level2.formation)` pass (still used
+  for player-bullet-vs-invader; Level 2's own invader-bullet-vs-player and
+  UFO checks are handled entirely inside `level2.js`), advances `level` to
+  `3` once `level2.cleared`, and draws `level2.draw(ctx)` in `renderPlaying()`
+  when `level === 2`. `Level1 -> Level2` happens automatically the instant
+  `level1.cleared` becomes `true` (no level-select screen), constructing the
+  `Level2` instance at that point while reusing the same `player` object, so
+  `player.lives` and `player.shotsFired` carry over unchanged.
 
 ## Manual verification path
 
@@ -267,12 +330,58 @@ press ENTER from `Title` again):
     sideways step visibly back to its slow (~800ms) starting pace.
 17. Destroy all 55 invaders in a single Level 1 run (shooting each one, per
     step 8) without letting any reach the player's row. Confirm that the
-    instant the last invader is destroyed, the screen transitions straight
-    to the `GameOver` scene (level 2 has no content yet, so the dispatcher's
-    default branch shows Game Over as a placeholder for the future "Level 2:
-    they shoot back" card). Press **ENTER** to confirm it returns to `Title`,
-    and that playing again starts a fresh Level 1 (`Level: 1`, a full 11x5
-    formation, HUD reset).
+    instant the last invader is destroyed, the screen transitions straight to
+    Level 2 with **no level-select screen** in between: the HUD's `Level:`
+    readout changes to `2`, a fresh 11x5 invader formation appears, and the
+    `Lives:` readout (both HUD copies) keeps whatever value it had at the end
+    of Level 1 (i.e. is *not* reset back to `3`).
+
+**Level 2: they shoot back** (continue from having just reached Level 2 in
+step 17; if you lost a life or two clearing Level 1, that's expected and
+useful for checking lives carry over):
+
+18. Watch the formation for a few seconds. Confirm it steps sideways the same
+    way Level 1's did (discrete steps, edge-drop + reversal, never crossing
+    the canvas edge), but noticeably faster at a comparable alive-count than
+    Level 1 was (~1.5x the step rate throughout, not just at the start/end).
+19. Watch for invader bullets: confirm individual invaders (not the whole
+    formation) periodically fire a bullet that falls straight down at a
+    steady rate, that bullets appear roughly 0.8-2 seconds apart from each
+    other (never in a tight burst from multiple columns at once), and that
+    each bullet always originates from the *front* (bottom-most surviving)
+    invader of whichever column fired -- never from behind a still-alive
+    invader in the same column.
+20. Let an invader bullet hit the player ship. Confirm: `Lives:` drops by
+    exactly one, the ship immediately reappears at its fixed bottom-center
+    start position, and for about 2 seconds it visibly flickers on/off
+    (invulnerable) -- confirm that any invader bullet that touches the ship
+    during that flicker window does *not* cost another life and does *not*
+    restart the 2-second flicker window. Confirm normal hits resume costing
+    a life once the flicker stops.
+21. Wait up to 20 seconds. Confirm a bonus UFO (a distinctly colored small
+    rectangle) crosses the screen at a steady horizontal speed near the top,
+    entering from one side and exiting the other. Let it despawn off-screen
+    (or shoot it), then wait for the next one and confirm it enters from the
+    *opposite* side this time (alternating left/right on successive spawns).
+22. Shoot a bonus UFO. Confirm the score jumps by one of `50`, `100`, `150`,
+    or `300` (never a value outside that set), and that hitting several UFOs
+    across a run cycles through that same fixed set of point values in a
+    repeatable order (not randomly) as your total shots-fired count grows --
+    the exact value depends on how many shots you've fired all game, so this
+    is easiest to eyeball as "always one of those four numbers, changing
+    predictably" rather than predicting the exact sequence by hand.
+23. Lose all remaining lives (either to invader bullets or the formation
+    reaching the player's row). Confirm control passes to the existing
+    `GameOver` scene exactly as it did at the end of the original card ("Game
+    loop and canvas framework"): final score shown, "Press ENTER to restart".
+    Press **ENTER** and confirm it returns to `Title` exactly as before (this
+    behavior is reused unmodified, not touched by this card).
+24. Destroy every invader in Level 2's grid without losing all lives. Confirm
+    the HUD's `Level:` readout advances to `3` the instant the last invader
+    is destroyed (there is no Level 3 content yet, so the dispatcher's
+    `default` branch will immediately show `GameOver` as a placeholder --
+    confirm that happens rather than the game hanging or erroring, which
+    confirms the `2 -> 3` transition itself is reachable).
 
 ### Automated sanity check performed by the coder agent
 
@@ -326,6 +435,39 @@ imports (scratch tooling, not part of this repo) using a stubbed
   to `55`);
 - emptying `level1.formation.invaders` and calling `update()` sets
   `level1.cleared = true`.
+
+`level2.js` and the `player.js` additions (`respawn()`, `shotsFired`,
+`invulnerable`) were exercised the same way, via the same stubbed-DOM Node
+harness, confirming:
+
+- `game.js` and `level2.js` also import from each other without a
+  temporal-dead-zone error, the same circular-reference pattern as
+  `level1.js`;
+- `new Level2()` spawns a fresh 55-invader formation and seeds its global
+  fire timer to a value inside `[800, 2000)` ms;
+- the Level 2 step-interval formula evaluates to `536` (`800 * 0.67`) at 55
+  alive and `67` (`100 * 0.67`) at 1 alive -- exactly Level 1's reference
+  values from `100`/`800` multiplied by `0.67`;
+- forcing the global fire timer to `0` and calling `updateFiring()` pushes
+  exactly one bullet, and grouping the formation by column confirms each
+  column holds all 5 rows (so the "lowest surviving invader" pick has real
+  rows to choose between) -- the invader picked to fire always has the
+  largest `y` (frontmost/closest to the player) among its column;
+- placing an invader bullet exactly on the player and calling
+  `checkPlayerHit(player)` costs one life, moves the player back to its
+  fixed start `(x, y)`, and sets `player.invulnerable = true`; immediately
+  placing a second bullet on the (now-relocated) player and calling
+  `checkPlayerHit(player)` again leaves `lives` and the invulnerability
+  countdown unchanged -- confirming the ignore-hits-while-invulnerable rule;
+- `spawnUfo()` alternates entry side/direction on successive calls; placing
+  a player bullet on the UFO and calling `checkUfoHit(player)` with
+  `player.shotsFired = 6` (`6 % 4 == 2`) awards exactly `150` points (the
+  tier at index `2` in `[50, 100, 150, 300]`), clears the UFO, and consumes
+  the player's bullet;
+- forcing an invader down to the player's row and calling
+  `update(dt, player)` with `player.lives = 1` costs the last life and
+  calls the imported `triggerGameOver()`, mirroring Level 1's reach-row
+  handling through the same hit path bullets use.
 
 This does not replace a real visual check. **The manual steps above should
 still be run by a human (or the QA agent) in an actual Firefox window**
