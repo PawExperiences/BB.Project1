@@ -18,4 +18,26 @@ npm ci
 npm run build
 ```
 
-This produces a production build in `dist/`, including `dist/index.html`.
+Running `npm ci && npm run build` builds the app and writes `dist/index.html`.
+
+## Empty
+
+`src/Empty.tsx` is a reusable placeholder for empty sections (e.g. a
+standup section with no updates or no blockers). It renders a muted,
+de-emphasized message instead of showing nothing or an empty list.
+
+| Prop    | Type     | Required / default        | Description                                      |
+| ------- | -------- | -------------------------- | ------------------------------------------------- |
+| `label` | `string` | Optional, defaults to `"None"` | Text to display in place of the default `"None"`. |
+
+### Usage
+
+```tsx
+import { Empty } from './Empty'
+
+// Default label
+<Empty />
+
+// Custom label
+<Empty label="No blockers" />
+```
