@@ -1,6 +1,8 @@
 import { CANVAS_WIDTH, CANVAS_HEIGHT, STARTING_LIVES } from './gameConfig.js';
 import { initInput } from './input.js';
 import { Player } from './player.js';
+import { InvaderFormation } from './invaders.js';
+import * as collision from './collision.js';
 
 // --- Canvas setup -----------------------------------------------------
 
@@ -31,6 +33,7 @@ let scene = SCENES.TITLE;
 
 initInput();
 const player = new Player();
+const invaders = new InvaderFormation();
 
 function goToPlaying() {
   hud.score = 0;
@@ -77,8 +80,10 @@ function update(dt) {
       break;
     case SCENES.PLAYING:
       player.update(dt);
-      // Invader formation/movement: owned by the "Invaders" card (invaders.js)
-      // Collision detection (bullets/invaders/player): owned by the "Collision" card (collision.js)
+      invaders.update(dt);
+      // Collision pass runs after movement, strictly before rendering
+      // ("collide, then draw").
+      collision.update(dt, player, invaders);
       // Level content/progression: owned by the level1.js / level2.js / level3.js cards
       // Boss encounter: owned by the "Boss" card (boss.js)
       break;
@@ -117,8 +122,8 @@ function renderTitle() {
 }
 
 function renderPlaying() {
-  // Gameplay visuals (invaders, ...) are drawn by the sibling cards listed
-  // in update(). This card draws the player ship/bullet and the HUD.
+  invaders.draw(ctx);
+  collision.draw(ctx);
   player.draw(ctx);
   renderHud();
 }

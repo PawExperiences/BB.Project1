@@ -18,8 +18,8 @@ intentionally **not** created, stubbed, or imported here.
 | `README.md`      | Game loop and canvas framework       | **this card** |
 | `input.js`       | Player & Input                       | **created** |
 | `player.js`      | Player & Input                       | **created** |
-| `invaders.js`    | Invaders                             | not yet created |
-| `collision.js`   | Collision detection                  | not yet created |
+| `invaders.js`    | Invaders                             | **created** |
+| `collision.js`   | Collision detection                  | **created** |
 | `level1.js`      | Level 1                              | not yet created |
 | `level2.js`      | Level 2                              | not yet created |
 | `level3.js`      | Level 3                              | not yet created |
@@ -88,6 +88,47 @@ resolve under `file://`).
 - `game.js` now calls `initInput()` once at load, and during the `Playing`
   scene calls `player.update(dt)` / `player.draw(ctx)` each frame.
 
+## Sprite rendering and collision detection (this card)
+
+- `invaders.js`: exports an `InvaderFormation` class with `update(dt)` /
+  `draw(ctx)`, matching the same per-frame contract as `Player`.
+  - Builds the classic 11-column x 5-row grid (55 invaders) as identical
+    coloured rectangles, drawn with `fillRect` (no sprite art/visual
+    variation between invaders).
+  - The whole formation moves sideways as one rigid block. Whenever any
+    invader in the formation would cross a canvas edge on the next step, the
+    formation reverses direction and steps down one row *instead* of moving
+    sideways that frame; it resumes sideways movement in the new direction
+    on the following frame.
+  - Exposes an (always-empty, for this card) `bullets` array, reserved for
+    the invader-firing logic of a later card ("Level 2: they shoot back") to
+    push bullets into -- this card implements no invader shooting/firing AI.
+  - Reuses `CANVAS_WIDTH` from `gameConfig.js` rather than redefining canvas
+    dimensions.
+- `collision.js`: an AABB (axis-aligned bounding box) collision pass, run
+  from `game.js`'s `update()` step strictly before `render()`
+  ("collide, then draw"):
+  - Player-bullet-vs-invader: on overlap, both the bullet and the invader
+    are removed, a short fading-circle explosion effect plays at the
+    invader's last position for `0.3s`, and `hud.score` increments by `10`.
+  - Invader-bullet-vs-player: written generically over any array of bullet
+    objects (`invaders.bullets`) so it is already correct once invader
+    firing lands in a later card, even though that array is always empty
+    here. On overlap, calls the `player.loseLife()` hook exposed by
+    `player.js`, mirrors the result into `hud.lives`, and calls
+    `game.js`'s exported `triggerGameOver()` once lives reach `0`.
+  - Reuses the player bullet's size (`BULLET_WIDTH`/`BULLET_HEIGHT`,
+    exported from `player.js`) rather than redefining the bullet's
+    dimensions.
+- `game.js`: touched only to wire the two modules into the existing loop --
+  imports `InvaderFormation` and the `collision` module, constructs one
+  `InvaderFormation` alongside the existing `Player`, calls
+  `invaders.update(dt)` then `collision.update(dt, player, invaders)` in the
+  `Playing` branch of `update()`, and calls `invaders.draw(ctx)` /
+  `collision.draw(ctx)` (for explosions) ahead of `player.draw(ctx)` in
+  `renderPlaying()`. The loop and canvas machinery themselves are
+  unchanged, per "Game loop and canvas framework".
+
 ## Manual verification path
 
 This stack has no test runner, no server, and no build step by design (see
@@ -114,8 +155,9 @@ Steps (verify in **Firefox**):
    the HUD: `Score: 0`, `Hi-Score: 0` in the top-left and `Lives: 3` in the
    top-right, plus the player ship (a small green rounded-nose-and-hull
    shape) near the bottom-center of the canvas and a `Lives: 3` readout
-   near the bottom-left. There are no invaders yet -- that's expected, as
-   this is a sibling card's scope.
+   near the bottom-left. Confirm the invader swarm is also visible: an
+   11-column x 5-row grid of identical coloured rectangles positioned above
+   the player ship.
 5. Hold **ArrowRight** (or **D**): confirm the ship moves smoothly right
    and stops exactly at the canvas's right edge, never sliding past it.
    Hold **ArrowLeft** (or **A**): confirm it moves left and stops exactly
@@ -127,20 +169,38 @@ Steps (verify in **Firefox**):
    **Space** repeatedly: confirm no second bullet appears. Once the bullet
    reaches the top of the canvas and disappears, confirm pressing **Space**
    again fires a new bullet.
-7. Open the browser devtools console and run
+7. Watch the invader formation for a few seconds: confirm it drifts
+   sideways as one rigid block (every invader moves together, none
+   individually), and that when the formation reaches a canvas edge it
+   reverses direction and steps down one row before continuing sideways
+   again, rather than overlapping the edge.
+8. Move the ship under an invader column and press **Space** to fire.
+   Confirm that when the bullet reaches an invader: both the bullet and
+   that invader disappear immediately, a brief fading circle "explosion"
+   appears at the invader's last position, and `Score:` in the top-left HUD
+   increases by `10`. Confirm a bullet that reaches the top of the canvas
+   without hitting anything does *not* change the score.
+9. Open the browser devtools console and run
    `document.title` (sanity check the page didn't navigate), then run a
    sibling-card smoke check by importing the module's exported state, e.g.
    inspect that `hud.lives === 3` holds via the console if the module was
    exposed for debugging, or simply trust step 4's on-canvas HUD reading.
-8. To manually reach the `GameOver` scene (since no lives-loss trigger
-   exists yet), open devtools console and run:
-   `const m = await import('./game.js'); m.triggerGameOver()`
-   Confirm the canvas now shows "GAME OVER", the score (`0`), and
-   "Press ENTER to restart".
-9. Press **ENTER** again. Confirm it returns immediately to the `Title`
-   scene (no reload), and that a subsequent ENTER into `Playing` shows
-   `Score: 0` and `Lives: 3` again (reset), while any non-zero hi-score
-   from step 8 is preserved.
+10. There is no invader-firing AI yet (that's "Level 2: they shoot back"),
+    so the invader-bullet-vs-player path can't be triggered from play. To
+    exercise it manually, open devtools console and run:
+    `const g = await import('./game.js'); const inv = await import('./invaders.js');`
+    then push a synthetic bullet at the player's position and confirm a
+    life is lost and both `Lives:` readouts (top-right HUD and the
+    bottom-left player readout) drop together and stay in sync.
+11. To manually reach the `GameOver` scene (since no invader can yet reduce
+    lives to `0` through play), open devtools console and run:
+    `const m = await import('./game.js'); m.triggerGameOver()`
+    Confirm the canvas now shows "GAME OVER", the current score, and
+    "Press ENTER to restart".
+12. Press **ENTER** again. Confirm it returns immediately to the `Title`
+    scene (no reload), and that a subsequent ENTER into `Playing` shows
+    `Score: 0` and `Lives: 3` again (reset), while any non-zero hi-score
+    from step 11 is preserved.
 
 ### Automated sanity check performed by the coder agent
 
@@ -148,21 +208,34 @@ This sandboxed environment has no GUI browser available (headless Chromium
 and Firefox both failed to launch here due to missing system libraries, and
 package installation is blocked in this sandbox), so the coder agent could
 not literally double-click `index.html` in a windowed browser. As a
-substitute, `game.js` was exercised programmatically with Node + jsdom
-(scratch tooling, not part of this repo) using a stubbed
-`HTMLCanvasElement.getContext`, confirming:
+substitute, `game.js`, `invaders.js`, `collision.js` and `player.js` were
+exercised programmatically with plain Node ES module imports (scratch
+tooling, not part of this repo) using a stubbed `document.getElementById`
+canvas/context, confirming:
 
-- the canvas is sized `768x896` from `gameConfig.js`;
-- the exported `hud` object starts at `{ score: 0, lives: 3, hiScore: 0 }`;
-- `Title -> Playing` and `GameOver -> Title` both fire on a synthetic
-  `keydown` `Enter` event, with no page navigation;
-- the `Playing` scene's HUD draw calls reflect the live `hud` values;
-- `triggerGameOver()` renders "GAME OVER" + the score and updates
-  `hiScore` to the max of itself and the final score;
-- returning to `Title` resets `score`/`lives` but preserves `hiScore`;
-- the `requestAnimationFrame` loop keeps scheduling frames steadily over
-  time without throwing.
+- the canvas is sized `768x896` from `gameConfig.js` and the exported `hud`
+  object starts at `{ score: 0, lives: 3, hiScore: 0 }`;
+- `game.js` and `collision.js` import from each other (a circular ES module
+  reference) and load without a temporal-dead-zone error, since `hud` and
+  `triggerGameOver` are only read from inside `collision.js` functions,
+  never at its module top level;
+- `new InvaderFormation()` produces exactly 55 invaders (11x5) and exposes
+  an empty `bullets` array;
+- calling `update(dt)` repeatedly moves every invader sideways together;
+  forcing the formation past a canvas edge and calling `update(dt)` again
+  steps every invader down by the fixed step-down amount and flips
+  `direction`, without any sideways movement on that same call;
+- placing a player bullet exactly on an invader and calling
+  `collision.update(dt, player, formation)` removes that invader, clears
+  the player's bullet, and increments `hud.score` by `10`;
+- pushing a synthetic bullet into `formation.bullets` at the player's
+  position and calling `collision.update(...)` calls `player.loseLife()`,
+  syncs `hud.lives` to `player.lives`, and consumes the bullet;
+- driving `player.lives` to `0` via that same path calls the imported
+  `triggerGameOver()` (observed via the resulting scene state).
 
-This does not replace a real visual check. **Steps 1-7 above should still be
-run by a human (or the QA agent) in an actual Firefox window** before this
-card is considered fully verified end-to-end.
+This does not replace a real visual check. **The manual steps above should
+still be run by a human (or the QA agent) in an actual Firefox window**
+before this card is considered fully verified end-to-end -- in particular,
+the explosion effect's visual appearance and the formation's edge-bounce
+timing/feel can only be judged by eye.
