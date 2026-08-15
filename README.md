@@ -33,6 +33,16 @@ dotnet publish -c Release -o out
 produces a runnable executable in `out` (e.g. `out/caltool` on Linux/macOS,
 `out/caltool.exe` on Windows).
 
+## Tests
+
+```
+dotnet test tests/CalendarTests.csproj
+```
+
+runs the calendar-grid unit tests (`tests/CalendarTests.csproj`), which cover
+months starting on a Monday and on a Sunday, and leap-year vs. non-leap-year
+Februaries.
+
 ## Usage
 
 ```
