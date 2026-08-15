@@ -23,7 +23,7 @@ intentionally **not** created, stubbed, or imported here.
 | `level1.js`      | Level 1                              | **created** |
 | `level2.js`      | Level 2                              | **created** |
 | `level3.js`      | Level 3                              | **created** |
-| `boss.js`        | Boss                                 | not yet created |
+| `boss.js`        | Boss                                 | **created** |
 
 Everywhere `game.js` will eventually wire one of the files above in, it
 carries a one-line comment naming the owning card instead of a real
@@ -287,6 +287,81 @@ resolve under `file://`).
   `Level3` instance at that point while reusing the same `player` object, so
   `player.lives` and `player.shotsFired` carry over unchanged.
 
+## Boss level: multi-phase finale (this card)
+
+- `boss.js`: exports a `Level4` class with `update(dt, player)` / `draw(ctx)`
+  / a `cleared` flag, matching the same per-frame contract as `Level1`,
+  `Level2` and `Level3`. Reuses `collision.js`'s existing `update()`/`draw()`
+  pass for *all* hit-testing (both player-bullet-vs-boss and
+  boss-bullet-vs-player) by exposing the same `{ invaders, bullets }`
+  `formation` shape the other levels already pass it -- no second collision
+  implementation is written here:
+  - **Body**: a single `160x80` rectangle drawn with `fillRect`, horizontal
+    position fixed at construction time (centered), vertical position never
+    changes for the whole fight.
+  - **Movement**: drifts at `90px/s`, reversing direction the instant it
+    would cross either canvas edge (clamped exactly to the edge, never
+    overlapping it).
+  - **HP/health bar**: starts at `10`, shown as a bar spanning most of the
+    canvas width just below the existing Score/Level/Lives HUD row (clear of
+    it, so neither overlaps). The boss's single AABB hitbox lives in
+    `formation.invaders`; when `collision.js`'s player-bullet pass splices it
+    out on a hit, `boss.js` notices the empty array on its *next* `update()`
+    (the same "react to collision.js's removal one frame later" pattern
+    `level1.js`'s `cleared` flag and `level3.js`'s split-threshold detection
+    already use), deducts exactly 1 HP, and -- if still alive -- re-adds a
+    fresh hitbox at the boss's current position for the next hit.
+  - **Attack**: a 3-bullet spread from the boss's centre point (one straight
+    down, one 20 degrees left of straight down, one 20 degrees right, each at
+    a uniform `260px/s` -- the angle only splits the same speed between the
+    x/y components, it never changes bullet speed), fired on a global timer:
+    every `1500ms` while HP is `10` down to `5` inclusive, every `700ms` once
+    HP drops below `5`, for the remainder of the fight. Boss bullets are
+    pushed into `formation.bullets`, so they flow through `collision.js`'s
+    existing generic invader-bullet-vs-player pass unmodified, using its
+    same `BULLET_WIDTH`/`BULLET_HEIGHT` (from `player.js`) fallback hitbox
+    size other invader bullets already use.
+  - **Sudden death**: `boss.js` tracks `player.lives` across frames; any drop
+    while the fight is running (which can only come from
+    `collision.js`'s boss-bullet-vs-player pass, since nothing else touches
+    lives during Level 4) calls the existing `triggerGameOver()` hook
+    immediately, regardless of remaining boss HP or remaining player lives --
+    unlike Levels 1-3, which only call it once lives reach `0`.
+  - **Win**: HP reaching `0` sets `cleared = true` and calls a new exported
+    `game.js` hook, `triggerWin()` (mirroring `triggerGameOver()`'s shape:
+    syncs `hud.hiScore`, then switches scene), instead of advancing to a
+    Level 5 that doesn't exist.
+- `game.js`:
+  - Gains a new `SCENES.WIN` state, a `renderWin()` function (mirroring
+    `renderGameOver()`: "YOU WIN", the final score, "Press ENTER to
+    restart"), and the exported `triggerWin()` hook described above. `ENTER`
+    on the `Win` scene behaves exactly like `ENTER` on `GameOver` -- it
+    returns to `Title` (score/lives already reset there), so the next `ENTER`
+    from `Title` starts a fresh run at Level 1 with score back at `0`, the
+    same restart path the loss screen already used.
+  - Imports `Level4` from `boss.js` and adds a `level4` variable alongside
+    `level1`/`level2`/`level3`, constructed the instant `level3.cleared`
+    fires (mirroring the existing `Level1->Level2` and `Level2->Level3`
+    handoffs) and reset to `null` in `goToPlaying()`. The `level === 4`
+    branch in both `update()`'s dispatcher and `renderPlaying()` mirrors the
+    `level === 1..3` branches exactly: `level4.update(dt, player)` then the
+    existing `collision.update(dt, player, level4.formation)` pass, and
+    `level4.draw(ctx)` in `renderPlaying()`. Unlike the earlier branches,
+    there's no `if (level4.cleared)` handoff to a next level -- `boss.js`
+    calls `triggerWin()`/`triggerGameOver()` itself once the fight resolves.
+  - **Audit of the existing Level 1-3 wiring** (this card's other job): read
+    through `update()`'s level dispatcher, `renderPlaying()`, and each of
+    `level1.js`/`level2.js`/`level3.js`'s `cleared` flags. The existing
+    `1 -> 2 -> 3` chain already matched the house rule exactly (each level
+    constructed the next the instant the previous's `cleared` flag fired,
+    `renderPlaying()` already dispatched all three) -- the only gap was that
+    `level === 3`'s `cleared` branch advanced `level` to `4` but nothing
+    beyond the `switch`'s `default` (a `triggerGameOver()` placeholder
+    explicitly commented as standing in for the not-yet-built boss card)
+    ever gave that `4` real content. No Levels 1-3 wiring changes were
+    needed; only the placeholder `default` branch was replaced with the real
+    `level === 4` branch above.
+
 ## Manual verification path
 
 This stack has no test runner, no server, and no build step by design (see
@@ -474,10 +549,47 @@ Level 3 in step 24):
     other cluster.
 31. Destroy every invader in both the left and right clusters. Confirm the
     HUD's `Level:` readout advances to `4` the instant the last invader in
-    either cluster is destroyed (there is no boss level content yet, so the
-    dispatcher's `default` branch will immediately show `GameOver` as a
-    placeholder -- confirm that happens rather than the game hanging or
-    erroring, which confirms the `3 -> 4` transition itself is reachable).
+    either cluster is destroyed, and that the boss fight begins immediately
+    (no level-select screen) -- this confirms the full `1 -> 2 -> 3 -> 4`
+    chain is reachable in one continuous playthrough.
+
+**Boss level: multi-phase finale** (continue from having just reached Level 4
+in step 31):
+
+32. Confirm a single large rectangular boss shape (`160x80`) is visible near
+    the top of the canvas, and that a health bar spans most of the canvas
+    width just below the existing `Score`/`Level`/`Lives` HUD row, starting
+    full (`10/10`) and not overlapping that row's text.
+33. Watch the boss for several seconds. Confirm it drifts sideways smoothly
+    at a steady rate, reverses direction the instant it reaches either
+    canvas edge (never overlapping/crossing it), and that its vertical
+    position never changes for the whole fight.
+34. Watch for the boss's attack. Confirm it periodically fires three bullets
+    at once from its own centre: one travelling straight down, one angled
+    slightly left, one angled slightly right, all three at the same visible
+    speed. Time the gap between volleys with the initial full HP: confirm
+    it's roughly `1.5s` between volleys.
+35. Shoot the boss (aim the player's bullet at its body). Confirm each hit
+    immediately shortens the health bar by one tenth and the `BOSS n/10`
+    readout decrements by exactly `1` per hit -- never by more or less than
+    one HP per bullet.
+36. Keep shooting until the boss's HP drops to `5` or below. Confirm the
+    volley cadence visibly speeds up to roughly `0.7s` between volleys from
+    that point on, for the remainder of the fight.
+37. Let a boss bullet hit the player ship (or maneuver into one). Confirm the
+    run ends *immediately* -- a "YOU WIN"/game-over-style screen should NOT
+    appear; instead confirm the screen shows `GAME OVER` and the score
+    reached that run, even if `Lives:` was greater than `1` at the moment of
+    the hit (sudden death should not merely cost a life). Press **ENTER**:
+    confirm it returns to `Title` (mirroring the existing Game Over restart
+    flow), and a subsequent **ENTER** starts a fresh run at Level 1 with
+    `Score: 0` (hi-score preserved).
+38. Start a fresh run (steps 4-31) and this time destroy the boss (reduce its
+    HP to `0`) without letting any boss bullet touch the player ship. Confirm
+    the screen shows `YOU WIN` and the final score reached. Press **ENTER**
+    twice (returns to `Title`, then starts a new run): confirm play resumes
+    at Level 1 with `Score: 0` (hi-score preserved), exactly mirroring the
+    Game Over restart flow.
 
 ### Automated sanity check performed by the coder agent
 
@@ -589,6 +701,46 @@ harness, confirming:
 - emptying `level3.formation.invaders` and calling `update()` sets
   `level3.cleared = true`, the same signal `game.js` reads to advance
   `level` to `4`.
+
+`boss.js` was exercised the same way, via the same stubbed-DOM Node harness,
+confirming:
+
+- `game.js` and `boss.js` also import from each other without a
+  temporal-dead-zone error, the same circular-reference pattern as the other
+  three level modules;
+- `new Level4()` starts at `10` HP, `cleared = false`, a `formation.invaders`
+  array holding exactly one `160x80` hitbox, and an empty
+  `formation.bullets`;
+- repeatedly calling `update(dt, player)` moves the boss horizontally by
+  `90px/s` while its `y` never changes, and clamps exactly at each canvas
+  edge (`x` never goes negative or past `CANVAS_WIDTH - 160`) while flipping
+  direction there;
+- with a fresh boss, the first spread fires at `~1500ms` of elapsed
+  `update()` calls (Phase 1's cadence), is exactly 3 bullets, every bullet's
+  `(vx, vy)` magnitude is exactly `260`, one bullet has `vx = 0` (straight
+  down), and the other two are exactly `20°` off vertical in opposite
+  directions;
+- forcing `hp = 4` (Phase 2) and reseeding the fire timer, the next spread
+  fires at `~700ms` instead of `~1500ms`;
+- emptying `formation.invaders` (simulating `collision.js`'s player-bullet
+  pass having just spliced the hitbox out) and calling `update(dt, player)`
+  deducts exactly `1` HP and pushes a fresh hitbox back into
+  `formation.invaders` for the next hit;
+- driving `hp` to `0` the same way sets `cleared = true` and calls the
+  imported `triggerWin()` (observed via `hud.hiScore` syncing to the current
+  `hud.score`), after which further `update()` calls are a no-op;
+- seeding a player's `lives`, then dropping it by one (simulating
+  `collision.js`'s boss-bullet-vs-player pass having just cost a life) and
+  calling `update(dt, player)` calls the imported `triggerGameOver()`
+  immediately -- verified both via the direct stub above and by running the
+  **real** `collision.js` module against a live `Player` instance and a
+  synthetic boss bullet placed exactly on the player: `checkInvaderBulletsVsPlayer`
+  cost exactly one life through the normal path, and `boss.js`'s next
+  `update()` still called `triggerGameOver()` even though 2 lives remained --
+  confirming the sudden-death rule fires regardless of remaining lives, and
+  that no second collision implementation was written (the same real
+  `collision.js` pass used by Levels 1-3 handled both the player-bullet-vs-
+  boss and boss-bullet-vs-player hits above).
 
 This does not replace a real visual check. **The manual steps above should
 still be run by a human (or the QA agent) in an actual Firefox window**
