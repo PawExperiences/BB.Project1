@@ -1,0 +1,16 @@
+[project]
+name = "linkcheck"
+version = "0.1.0"
+description = "A static, lexical Markdown link checker with no network access."
+readme = "README.md"
+requires-python = ">=3.9"
+
+[project.scripts]
+linkcheck = "linkcheck.cli:main"
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
