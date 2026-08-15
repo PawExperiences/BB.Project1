@@ -1,27 +1,19 @@
 import tickets from "../data/tickets.json";
 import Chip from "./Chip";
-
-type Ticket = {
-  key: string;
-  title: string;
-  status: "To Do" | "In Progress" | "Done";
-  assignee: string;
-};
-
-const STATUSES: Ticket["status"][] = ["To Do", "In Progress", "Done"];
+import { groupByStatus, Ticket } from "../lib/group";
 
 export default function Home() {
   const allTickets = tickets as Ticket[];
+  const buckets = groupByStatus(allTickets);
 
   return (
     <main style={{ padding: "2rem", fontFamily: "sans-serif" }}>
       <h1>e2e ticket mirror</h1>
-      {STATUSES.map((status) => {
-        const ticketsInStatus = allTickets.filter((t) => t.status === status);
+      {buckets.map(({ status, tickets: ticketsInStatus, count }) => {
         return (
           <section key={status} style={{ marginBottom: "2rem" }}>
             <h2>
-              {status} ({ticketsInStatus.length})
+              {status} ({count})
             </h2>
             {ticketsInStatus.map((ticket) => (
               <div
