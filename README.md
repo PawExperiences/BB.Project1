@@ -65,10 +65,27 @@ For each broken link, `linkcheck` prints one line to stdout:
 
 Lines are printed in ascending order of line number (document order).
 
-## Exit codes
+After a scan completes, `linkcheck` prints one summary line to **stderr**
+(never stdout) reporting the number of files scanned, the number of links
+found, and the number of broken links found, e.g.:
 
-- `0` — no broken links were found; no broken-link lines are printed.
-- `1` — one or more broken links were found; each is printed to stdout.
-- `2` — the given file path does not exist or cannot be read; an error
-  message is printed to stderr and no broken-link lines are printed to
-  stdout.
+```
+linkcheck: 1 files scanned, 5 links found, 2 broken links
+```
+
+Keeping the summary off stdout means stdout stays reserved for the
+per-link output above, so downstream tooling can pipe stdout without the
+summary text getting in the way. The summary is only printed when a scan
+actually completes — it is not printed on a usage error.
+
+## Exit Status
+
+`linkcheck` commits to a stable exit-status contract so callers (scripts,
+CI) can branch on the exit code without parsing output:
+
+- `0` — clean: the scan completed and no broken links were found.
+- `1` — broken links found: the scan completed and at least one broken
+  link was found; each is printed to stdout.
+- `2` — usage error: bad or missing arguments, or an invalid/nonexistent
+  file path. No scan is attempted; an error message is printed to
+  stderr.
