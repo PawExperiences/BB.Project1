@@ -88,8 +88,19 @@ def main(argv=None):
         )
         return 2
 
+    with open(args.file, "r", encoding="utf-8") as handle:
+        lines = handle.read().splitlines()
+    links_found = sum(1 for _ in find_targets(lines))
+
     for line_number, target, reason in broken:
         print("{}:{}: {}".format(line_number, target, reason))
+
+    print(
+        "linkcheck: {} files scanned, {} links found, {} broken links".format(
+            1, links_found, len(broken)
+        ),
+        file=sys.stderr,
+    )
 
     return 1 if broken else 0
 
