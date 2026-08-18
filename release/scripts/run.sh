@@ -1,45 +1,31 @@
 #!/bin/sh
-# run.sh -- start Space Invaders 0.1.0.
-#
-# WHAT IT DOES: opens the game's index.html in the default web browser via
-# a file:// URL (xdg-open on Linux, open on macOS, cmd start on Windows
-# Git Bash / MSYS). The game is fully static -- no server, no build step,
-# no dependencies.
-#
-# WHEN TO RUN: any time you want to play or smoke-test the released game:
-#   sh release/scripts/run.sh
+# run.sh -- build (if needed) and run the prime_tester CLI, forwarding all
+# arguments. Use it to quickly try the released binary:
+#   ./release/scripts/run.sh 2 4 17
+#   ./release/scripts/run.sh --upto 30
+#   printf '2\n4\n17\n' | ./release/scripts/run.sh
+# Exits with prime_tester's own exit status (1 if any bad token occurred).
+set -eu
 
-set -u
+cd "$(dirname "$0")/../.."
 
-ROOT=$(CDPATH= cd "$(dirname "$0")/../.." && pwd)
-INDEX="$ROOT/index.html"
+if [ ! -f build/CMakeCache.txt ]; then
+  echo "[run] configuring: cmake -B build"
+  cmake -B build
+fi
+echo "[run] building: cmake --build build"
+cmake --build build
 
-if [ ! -f "$INDEX" ]; then
-  echo "ERROR: index.html not found at $INDEX"
-  echo "Run this script from a checkout (or unpacked zip) of the release."
+EXE=""
+for c in build/prime_tester build/prime_tester.exe \
+         build/Debug/prime_tester.exe build/Release/prime_tester.exe \
+         build/Debug/prime_tester build/Release/prime_tester; do
+  if [ -f "$c" ]; then EXE="$c"; break; fi
+done
+if [ -z "$EXE" ]; then
+  echo "[run] FAILED: prime_tester binary not found under build/" >&2
   exit 1
 fi
 
-echo "Opening $INDEX in the default browser ..."
-case "$(uname -s 2>/dev/null || echo unknown)" in
-  Darwin*)
-    open "$INDEX"
-    ;;
-  MINGW*|MSYS*|CYGWIN*)
-    if command -v cygpath >/dev/null 2>&1; then
-      cmd //c start "" "$(cygpath -w "$INDEX")"
-    else
-      cmd //c start "" "$INDEX"
-    fi
-    ;;
-  *)
-    if command -v xdg-open >/dev/null 2>&1; then
-      xdg-open "$INDEX"
-    else
-      echo "No opener found - open this file in your browser manually:"
-      echo "  $INDEX"
-    fi
-    ;;
-esac
-
-echo "Controls: ENTER = start/advance scene, Arrow keys or A/D = move, Space = fire."
+echo "[run] starting: $EXE $*"
+exec "$EXE" "$@"

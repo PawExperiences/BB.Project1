@@ -1,26 +1,30 @@
-<#
-.SYNOPSIS
-  run.ps1 -- start Space Invaders 0.1.0.
+# run.ps1 -- build (if needed) and run the prime_tester CLI, forwarding
+# all arguments. Use it to quickly try the released binary:
+#   powershell -File release/scripts/run.ps1 2 4 17
+#   powershell -File release/scripts/run.ps1 --upto 30
+# Exits with prime_tester's own exit status (1 if any bad token occurred).
+$ErrorActionPreference = "Stop"
 
-.DESCRIPTION
-  WHAT IT DOES: opens the game's index.html in the default web browser via
-  a file:// URL. The game is fully static (no server, no build step, no
-  dependencies), so this is all that is needed to play.
-  WHEN TO RUN: any time you want to play or smoke-test the released game.
+Set-Location (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 
-.EXAMPLE
-  powershell -File release\scripts\run.ps1
-#>
-
-$Root  = Resolve-Path (Join-Path $PSScriptRoot "..\..")
-$Index = Join-Path $Root "index.html"
-
-if (-not (Test-Path $Index)) {
-  Write-Host "ERROR: index.html not found at $Index"
-  Write-Host "Run this script from a checkout (or unpacked zip) of the release."
-  exit 1
+if (-not (Test-Path "build/CMakeCache.txt")) {
+  Write-Host "[run] configuring: cmake -B build"
+  cmake -B build
+  if ($LASTEXITCODE -ne 0) { throw "cmake configure failed (exit $LASTEXITCODE)" }
 }
+Write-Host "[run] building: cmake --build build"
+cmake --build build
+if ($LASTEXITCODE -ne 0) { throw "cmake build failed (exit $LASTEXITCODE)" }
 
-Write-Host "Opening $Index in the default browser ..."
-Start-Process $Index
-Write-Host "Controls: ENTER = start/advance scene, Arrow keys or A/D = move, Space = fire."
+$Exe = $null
+foreach ($candidate in @(
+    "build/prime_tester.exe", "build/prime_tester",
+    "build/Debug/prime_tester.exe", "build/Release/prime_tester.exe",
+    "build/Debug/prime_tester", "build/Release/prime_tester")) {
+  if (Test-Path $candidate) { $Exe = $candidate; break }
+}
+if (-not $Exe) { throw "[run] prime_tester binary not found under build/" }
+
+Write-Host "[run] starting: $Exe $args"
+& $Exe @args
+exit $LASTEXITCODE

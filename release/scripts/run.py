@@ -1,34 +1,52 @@
 #!/usr/bin/env python3
-"""
-run.py -- start Space Invaders 0.1.0.
+"""Build (if needed) and run the prime_tester CLI, forwarding all arguments.
 
-WHAT IT DOES: opens the game's index.html in the default web browser via
-a file:// URL. The game is fully static (no server, no build step, no
-dependencies), so this is all that is needed to play.
+Use it to quickly try the released binary, e.g.:
+    python release/scripts/run.py 2 4 17
+    python release/scripts/run.py --upto 30
+    printf '2\n4\n17\n' | python release/scripts/run.py
 
-WHEN TO RUN: any time you want to play or smoke-test the released game:
-  python release/scripts/run.py
-Standard library only.
+Exits with prime_tester's own exit status (1 if any bad token occurred).
 """
 
+import os
+import subprocess
 import sys
-import webbrowser
 from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]
+BUILD = ROOT / "build"
+
+EXE_CANDIDATES = (
+    "prime_tester",
+    "prime_tester.exe",
+    "Debug/prime_tester.exe",
+    "Release/prime_tester.exe",
+    "Debug/prime_tester",
+    "Release/prime_tester",
+)
 
 
 def main():
-    root = Path(__file__).resolve().parent.parent.parent
-    index = root / "index.html"
-    if not index.is_file():
-        print("ERROR: index.html not found at " + str(index))
-        print("Run this script from a checkout (or unpacked zip) of the release.")
-        sys.exit(1)
-    url = index.as_uri()
-    print("Opening " + url + " in the default browser ...")
-    webbrowser.open(url)
-    print("Controls: ENTER = start/advance scene, Arrow keys or A/D = move, Space = fire.")
-    print("If the browser did not open, double-click index.html instead.")
+    os.chdir(ROOT)
+    if not (BUILD / "CMakeCache.txt").exists():
+        print("[run] configuring: cmake -B build", flush=True)
+        subprocess.check_call(["cmake", "-B", "build"])
+    print("[run] building: cmake --build build", flush=True)
+    subprocess.check_call(["cmake", "--build", "build"])
+    exe = None
+    for rel in EXE_CANDIDATES:
+        candidate = BUILD / rel
+        if candidate.is_file():
+            exe = candidate
+            break
+    if exe is None:
+        print("[run] FAILED: prime_tester binary not found under build/", file=sys.stderr)
+        return 1
+    print("[run] starting: %s %s" % (exe, " ".join(sys.argv[1:])), flush=True)
+    result = subprocess.run([str(exe)] + sys.argv[1:])
+    return result.returncode
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

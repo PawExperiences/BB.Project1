@@ -1,3 +1,27 @@
+## 0.3.0 -- e2e prime tester 0.3.0
+
+# Changelog
+
+## [0.3.0] - e2e prime tester (first release)
+
+First release of the Prime Number Tester: a standalone, dependency-free C++17 command-line program built with CMake (minimum 3.16). No previous release of this project exists (PREVIOUS: None).
+
+### Added
+- `prime_tester` CLI: prints `<n> is prime` / `<n> is not prime` for each integer token, one per line to stdout, in input order. Core predicate `bool is_prime(long long n)` (src/prime.h, src/prime.cpp) uses trial division up to sqrt(n) with the 6k+/-1 optimisation.
+- Correct edge cases: every n < 2 (0, 1, all negatives) is not prime; 2 and 3 are prime; even n > 2 is not prime.
+- Two input modes: tokens as command-line arguments (stdin ignored), or one token per line from stdin until EOF when no arguments are given.
+- Error contract: a non-integer or out-of-`long long`-range token is echoed verbatim to stderr as `not a number: <token>`; processing continues with the remaining tokens and the process exits 1 if any bad token occurred. Clean runs exit 0; empty input prints nothing and exits 0.
+- Sieve module (src/sieve.h, src/sieve.cpp): `std::vector<long long> primes_up_to(long long n)` implemented as a Sieve of Eratosthenes; empty vector for n < 2 (e.g. `primes_up_to(30)` = {2,3,5,7,11,13,17,19,23,29}).
+- `--upto N` CLI mode: prints every prime 2 <= p <= N (N inclusive), one per line, exit 0; N < 2 prints nothing and exits 0. Serves as the manual benchmark: `--upto 10000000` completes in well under 30 seconds (timed externally).
+- CTest coverage (tests/sieve_test.cpp) for `primes_up_to` boundary cases (n < 2, n = 2, n = 30); `ctest` passes against the build tree.
+- README.md: copy-pasteable build section (`cmake -B build`, `cmake --build build`, executable at `build/prime_tester`) plus a worked-examples table covering eight scenarios (prime, composite, 0, 1, negative, non-numeric token, empty stdin, `--upto 30`) with verbatim expected stdout and exit statuses.
+
+### Changed
+- Repository housekeeping before this release line: the working tree was reset (commits 3d812d4, 32e31f9, 8e02c96), removing the prior in-repo e2e experiments visible in the diff -- the space invaders game sources (boss.js, collision.js, game.js, gameConfig.js, index.html, input.js, invaders.js, level1.js, level2.js, levels.js, player.js), the old release scripts (release/scripts/*), old per-release notes (docs/releases/0-1-0.md, 0-6-0.md) and the old CHANGELOG content. None of that is part of this release's scope.
+
+### Fixed
+- Nothing; initial release of the current codebase.
+
 ## 0.1.0 -- e2e space invaders 0.1.0
 
 # Changelog — Space Invaders 0.1.0
