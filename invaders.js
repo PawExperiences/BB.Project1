@@ -1,13 +1,18 @@
 // The invader formation: an 11-column x 5-row grid (55 invaders, the
-// classic formation) of identical filled rectangles that marches sideways
-// as a single unit, reversing direction and dropping one fixed step
-// whenever its edge-most invader reaches a side edge of the canvas.
-// Added by "Sprite rendering and collision detection".
+// classic formation) of identical filled rectangles. The level cards drive
+// the march in discrete steps via step(): each step moves the whole
+// formation sideways by one fixed increment as a unit, and when the
+// edge-most living invader reaches a side edge of the canvas the formation
+// snaps flush to that edge, drops by exactly one invader cell height and
+// reverses horizontal direction.
+// Added by "Sprite rendering and collision detection"; the discrete-step
+// march and the aliveCount()/lowestBottom() lifecycle queries were added by
+// "Level 1: the classic grid".
 
 import { CANVAS_WIDTH } from './gameConfig.js';
 
 // Grid shape — exported so the classic 11 x 5 = 55 formation is checkable
-// from the outside (README verification, later level cards).
+// from the outside (README verification, the level cards).
 export const INVADER_COLS = 11;
 export const INVADER_ROWS = 5;
 
@@ -29,10 +34,11 @@ const FORMATION_WIDTH = (INVADER_COLS - 1) * CELL_WIDTH + INVADER_WIDTH; // 516
 const START_X = (CANVAS_WIDTH - FORMATION_WIDTH) / 2; // 126
 const START_Y = 112;
 
-// Sideways drift speed in px/s (dt-scaled, like the player ship) and the
-// fixed downward step taken at each edge reversal.
-const FORMATION_SPEED = 40;
-const DROP_STEP = 24;
+// March increments: STEP_X px sideways per discrete step (how often step()
+// is called — the pacing — is owned by the level cards), and a downward
+// drop of exactly one invader cell height at each edge reversal.
+const STEP_X = 8;
+const DROP_STEP = CELL_HEIGHT;
 
 export class InvaderFormation {
   constructor() {
@@ -40,9 +46,9 @@ export class InvaderFormation {
   }
 
   // Back to the full starting formation: 55 living invaders in their home
-  // position, marching right. game.js calls this at the start of every
-  // game. Each invader is a plain { x, y, width, height, alive } rect in
-  // absolute canvas coordinates (x/y = top-left) — the same shape the
+  // position, marching right. The level cards call this when a level
+  // (re)starts. Each invader is a plain { x, y, width, height, alive } rect
+  // in absolute canvas coordinates (x/y = top-left) — the same shape the
   // shared AABB test in collision.js expects.
   reset() {
     this.invaders = [];
@@ -61,11 +67,17 @@ export class InvaderFormation {
     this.direction = 1;
   }
 
-  update(dt) {
-    // The formation moves as a single unit: every living invader gets the
-    // same dx this step. Dead invaders are skipped in place, so killing one
-    // never alters the position or movement of the rest.
-    const dx = this.direction * FORMATION_SPEED * dt;
+  // One discrete march step: every living invader moves STEP_X px in the
+  // current direction, as a single unit. Dead invaders are skipped in
+  // place, so killing one never alters the position or movement of the
+  // rest.
+  //
+  // Edge check on the edge-most LIVING invader: when this step makes it
+  // reach either side edge of the canvas, the whole formation snaps back to
+  // exactly touch that edge, reverses horizontal direction and drops by
+  // exactly one invader cell height (DROP_STEP === CELL_HEIGHT).
+  step() {
+    const dx = this.direction * STEP_X;
 
     let anyAlive = false;
     let leftEdge = Infinity;
@@ -78,15 +90,10 @@ export class InvaderFormation {
       if (invader.x + invader.width > rightEdge) rightEdge = invader.x + invader.width;
     }
 
-    // All-clear (every invader destroyed) is a level/game-flow concern and
-    // out of scope for this card: with none left there is simply nothing to
-    // move.
+    // With none left there is simply nothing to move; the all-clear flow is
+    // owned by the level cards.
     if (!anyAlive) return;
 
-    // Edge check on the edge-most LIVING invader: when it reaches either
-    // side edge of the canvas, the whole formation snaps back to exactly
-    // touch that edge, reverses horizontal direction and drops one fixed
-    // step downward as a unit.
     const hitRight = this.direction > 0 && rightEdge >= CANVAS_WIDTH;
     const hitLeft = this.direction < 0 && leftEdge <= 0;
     if (hitRight || hitLeft) {
@@ -100,6 +107,29 @@ export class InvaderFormation {
         invader.y += DROP_STEP;
       }
     }
+  }
+
+  // The number of invaders still alive (55 at spawn). The level cards scale
+  // the march pace from it.
+  aliveCount() {
+    let count = 0;
+    for (const invader of this.invaders) {
+      if (invader.alive) count++;
+    }
+    return count;
+  }
+
+  // The bottom edge of the lowest living invader in canvas coordinates
+  // (the largest y + height), or 0 when none are alive. The level cards
+  // compare this against the player's row for the breach check.
+  lowestBottom() {
+    let bottom = 0;
+    for (const invader of this.invaders) {
+      if (!invader.alive) continue;
+      const invaderBottom = invader.y + invader.height;
+      if (invaderBottom > bottom) bottom = invaderBottom;
+    }
+    return bottom;
   }
 
   draw(ctx) {
