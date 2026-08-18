@@ -1,12 +1,17 @@
 import { CANVAS_WIDTH, CANVAS_HEIGHT, STARTING_LIVES } from './gameConfig.js';
 import { initInput } from './input.js';
 import { Player } from './player.js';
+import { InvaderFormation } from './invaders.js';
+import {
+  collide,
+  updateExplosions,
+  drawExplosions,
+  clearExplosions,
+} from './collision.js';
 
 // Future import sites — one line per sibling module with the card that owns
 // it. These are comments only: the files do not exist yet, and a real import
 // of a missing file would throw at load time.
-// collision.js — added by "Sprite rendering and collision detection"
-// invaders.js — added by "Level 1: the classic grid"
 // level1.js — added by "Level 1: the classic grid"
 // level2.js — added by "Level 2: they shoot back"
 // level3.js — added by "Level 3: shields and formations"
@@ -25,6 +30,19 @@ initInput();
 // (the in-flight bullet, or null) and call player.loseLife() when the ship
 // is hit.
 export const player = new Player();
+
+// The invader formation (11 columns x 5 rows = 55 invaders), created once
+// at startup and reset at the start of every game. invaders.js owns the
+// grid and its marching; collision.js owns what happens when a bullet
+// meets an invader.
+const formation = new InvaderFormation();
+
+// Hostile (invader-fired) bullets, part of the game state. No card spawns
+// these yet — "Level 2: they shoot back" will push its bullets into this
+// list — but the collision pass already consumes whatever the list holds
+// every frame. Exported so that card writes to the same list this card
+// passes to collide().
+export const hostileBullets = [];
 
 // HUD state, owned by this card and exported for sibling cards: they import
 // and mutate this object (e.g. hud.score += ... on a kill). hud.lives is a
@@ -61,6 +79,9 @@ let lastTimestamp = null;
 function startGame() {
   hud.score = 0;
   player.reset();
+  formation.reset();
+  hostileBullets.length = 0;
+  clearExplosions();
   hud.lives = player.lives;
   scene = SCENES.PLAYING;
 }
@@ -99,6 +120,11 @@ function update(dt) {
       break;
     case SCENES.PLAYING:
       player.update(dt);
+      formation.update(dt);
+      // Explosions are pure visuals owned by collision.js; aging them here
+      // keeps their ~0.3 s lifetime on the same fixed timestep as the rest
+      // of the world.
+      updateExplosions(dt);
       // Mirror the player's lives counter into the HUD and run the wired
       // Playing -> Game Over transition: the level cards call
       // player.loseLife(), and the moment lives reach 0 the game ends
@@ -137,7 +163,11 @@ function renderTitle() {
 }
 
 function renderPlaying() {
+  // Draw only — every collision/overlap decision for this frame has
+  // already been made by collide() before render() is called.
+  formation.draw(ctx);
   player.draw(ctx);
+  drawExplosions(ctx);
   drawHud();
 }
 
@@ -188,7 +218,14 @@ function frame(timestamp) {
     accumulator -= FIXED_DT;
   }
 
-  // Phase 2 — draw exactly once per animation frame.
+  // Phase 2 — collision pass: exactly once per animation frame, after the
+  // world updates and before any drawing. All AABB/overlap checks live in
+  // collision.js; the render code below performs none.
+  if (scene === SCENES.PLAYING) {
+    collide({ player, formation, hostileBullets, hud });
+  }
+
+  // Phase 3 — draw exactly once per animation frame.
   render();
 
   requestAnimationFrame(frame);
