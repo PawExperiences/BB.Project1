@@ -1,6 +1,8 @@
 import { CANVAS_WIDTH, CANVAS_HEIGHT, STARTING_LIVES } from './gameConfig.js';
 
-// Forward-looking imports for sibling cards — nothing below is implemented yet.
+// Future import sites — one line per sibling module with the card that owns
+// it. These are comments only: the files do not exist yet, and a real import
+// of a missing file would throw at load time.
 // input.js — added by "Keyboard input and the player ship"
 // player.js — added by "Keyboard input and the player ship"
 // collision.js — added by "Sprite rendering and collision detection"
@@ -13,8 +15,10 @@ import { CANVAS_WIDTH, CANVAS_HEIGHT, STARTING_LIVES } from './gameConfig.js';
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 
-// HUD state, owned by this card. Sibling cards import and mutate this object
-// (e.g. score += ... on a kill, lives -= 1 on a hit) rather than re-declaring it.
+// HUD state, owned by this card and exported for sibling cards: they import
+// and mutate this object (e.g. hud.score += ... on a kill, hud.lives -= 1 on
+// a hit) instead of declaring their own copy. In-memory only — no
+// localStorage persistence (explicitly out of scope for this card).
 export const hud = {
   score: 0,
   lives: STARTING_LIVES,
@@ -29,19 +33,22 @@ const SCENES = {
 
 let scene = SCENES.TITLE;
 
+// Fixed timestep: update() is always invoked with exactly this dt, i.e. 60
+// steps per second, independent of the display's actual frame rate.
 const FIXED_DT = 1 / 60;
-// Caps how much simulated time a single frame can contribute to the
-// accumulator, so resuming a backgrounded/inactive tab (where the browser
-// reports one huge delta) doesn't burst-fire a queue of catch-up updates.
+// Maximum frame delta (250 ms) allowed into the accumulator. While the tab
+// is backgrounded, requestAnimationFrame pauses and the next frame reports
+// one huge delta; clamping it means resuming fires at most
+// MAX_DELTA / FIXED_DT = 15 catch-up updates instead of an unbounded burst.
 const MAX_DELTA = 0.25;
 
 let accumulator = 0;
 let lastTimestamp = null;
 
 function startGame() {
-  scene = SCENES.PLAYING;
   hud.score = 0;
   hud.lives = STARTING_LIVES;
+  scene = SCENES.PLAYING;
 }
 
 function endGame() {
@@ -53,15 +60,19 @@ function returnToTitle() {
   scene = SCENES.TITLE;
 }
 
+// Every scene transition is driven from here by the ENTER key; the page is
+// never reloaded or navigated at any point.
 window.addEventListener('keydown', (event) => {
   if (event.key !== 'Enter') return;
 
   if (scene === SCENES.TITLE) {
     startGame();
   } else if (scene === SCENES.PLAYING) {
-    // No gameplay entities exist yet, so there is no real end-of-game
-    // condition to check. ENTER stands in as the manual trigger until a
-    // sibling card (losing all lives, clearing level 3 + boss) replaces it.
+    // Manual stand-in only: this card ships no gameplay that can reduce
+    // lives, so ENTER ends the game to keep the full Title -> Playing ->
+    // Game Over -> Title loop verifiable by hand. The real trigger is the
+    // hud.lives <= 0 check in update(); the sibling card that introduces
+    // damage replaces this branch.
     endGame();
   } else if (scene === SCENES.GAME_OVER) {
     returnToTitle();
@@ -73,7 +84,13 @@ function update(dt) {
     case SCENES.TITLE:
       break;
     case SCENES.PLAYING:
-      // No gameplay-entity logic in this card — just the loop and the HUD.
+      // The wired Playing -> Game Over transition: later cards write
+      // hud.lives, and the moment it reaches 0 the game ends (hiScore is
+      // updated inside endGame()). No gameplay-entity logic exists in this
+      // card — entities arrive in sibling cards.
+      if (hud.lives <= 0) {
+        endGame();
+      }
       break;
     case SCENES.GAME_OVER:
       break;
@@ -104,6 +121,7 @@ function renderTitle() {
 }
 
 function renderPlaying() {
+  // The playfield is intentionally empty — entities arrive in later cards.
   drawHud();
 }
 
@@ -147,12 +165,14 @@ function frame(timestamp) {
   lastTimestamp = timestamp;
   if (delta > MAX_DELTA) delta = MAX_DELTA;
 
+  // Phase 1 — fixed-timestep simulation: 0..15 updates of exactly 1/60 s.
   accumulator += delta;
   while (accumulator >= FIXED_DT) {
     update(FIXED_DT);
     accumulator -= FIXED_DT;
   }
 
+  // Phase 2 — draw exactly once per animation frame.
   render();
 
   requestAnimationFrame(frame);
