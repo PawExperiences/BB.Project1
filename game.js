@@ -1,18 +1,20 @@
 import { CANVAS_WIDTH, CANVAS_HEIGHT, STARTING_LIVES } from './gameConfig.js';
 import { initInput } from './input.js';
 import { Player } from './player.js';
-import { InvaderFormation } from './invaders.js';
 import {
   collide,
   updateExplosions,
   drawExplosions,
   clearExplosions,
 } from './collision.js';
+import { createLevel } from './levels.js';
 
-// Future import sites — one line per sibling module with the card that owns
-// it. These are comments only: the files do not exist yet, and a real import
-// of a missing file would throw at load time.
+// Level modules self-register with the level registry (levels.js) when
+// imported — one import line per level module, each owned by its card:
 // level1.js — added by "Level 1: the classic grid"
+import './level1.js';
+// Future import sites — comments only: the files do not exist yet, and a
+// real import of a missing file would throw at load time.
 // level2.js — added by "Level 2: they shoot back"
 // level3.js — added by "Level 3: shields and formations"
 // boss.js — added by "Boss level: multi-phase finale"
@@ -27,15 +29,10 @@ initInput();
 
 // The player ship, created once at startup and reset at the start of every
 // game. Exported for the collision/level cards: they read player.bullet
-// (the in-flight bullet, or null) and call player.loseLife() when the ship
-// is hit.
+// (the in-flight bullet, or null), call player.loseLife() when the ship is
+// hit or a breach costs a life, and player.resetPosition() to restart a
+// level.
 export const player = new Player();
-
-// The invader formation (11 columns x 5 rows = 55 invaders), created once
-// at startup and reset at the start of every game. invaders.js owns the
-// grid and its marching; collision.js owns what happens when a bullet
-// meets an invader.
-const formation = new InvaderFormation();
 
 // Hostile (invader-fired) bullets, part of the game state. No card spawns
 // these yet — "Level 2: they shoot back" will push its bullets into this
@@ -48,13 +45,34 @@ export const hostileBullets = [];
 // and mutate this object (e.g. hud.score += ... on a kill). hud.lives is a
 // display mirror of the lives counter owned by player.js — every Playing
 // update copies player.lives into it, so the HUD text and the lives <= 0
-// game-over check below follow the player's counter. In-memory only — no
-// localStorage persistence (explicitly out of scope for this card).
+// game-over check below follow the player's counter. hud.level is the
+// current level number: set to 1 at the start of every game and bumped on
+// every level change by advanceLevel(). In-memory only — no localStorage
+// persistence (explicitly out of scope for this card).
 export const hud = {
   score: 0,
   lives: STARTING_LIVES,
   hiScore: 0,
+  level: 1,
 };
+
+// The slice of game state handed to every level the registry creates.
+// Level 1 reads the player's row for its breach check and calls
+// loseLife()/resetPosition() on it; "Level 2: they shoot back" will push
+// its bullets into hostileBullets; score changes stay owned by
+// collision.js via hud.
+const levelContext = { player, hud, hostileBullets };
+
+// The active level object (created through the registry in levels.js) and
+// its 1-based number. currentLevel is null only while no module is
+// registered for the current level number — until "Level 2: they shoot
+// back" lands, clearing Level 1 leaves the Playing scene running with an
+// empty field while the HUD already shows the new level number.
+// currentLevel is exported as a live binding so the README's manual
+// verification can reach the active level's formation from the DevTools
+// console.
+export let currentLevel = null;
+let levelNumber = 1;
 
 const SCENES = {
   TITLE: 'title',
@@ -79,11 +97,27 @@ let lastTimestamp = null;
 function startGame() {
   hud.score = 0;
   player.reset();
-  formation.reset();
   hostileBullets.length = 0;
   clearExplosions();
   hud.lives = player.lives;
+  // Every game starts at Level 1, created through the registry so later
+  // level cards plug in without changes here or in level1.js.
+  levelNumber = 1;
+  hud.level = levelNumber;
+  currentLevel = createLevel(levelNumber, levelContext);
   scene = SCENES.PLAYING;
+}
+
+// Level-clear handoff: bump the level counter, mirror it into the HUD and
+// ask the registry for the next level's module. createLevel() returns null
+// when no module has registered that number yet — today that is the case
+// for level 2, whose module arrives with the sibling card "Level 2: they
+// shoot back" — which leaves the Playing scene running with an empty field
+// until then.
+function advanceLevel() {
+  levelNumber += 1;
+  hud.level = levelNumber;
+  currentLevel = createLevel(levelNumber, levelContext);
 }
 
 function endGame() {
@@ -103,11 +137,11 @@ window.addEventListener('keydown', (event) => {
   if (scene === SCENES.TITLE) {
     startGame();
   } else if (scene === SCENES.PLAYING) {
-    // Manual stand-in only: no card yet ships gameplay that reduces lives,
-    // so ENTER ends the game to keep the full Title -> Playing -> Game
-    // Over -> Title loop verifiable by hand. The real trigger is the
-    // hud.lives <= 0 check in update(); the level cards reduce lives via
-    // player.loseLife() and replace this branch.
+    // Manual stand-in only: ENTER ends the game so the full
+    // Title -> Playing -> Game Over -> Title loop stays verifiable by
+    // hand. The wired trigger is the hud.lives <= 0 check in update(),
+    // reached when Level 1's breach handling (and later the level cards'
+    // damage) takes the last life via player.loseLife().
     endGame();
   } else if (scene === SCENES.GAME_OVER) {
     returnToTitle();
@@ -120,7 +154,13 @@ function update(dt) {
       break;
     case SCENES.PLAYING:
       player.update(dt);
-      formation.update(dt);
+      if (currentLevel !== null) {
+        // The level owns the formation march (discrete steps with linear
+        // acceleration), the edge drops, the breach -> lose-one-life +
+        // restart path and clear detection.
+        currentLevel.update(dt);
+        if (currentLevel.cleared) advanceLevel();
+      }
       // Explosions are pure visuals owned by collision.js; aging them here
       // keeps their ~0.3 s lifetime on the same fixed timestep as the rest
       // of the world.
@@ -146,6 +186,11 @@ function drawHud() {
   ctx.fillText(`Score: ${hud.score}`, 16, 28);
   ctx.fillText(`Lives: ${hud.lives}`, 16, 52);
 
+  // Current level number, centered on the HUD's top line: visible from the
+  // moment the level starts and bumped on every level change.
+  ctx.textAlign = 'center';
+  ctx.fillText(`LEVEL ${hud.level}`, CANVAS_WIDTH / 2, 28);
+
   ctx.textAlign = 'right';
   ctx.fillText(`Hi: ${hud.hiScore}`, CANVAS_WIDTH - 16, 28);
   ctx.textAlign = 'left';
@@ -165,7 +210,7 @@ function renderTitle() {
 function renderPlaying() {
   // Draw only — every collision/overlap decision for this frame has
   // already been made by collide() before render() is called.
-  formation.draw(ctx);
+  if (currentLevel !== null) currentLevel.draw(ctx);
   player.draw(ctx);
   drawExplosions(ctx);
   drawHud();
@@ -220,9 +265,15 @@ function frame(timestamp) {
 
   // Phase 2 — collision pass: exactly once per animation frame, after the
   // world updates and before any drawing. All AABB/overlap checks live in
-  // collision.js; the render code below performs none.
-  if (scene === SCENES.PLAYING) {
-    collide({ player, formation, hostileBullets, hud });
+  // collision.js; the render code below performs none. The formation under
+  // test belongs to the active level.
+  if (scene === SCENES.PLAYING && currentLevel !== null) {
+    collide({
+      player,
+      formation: currentLevel.formation,
+      hostileBullets,
+      hud,
+    });
   }
 
   // Phase 3 — draw exactly once per animation frame.

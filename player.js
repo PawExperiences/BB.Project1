@@ -1,6 +1,7 @@
 // The player ship: movement, clamping, procedural drawing, single-bullet
 // management and the lives counter.
-// Added by "Keyboard input and the player ship".
+// Added by "Keyboard input and the player ship"; the position-only
+// resetPosition() was added by "Level 1: the classic grid".
 
 import {
   CANVAS_WIDTH,
@@ -36,6 +37,21 @@ export class Player {
   // Back to the starting state: centered at the bottom, no bullet in
   // flight, lives restored. game.js calls this at the start of every game.
   reset() {
+    this.resetPosition();
+
+    // Lives counter, initialised from STARTING_LIVES (gameConfig.js).
+    // Decrement interface for the level cards: call loseLife() when the
+    // ship is hit or a level breach costs a life (this.lives may also be
+    // assigned directly). What happens when lives reach 0 — game over —
+    // is owned by game.js, not by this class.
+    this.lives = STARTING_LIVES;
+  }
+
+  // Position-only reset for the level cards: the ship returns to its start
+  // position and any in-flight bullet is gone, while the lives counter is
+  // left untouched. Level restarts (e.g. Level 1's player-row breach) use
+  // this so the deducted life is neither refunded nor doubled.
+  resetPosition() {
     // Top-left corner of the ship in canvas coordinates; this.x is the
     // ship's left edge, this.x + this.width its right edge.
     this.x = (CANVAS_WIDTH - this.width) / 2;
@@ -46,13 +62,6 @@ export class Player {
     // exposed for the collision and level cards: they read player.bullet
     // to test hits against invaders, shields and the boss.
     this.bullet = null;
-
-    // Lives counter, initialised from STARTING_LIVES (gameConfig.js).
-    // Decrement interface for the level cards: call loseLife() when the
-    // ship is hit (this.lives may also be assigned directly). What happens
-    // when lives reach 0 — game over, respawn — is owned by the level
-    // cards / game.js, not by this class.
-    this.lives = STARTING_LIVES;
   }
 
   // Documented decrement interface for the level cards: reduces the lives
