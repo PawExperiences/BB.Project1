@@ -1,7 +1,9 @@
 // The player ship: movement, clamping, procedural drawing, single-bullet
 // management and the lives counter.
 // Added by "Keyboard input and the player ship"; the position-only
-// resetPosition() was added by "Level 1: the classic grid".
+// resetPosition() was added by "Level 1: the classic grid"; the session
+// shot counter and the post-respawn invulnerability window (flashing +
+// hit immunity) were added by "Level 2: they shoot back".
 
 import {
   CANVAS_WIDTH,
@@ -27,6 +29,10 @@ const BULLET_WIDTH = 4;
 const BULLET_HEIGHT = 14;
 const BULLET_COLOR = '#ffffff';
 
+// Invulnerability flash rate: while the window runs, the ship toggles
+// between visible and hidden every ~100 ms.
+const FLASH_HZ = 10;
+
 export class Player {
   constructor() {
     this.width = SHIP_WIDTH;
@@ -45,6 +51,18 @@ export class Player {
     // assigned directly). What happens when lives reach 0 — game over —
     // is owned by game.js, not by this class.
     this.lives = STARTING_LIVES;
+
+    // Session shot counter ("Level 2: they shoot back"): incremented once
+    // per shot fired. Zeroed only here, at the start of a game — the
+    // level transition never calls reset(), so the count accumulates
+    // across Level 1 and Level 2 and drives the UFO bonus tiers.
+    this.shotsFired = 0;
+
+    // Post-respawn invulnerability window in seconds ("Level 2: they
+    // shoot back"): while > 0 the ship visibly flashes and loseLife() is
+    // a no-op. Granted via grantInvulnerability(); zeroed for a fresh
+    // game.
+    this.invulnerable = 0;
   }
 
   // Position-only reset for the level cards: the ship returns to its start
@@ -65,13 +83,28 @@ export class Player {
   }
 
   // Documented decrement interface for the level cards: reduces the lives
-  // counter by 1 (never below 0) and returns the remaining lives.
+  // counter by 1 (never below 0) and returns the remaining lives. While
+  // the invulnerability window runs, a hit deducts nothing.
   loseLife() {
+    if (this.invulnerable > 0) return this.lives;
     if (this.lives > 0) this.lives -= 1;
     return this.lives;
   }
 
+  // Interface for the level cards ("Level 2: they shoot back"): start an
+  // invulnerability window of the given length in seconds. The ship keeps
+  // moving and firing normally; it flashes and cannot lose a life.
+  grantInvulnerability(seconds) {
+    this.invulnerable = seconds;
+  }
+
   update(dt) {
+    // Run the invulnerability window down on the same fixed timestep as
+    // the rest of the world.
+    if (this.invulnerable > 0) {
+      this.invulnerable = Math.max(0, this.invulnerable - dt);
+    }
+
     // Horizontal movement while ArrowLeft/ArrowRight or A/D is held. Speed
     // is PLAYER_SPEED px/s scaled by dt, so it is framerate-independent:
     // update(0.5) moves the ship exactly 100 px. Holding both directions
@@ -106,6 +139,9 @@ export class Player {
         width: BULLET_WIDTH,
         height: BULLET_HEIGHT,
       };
+      // One more shot in the session counter — Level 2's UFO tiers read
+      // it mod 4.
+      this.shotsFired += 1;
     }
   }
 
@@ -115,6 +151,15 @@ export class Player {
       ctx.fillStyle = BULLET_COLOR;
       ctx.fillRect(this.bullet.x, this.bullet.y, this.bullet.width, this.bullet.height);
     }
+
+    // While the invulnerability window runs the ship flashes: it is
+    // skipped (invisible) on alternating ~100 ms phases of the remaining
+    // time, and drawn normally otherwise.
+    const flashHidden =
+      this.invulnerable > 0 &&
+      Math.floor(this.invulnerable * FLASH_HZ) % 2 === 1;
+
+    if (flashHidden) return;
 
     // The ship is drawn procedurally from canvas rectangles and an arc —
     // no image assets are loaded.
