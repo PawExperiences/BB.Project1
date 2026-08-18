@@ -15,10 +15,11 @@ import { createLevel } from './levels.js';
 import './level1.js';
 // level2.js — added by "Level 2: they shoot back"
 import './level2.js';
+// boss.js — added by "Boss level: multi-phase finale"
+import './boss.js';
 // Future import sites — comments only: the files do not exist yet, and a
 // real import of a missing file would throw at load time.
 // level3.js — added by "Level 3: shields and formations"
-// boss.js — added by "Boss level: multi-phase finale"
 
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
@@ -38,7 +39,9 @@ export const player = new Player();
 // Hostile (invader-fired) bullets, part of the game state. "Level 2: they
 // shoot back" pushes its bullets into this list, and the collision pass
 // consumes whatever the list holds every frame. Exported so that card
-// writes to the same list this card passes to collide().
+// writes to the same list this card passes to collide(). The boss level
+// keeps its bullets in its own list (see boss.js) — sudden death cannot
+// be expressed through this list's loseLife() handling.
 export const hostileBullets = [];
 
 // HUD state, owned by this card and exported for sibling cards: they import
@@ -59,8 +62,10 @@ export const hud = {
 // The slice of game state handed to every level the registry creates.
 // Level 1 reads the player's row for its breach check and calls
 // loseLife()/resetPosition() on it; Level 2 pushes its bullets into
-// hostileBullets and awards its UFO bonus through hud; invader-kill score
-// changes stay owned by collision.js via hud.
+// hostileBullets and awards its UFO bonus through hud; the boss level
+// (Level 4) hit-tests its bullets against the player and reads hud.score
+// for its win screen; invader-kill score changes stay owned by
+// collision.js via hud.
 const levelContext = { player, hud, hostileBullets };
 
 // The active level object (created through the registry in levels.js) and
@@ -69,8 +74,8 @@ const levelContext = { player, hud, hostileBullets };
 // successor has not landed yet (today: Level 3) leaves the Playing scene
 // running with an empty field while the HUD already shows the new level
 // number. currentLevel is exported as a live binding so the README's
-// manual verification can reach the active level's formation from the
-// DevTools console.
+// manual verification can reach the active level from the DevTools
+// console.
 export let currentLevel = null;
 let levelNumber = 1;
 
@@ -78,6 +83,7 @@ const SCENES = {
   TITLE: 'title',
   PLAYING: 'playing',
   GAME_OVER: 'gameOver',
+  WIN: 'win',
 };
 
 let scene = SCENES.TITLE;
@@ -111,8 +117,10 @@ function startGame() {
 // Level-clear handoff: bump the level counter, mirror it into the HUD and
 // ask the registry for the next level's module. Level 2 is registered by
 // level2.js, so clearing Level 1 starts it immediately, in this same fixed
-// step, with the lives/score state untouched. createLevel() returns null
-// when no module has registered the new number yet (today: level 3), which
+// step, with the lives/score state untouched. The boss fight is registered
+// for Level 4 by boss.js, so clearing Level 3 starts it through this same
+// dispatch — no special-case entry point. createLevel() returns null when
+// no module has registered the new number yet (today: level 3), which
 // leaves the Playing scene running with an empty field until then.
 function advanceLevel() {
   levelNumber += 1;
@@ -123,6 +131,16 @@ function advanceLevel() {
 function endGame() {
   if (hud.score > hud.hiScore) hud.hiScore = hud.score;
   scene = SCENES.GAME_OVER;
+}
+
+// Boss-victory handoff ("Boss level: multi-phase finale"): the boss level
+// sets its `victory` flag when its HP reaches 0. The run then ends on the
+// win screen — drawn by the boss level itself via drawWinScreen() —
+// instead of advancing to a Level 5 that does not exist. ENTER on the win
+// screen starts a fresh run at Level 1 via startGame().
+function winGame() {
+  if (hud.score > hud.hiScore) hud.hiScore = hud.score;
+  scene = SCENES.WIN;
 }
 
 function returnToTitle() {
@@ -141,10 +159,14 @@ window.addEventListener('keydown', (event) => {
     // Title -> Playing -> Game Over -> Title loop stays verifiable by
     // hand. The wired trigger is the hud.lives <= 0 check in update(),
     // reached when Level 1's breach handling (or Level 2's invader fire)
-    // takes the last life via player.loseLife().
+    // takes the last life via player.loseLife(), or when the boss's
+    // sudden death zeroes the lives counter directly.
     endGame();
   } else if (scene === SCENES.GAME_OVER) {
     returnToTitle();
+  } else if (scene === SCENES.WIN) {
+    // Win screen restart: straight into a fresh run at Level 1.
+    startGame();
   }
 });
 
@@ -157,9 +179,15 @@ function update(dt) {
       if (currentLevel !== null) {
         // The level owns the formation march (discrete steps with linear
         // acceleration), the edge drops, the breach -> lose-one-life +
-        // restart path and clear detection.
+        // restart path and clear detection. The boss level (Level 4)
+        // instead owns its phased spread fire and sudden death, and ends
+        // the fight through `victory` rather than `cleared`.
         currentLevel.update(dt);
-        if (currentLevel.cleared) advanceLevel();
+        if (currentLevel.victory) {
+          winGame();
+        } else if (currentLevel.cleared) {
+          advanceLevel();
+        }
       }
       // Explosions are pure visuals owned by collision.js; aging them here
       // keeps their ~0.3 s lifetime on the same fixed timestep as the rest
@@ -167,7 +195,8 @@ function update(dt) {
       updateExplosions(dt);
       // Mirror the player's lives counter into the HUD and run the wired
       // Playing -> Game Over transition: the level cards call
-      // player.loseLife(), and the moment lives reach 0 the game ends
+      // player.loseLife() — or zero the counter outright, as the boss's
+      // sudden death does — and the moment lives reach 0 the game ends
       // (hiScore is updated inside endGame()).
       hud.lives = player.lives;
       if (hud.lives <= 0) {
@@ -175,6 +204,8 @@ function update(dt) {
       }
       break;
     case SCENES.GAME_OVER:
+      break;
+    case SCENES.WIN:
       break;
   }
 }
@@ -232,6 +263,19 @@ function renderGameOver() {
   drawHud();
 }
 
+function renderWin() {
+  // The WIN scene is reachable only from the boss fight's victory flag,
+  // so currentLevel is the boss level, which owns the win screen's
+  // content (final score + restart prompt). The canvas has already been
+  // cleared by render().
+  if (
+    currentLevel !== null &&
+    typeof currentLevel.drawWinScreen === 'function'
+  ) {
+    currentLevel.drawWinScreen(ctx);
+  }
+}
+
 function render() {
   ctx.fillStyle = '#000000';
   ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
@@ -245,6 +289,9 @@ function render() {
       break;
     case SCENES.GAME_OVER:
       renderGameOver();
+      break;
+    case SCENES.WIN:
+      renderWin();
       break;
   }
 }
@@ -266,7 +313,9 @@ function frame(timestamp) {
   // Phase 2 — collision pass: exactly once per animation frame, after the
   // world updates and before any drawing. All AABB/overlap checks live in
   // collision.js; the render code below performs none. The formation under
-  // test belongs to the active level.
+  // test belongs to the active level (an empty stand-in during the boss
+  // fight — boss.js runs its own checks through the shared overlaps()
+  // helper).
   if (scene === SCENES.PLAYING && currentLevel !== null) {
     collide({
       player,
