@@ -1,230 +1,149 @@
-# BB.Project1 — Space Invaders
+# Space Invaders
 
-A hand-written HTML/CSS/ES-modules Space Invaders clone. No framework, no
-bundler, no package manager.
+A classic Space Invaders clone in hand-written HTML, CSS and ES modules.
+No framework, no bundler, no package manager — and no build step.
 
-## Running the game
+## Run
 
-Open `index.html` directly in a browser (double-click it, or open the
-`file://` path). There is no build step, no dev server, and nothing to
-install — the page loads `game.js` as an ES module and runs. Use a browser
-that allows ES modules over `file://` (e.g. Firefox or Safari).
+Open `index.html` directly from the filesystem (double-click it, or drag
+it into a browser window). The game runs from a `file://` URL; there is
+no server and nothing to install or build.
 
-## Environment note
+Browser note: the game uses ES modules, which some browsers refuse to
+load from `file://` URLs. Firefox and Safari load them out of the box;
+on Chrome/Edge, start the browser with `--allow-file-access-from-files`
+or use a different browser.
 
-No build tooling exists in this repo today. If future cards introduce one,
-the assumed environment is **Node 20 LTS** with **pnpm** as the package
-manager. Until then, none of that is required to run or verify the game.
+## Controls
 
-## Manual verification checklist
+| Key                             | Action                                        |
+| ------------------------------- | --------------------------------------------- |
+| ArrowLeft / ArrowRight or A / D | Move the ship (hold)                          |
+| Space                           | Fire — at most one bullet in flight at a time |
+| ENTER                           | Advance screens (start / restart)             |
 
-Open `index.html` via a `file://` URL and check:
+Pressing ENTER mid-game ends the run: a manual stand-in so the full
+title -> playing -> game over loop stays verifiable by hand (see
+game.js).
 
-- [ ] Title scene shows "SPACE INVADERS" and "Press ENTER to start"; the
-      canvas is 768×896 on a dark page background.
-- [ ] Pressing ENTER on the Title scene moves to the Playing scene; the HUD
-      shows `Score: 0` and `Lives: 3` (score/lives are reset on entry).
-- [ ] Playing scene shows the HUD (Score, Lives, Hi, plus the current
-      `LEVEL n` centered on the top line) drawn on the canvas itself, plus
-      the player ship near the bottom edge: a small green cannon/hull/dome
-      shape, horizontally centered.
-- [ ] Hold ArrowLeft / ArrowRight: the ship slides left/right at a steady
-      200 px/s. The A and D keys do the same. The speed does not depend on
-      the display's refresh rate (movement is dt-scaled).
-- [ ] Keep holding a direction into either screen edge: the ship stops
-      cleanly — its left edge never goes below `x = 0` and its right edge
-      never passes the right canvas edge, no matter how long the key is
-      held.
-- [ ] Tap Space: one small bullet leaves the ship's nose and travels
-      straight up at 500 px/s. While it is on screen, pressing or holding
-      Space does nothing; once it exits the top edge, Space fires again.
-- [ ] Hold Space continuously: bullets fire one after another — each the
-      moment the previous one leaves the top — never two on screen at once.
-- [ ] The Playing scene opens with exactly 55 invaders in an 11-column ×
-      5-row rectangular grid near the top of the canvas: every invader is
-      the same filled rectangle in a single colour (drawn with `fillRect`,
-      no image assets).
-- [ ] The invader formation marches sideways in discrete steps as a single
-      unit. When its edge-most invader reaches either side edge of the
-      canvas, the whole formation reverses direction and drops by exactly
-      one invader cell height, then marches back the other way. (Step
-      pacing and the full Level 1 lifecycle are covered by the dedicated
-      section below.)
-- [ ] Line the ship up under an invader and tap Space: when the bullet
-      overlaps the invader's bounding box, both the bullet and that invader
-      disappear, a brief explosion (an expanding, fading rectangle, visible
-      for ~0.3 s) flashes at the invader's former position, and the HUD
-      `Score` increases by 10.
-- [ ] Kills are independent: the surviving invaders keep their positions
-      and keep marching unchanged, and rapid successive kills can leave
-      several explosions visible at once.
-- [ ] Auto-repeat neutralised: hold a movement key for several seconds and
-      the ship glides smoothly; the OS key-repeat does not make it stutter
-      or jump (held state derives from keydown/keyup transitions only — see
-      the `event.repeat` guard in `input.js`).
-- [ ] Pressing ENTER on the Playing scene moves to the Game Over scene.
-      (ENTER is only the manual stand-in end trigger; the wired real
-      trigger — lives reaching 0 — is described below and is now driven
-      for real by Level 1's breach handling.)
-- [ ] Game Over scene shows "GAME OVER", the final score value, and "Press
-      ENTER to restart".
-- [ ] Pressing ENTER on the Game Over scene returns to the Title scene — no
-      page reload or navigation happens at any transition. Starting a new
-      game re-centers the ship and restores `Lives: 3`.
-- [ ] Browser DevTools console shows no errors and no failed network
-      requests throughout the whole flow.
+## How a run works
 
-### Level 1: the classic grid
+- You start with 3 lives. Each destroyed invader scores 10 points. The
+  HUD shows score, lives, the current level number and the session
+  hi-score (kept in memory only — nothing is persisted).
+- Losing your last life ends the run on the GAME OVER screen. ENTER
+  returns to the title screen; ENTER again starts a fresh run at
+  Level 1.
 
-Everything here runs from `file://` with no build step. The console
-snippets reuse the live module exports of `game.js`
-(`import('./game.js').then((m) => { ... })`); run them only after a game
-has started, while `m.currentLevel` is Level 1.
+### Level 1 — the classic grid
 
-- [ ] Grid spawn: press ENTER on the Title scene — Level 1 starts with
-      exactly 55 invaders in an 11-column × 5-row grid above the player
-      ship, rendered by the shared formation/sprite code (`invaders.js`),
-      and the HUD shows `LEVEL 1` from the first Playing frame
-      (`import('./game.js').then((m) => console.log(m.hud.level))` prints
-      `1`).
-- [ ] March pace: with all 55 invaders alive the formation takes one
-      discrete step every ~800 ms — count roughly 10 steps in 8 s. As
-      invaders are destroyed the steps come faster, linearly with the
-      number left. To watch the top speed without playing for an hour,
-      leave a single invader alive from the console:
+55 invaders (11 columns x 5 rows) march in discrete steps, accelerating
+linearly from one step every ~800 ms (all 55 alive) down to ~100 ms (one
+left). When the edge-most living invader reaches a canvas edge, the
+whole grid snaps flush to the edge, drops exactly one row and reverses
+direction. If the bottom of the lowest invader reaches the player's row
+(a breach), you lose exactly one life and the level restarts in its
+initial state — score and remaining lives carry over.
 
-      ```js
-      import('./game.js').then((m) => {
-        m.currentLevel.formation.invaders.forEach((v, i) => { v.alive = i === 0; });
-      });
-      ```
+### Level 2 — they shoot back
 
-      The survivor now steps every ~100 ms (about 10 steps per second).
-- [ ] Edge drop: let the formation march to either canvas edge — the moment
-      its edge-most invader reaches the edge, the whole grid drops straight
-      down by exactly one invader cell height (32 px: the 24 px invader
-      plus the 8 px row gap) and marches back the other way.
-- [ ] Life loss + restart on breach: make a few kills first so `Score` is
-      non-zero, note `Score` and `Lives`, then push the formation down onto
-      the player's row from the console:
+Invaders fire at the ship; a hit costs a life. After being hit the ship
+flashes and is briefly invulnerable. A UFO bonus tied to your session
+shot counter can appear. (Implemented by level2.js.)
 
-      ```js
-      import('./game.js').then((m) => {
-        m.currentLevel.formation.invaders.forEach((v) => { v.y = 820; });
-      });
-      ```
+### Level 3 — shields and formations
 
-      Within a frame the lowest invader's bottom edge reaches the ship's
-      row: `Lives` drops by exactly one, the full 55-invader grid respawns
-      at its start position and resumes the initial ~800 ms pace, and the
-      ship returns to its centered start position. `Score` keeps its value
-      and the remaining lives carry over.
-- [ ] Level advance: destroy the 55th invader — by playing, or from the
-      console:
+Not implemented yet — the level3.js card has not landed. Clearing
+Level 2 currently leaves an empty playfield on LEVEL 3, because the
+level registry has no module for that number. When the card lands,
+clearing Level 3 will start the boss fight (Level 4) through the same
+level-number dispatch used for the 1 -> 2 -> 3 transitions; the boss is
+already registered for level 4, so no further wiring will be needed.
 
-      ```js
-      import('./game.js').then((m) => {
-        m.currentLevel.formation.invaders.forEach((v) => { v.alive = false; });
-      });
-      ```
+### Level 4 — the boss fight
 
-      Within a frame the level counter increments: the HUD shows `LEVEL 2`
-      and `m.hud.level` reads `2`. The handoff goes through the level
-      registry (`levels.js` → `createLevel(2, ...)`); until the sibling
-      card "Level 2: they shoot back" registers `level2.js`, no module is
-      registered for level 2, so the Playing scene simply continues with an
-      empty field and the movable ship. Once `level2.js` lands, the same
-      registry path creates and starts it — with no change to `level1.js`.
-- [ ] Wired game over: set `m.player.lives = 1` in the console, then force
-      the breach with the snippet above — losing the last life ends the
-      game through the wired lives-reach-0 path and the Game Over scene
-      appears with no ENTER involved.
+The finale, implemented by boss.js:
 
-### Verifying the collision wiring by code inspection
+- One boss, 160 x 80 px, drawn purely with canvas primitives (rects and
+  arcs — no image assets). It drifts horizontally at 90 px/s, reversing
+  direction at each canvas edge, and never descends.
+- The boss has 10 HP and every player bullet that lands deals 1 damage.
+  A health bar spans the top of the canvas for the whole fight; its
+  filled length is always current HP / 10 of the track and updates on
+  the very frame a hit lands.
+- Attack: a three-bullet spread from the boss's centre — one bullet
+  straight down, one at -20 deg and one at +20 deg from straight down,
+  each travelling at 260 px/s.
+- Phases: while HP > 5 the spread fires every 1500 ms; from the moment
+  HP reaches 5 the same spread fires every 700 ms. The interval is the
+  only change — pattern, bullet speed and movement are identical.
+- Sudden death: a single hit from any boss projectile ends the run
+  immediately, regardless of remaining lives. The restart that follows
+  is a fresh run at Level 1 — there is no boss retry.
+- Victory: at 0 HP the fight ends on a win screen showing the final
+  score as it stands (there is no boss-kill bonus). Press ENTER to
+  restart with a new run at Level 1.
+- Level 4 spawns no shields; the arena is just the boss and the player.
+- All boss hit-testing (player bullet vs boss, boss bullet vs player)
+  goes through the shared `overlaps()` helper imported from
+  collision.js.
 
-The invader-bullet-vs-player half of the collision pass has no on-screen
-effect yet — no hostile bullets exist until "Level 2: they shoot back" —
-so it is verified by reading the code:
+## Manual verification
 
-- `game.js` runs the collision pass (`collide({ player, formation:
-  currentLevel.formation, hostileBullets, hud })`) exactly once per
-  animation frame, after the fixed-timestep world updates and before
-  `render()` draws.
-- `collision.js` applies its single shared `overlaps()` AABB test to both
-  player-bullet-vs-invader and invader-bullet-vs-player, consuming the
-  `hostileBullets` list exported from `game.js` (currently always empty).
-- No overlap/AABB checks appear inside any draw/render function.
+Everything below runs from `file://` — no server, no build. Several
+checks use the DevTools console, where the game's modules are reachable
+through a dynamic import (run once per page load):
 
-### Verifying the real Game Over trigger (lives reaching 0)
+```js
+const g = await import('./game.js');        // player, hud, currentLevel
+const levels = await import('./levels.js'); // the level registry
+const boss = await import('./boss.js');     // BossLevel
+```
 
-The lives counter is owned by the player ship (`player.lives` in
-`player.js`, initialised from `STARTING_LIVES` in `gameConfig.js`);
-`game.js` mirrors it into `hud.lives` on every fixed-timestep update and
-checks `hud.lives <= 0`. Level 1 now drives this path for real: a
-player-row breach calls `player.loseLife()`, and a breach that takes the
-last life ends the game (see the Level 1 checklist above). To exercise the
-trigger directly by hand:
+1. Open `index.html`. The title screen shows "SPACE INVADERS" and the
+   start prompt.
+2. Press ENTER: Level 1 starts — the HUD reads LEVEL 1, 55 invaders in
+   an 11 x 5 grid, 3 lives, score 0.
+3. Hold Left/Right (or A/D): the ship moves and stops at the canvas
+   edges. Hold Space: bullets fire one at a time; a new one appears
+   only once the previous one has left the screen or hit something.
+4. Shoot an invader: it disappears, an orange explosion flashes and the
+   score increases by 10. The march quickens with every kill.
+5. Let the formation reach a canvas edge: the whole grid drops one row
+   and reverses. (Optional) let it march down to the player's row:
+   exactly one life is lost and Level 1 restarts in its initial state.
+6. Clear all 55 invaders — or shortcut with
+   `g.currentLevel.cleared = true` in the console: Level 2 starts in
+   the same tick, the HUD reads LEVEL 2 and the invaders now shoot
+   back. Take a hit: the ship flashes and is briefly immune.
+7. Boss wiring check: `levels.isLevelRegistered(4)` returns `true` —
+   the fight is entered through the ordinary level-number dispatch
+   (clearing Level 3 advances the counter to 4 and the registry
+   creates the boss). Until level3.js lands there is no registered
+   Level 3, so to playtest the boss today, temporarily register it
+   under number 3 and then clear Level 2:
 
-1. Start a game (ENTER on the Title scene).
-2. In the DevTools console run:
-   `import('./game.js').then((m) => { m.player.lives = 0; });`
-   — or call `m.player.loseLife()` repeatedly; that is the documented
-   decrement interface the level cards use.
-3. The scene switches to Game Over within a frame, and `Hi` is updated to
-   the greater of its previous value and the final score.
+   ```js
+   levels.registerLevel(3, (context) => new boss.BossLevel(context));
+   g.currentLevel.cleared = true; // clearing Level 2 now starts the boss
+   ```
 
-Later cards (invader/boss damage) drive this same path via
-`player.loseLife()` — which is why `player` (exposing `player.bullet`,
-`player.lives`, `player.loseLife()` and `player.resetPosition()`), `hud`
-(with the keys `score`, `lives`, `hiScore`, `level`), `hostileBullets` and
-`currentLevel` are named exports of `game.js`.
-
-## Planned file layout
-
-Implemented so far:
-
-- `index.html` — canvas page (768×896, dark background, inline styling),
-  loads `game.js`.
-- `gameConfig.js` — shared constants (`CANVAS_WIDTH`, `CANVAS_HEIGHT`,
-  `PLAYER_SPEED`, `BULLET_SPEED`, `STARTING_LIVES`).
-- `input.js` — held-key keyboard tracking (`initInput()`, `isKeyHeld(key)`)
-  with auto-repeat neutralised.
-- `player.js` — the `Player` ship entity: dt-scaled movement with canvas
-  clamping, procedural drawing, the one-bullet rule (`player.bullet`), the
-  lives counter (`player.lives`, `player.loseLife()`) and a position-only
-  reset (`player.resetPosition()`) for level restarts.
-- `invaders.js` — the invader formation (`InvaderFormation`): an 11-column ×
-  5-row grid (55 invaders) of identical `fillRect` rectangles, driven in
-  discrete steps by the level cards (`step()`: one sideways increment per
-  call; when the edge-most living invader reaches a canvas side edge the
-  formation snaps flush, reverses direction and drops by exactly one
-  invader cell height), plus the `aliveCount()` / `lowestBottom()` queries
-  the level lifecycle needs.
-- `collision.js` — the shared AABB overlap test (`overlaps()`), the
-  per-frame collision pass (`collide()`: player bullet vs invader → both
-  removed, explosion spawned, score +10; invader bullet vs player → bullet
-  spent, `player.loseLife()`), and the explosion lifecycle
-  (`updateExplosions()` / `drawExplosions()` / `clearExplosions()`).
-- `levels.js` — the tiny level registry/loader (`registerLevel()`,
-  `createLevel()`, `isLevelRegistered()`): a map from level number to level
-  factory. Level modules self-register on import, so a new level card adds
-  its module without touching `level1.js`.
-- `level1.js` — Level 1: the classic grid. Spawns the shared 11 × 5
-  formation, marches it in discrete steps whose interval scales linearly
-  from ~800 ms (55 alive) down to ~100 ms (1 alive), drops one cell height
-  and reverses at the playfield edges, costs the player one life and
-  restarts the level in its initial state on a player-row breach, and
-  reports `cleared` when the last invader is destroyed.
-- `game.js` — fixed-timestep loop (60 steps/s, 250 ms delta cap),
-  three-scene ENTER-driven state machine, on-canvas HUD (Score, Lives, Hi,
-  LEVEL n); owns the level counter, creates the active level through the
-  `levels.js` registry and hands off to the next registered level module on
-  a clear; wires `input.js`, `player.js`, `level1.js` and `collision.js`
-  into the Playing scene (update world → collide once per frame → draw);
-  exports `hud`, `player`, `hostileBullets` and `currentLevel`.
-
-Not yet implemented (owned by sibling cards — do not create these here):
-
-- `level2.js` — Level 2: they shoot back
-- `level3.js` — Level 3: shields and formations
-- `boss.js` — Boss level: multi-phase finale
+   (Under this shim the HUD reads LEVEL 3; once level3.js exists, the
+   same fight is reached as LEVEL 4 simply by playing through.)
+8. In the fight: the boss is 160 x 80 px at a constant height and the
+   health bar across the top starts full (10/10). The boss drifts
+   sideways and reverses exactly at each canvas edge;
+   `g.currentLevel.y` stays 120 for the whole fight.
+9. Watch the firing: volleys of three bullets — one straight down, two
+   angled symmetrically outward — leave the boss's centre every
+   ~1.5 s.
+10. Land five hits (or run `g.currentLevel.hp = 5`): the health bar
+    shows 5/10 and from that moment the volleys come every ~0.7 s.
+    The pattern and bullet speed are unchanged.
+11. Sudden death: with 3 lives left, take a single boss bullet — the
+    run ends on the spot with GAME OVER. ENTER -> title, ENTER -> a
+    fresh run at Level 1 (score 0, lives 3, `g.hud.level === 1`).
+12. Victory: reduce the boss to 0 HP (ten hits, or
+    `g.currentLevel.hp = 1` then one more hit). The win screen shows
+    "YOU WIN!", the final score and "Press ENTER to restart". ENTER
+    starts a new run at Level 1.
