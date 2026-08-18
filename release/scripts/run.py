@@ -1,39 +1,33 @@
 #!/usr/bin/env python3
-"""Run the built prime_tester CLI, building it first if needed.
-
-Usage:
-    python3 release/scripts/run.py [prime_tester args...]
-    e.g. python3 release/scripts/run.py 97 100 --upto 30
 """
-from __future__ import annotations
+run.py -- start Space Invaders 0.1.0.
 
-import os
-import subprocess
+WHAT IT DOES: opens the game's index.html in the default web browser via
+a file:// URL. The game is fully static (no server, no build step, no
+dependencies), so this is all that is needed to play.
+
+WHEN TO RUN: any time you want to play or smoke-test the released game:
+  python release/scripts/run.py
+Standard library only.
+"""
+
 import sys
+import webbrowser
 from pathlib import Path
-
-REPO_ROOT = Path(__file__).resolve().parents[2]
-BUILD_DIR = os.environ.get("BUILD_DIR", "build")
-BINARY_NAME = "prime_tester.exe" if os.name == "nt" else "prime_tester"
 
 
 def main():
-    build_dir = REPO_ROOT / BUILD_DIR
-    binary = build_dir / BINARY_NAME
-    if not binary.exists():
-        cmakelists = REPO_ROOT / "CMakeLists.txt"
-        if not cmakelists.exists():
-            print(
-                f"no CMakeLists.txt at {REPO_ROOT} and no built binary at {binary} -- nothing to run yet",
-                file=sys.stderr,
-            )
-            sys.exit(1)
-        print(f"{binary} not found -- building it first")
-        subprocess.run(["cmake", "-S", str(REPO_ROOT), "-B", str(build_dir)], check=True)
-        subprocess.run(["cmake", "--build", str(build_dir)], check=True)
-    print(f"+ {binary} {' '.join(sys.argv[1:])}")
-    result = subprocess.run([str(binary), *sys.argv[1:]])
-    sys.exit(result.returncode)
+    root = Path(__file__).resolve().parent.parent.parent
+    index = root / "index.html"
+    if not index.is_file():
+        print("ERROR: index.html not found at " + str(index))
+        print("Run this script from a checkout (or unpacked zip) of the release.")
+        sys.exit(1)
+    url = index.as_uri()
+    print("Opening " + url + " in the default browser ...")
+    webbrowser.open(url)
+    print("Controls: ENTER = start/advance scene, Arrow keys or A/D = move, Space = fire.")
+    print("If the browser did not open, double-click index.html instead.")
 
 
 if __name__ == "__main__":
