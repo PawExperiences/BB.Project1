@@ -10,8 +10,24 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 # The single executable target: the CLI front-end (src/main.cpp) plus the
-# reusable is_prime core (src/prime.cpp, interface in src/prime.h).
+# reusable is_prime core (src/prime.cpp, interface in src/prime.h) and the
+# range sieve behind the --upto flag (src/sieve.cpp, interface in
+# src/sieve.h).
 add_executable(prime_tester
     src/main.cpp
     src/prime.cpp
+    src/sieve.cpp
 )
+
+# CTest: boundary coverage for the sieve (n < 2, n == 2, the known range
+# up to 30) as a tiny assertion binary -- standard library only, no test
+# framework, no third-party dependencies. Run with:  (cd build && ctest)
+enable_testing()
+
+add_executable(sieve_test
+    tests/sieve_test.cpp
+    src/sieve.cpp
+)
+target_include_directories(sieve_test PRIVATE src)
+
+add_test(NAME sieve_boundaries COMMAND sieve_test)
