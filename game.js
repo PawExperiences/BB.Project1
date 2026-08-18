@@ -13,9 +13,10 @@ import { createLevel } from './levels.js';
 // imported — one import line per level module, each owned by its card:
 // level1.js — added by "Level 1: the classic grid"
 import './level1.js';
+// level2.js — added by "Level 2: they shoot back"
+import './level2.js';
 // Future import sites — comments only: the files do not exist yet, and a
 // real import of a missing file would throw at load time.
-// level2.js — added by "Level 2: they shoot back"
 // level3.js — added by "Level 3: shields and formations"
 // boss.js — added by "Boss level: multi-phase finale"
 
@@ -34,11 +35,10 @@ initInput();
 // level.
 export const player = new Player();
 
-// Hostile (invader-fired) bullets, part of the game state. No card spawns
-// these yet — "Level 2: they shoot back" will push its bullets into this
-// list — but the collision pass already consumes whatever the list holds
-// every frame. Exported so that card writes to the same list this card
-// passes to collide().
+// Hostile (invader-fired) bullets, part of the game state. "Level 2: they
+// shoot back" pushes its bullets into this list, and the collision pass
+// consumes whatever the list holds every frame. Exported so that card
+// writes to the same list this card passes to collide().
 export const hostileBullets = [];
 
 // HUD state, owned by this card and exported for sibling cards: they import
@@ -58,19 +58,19 @@ export const hud = {
 
 // The slice of game state handed to every level the registry creates.
 // Level 1 reads the player's row for its breach check and calls
-// loseLife()/resetPosition() on it; "Level 2: they shoot back" will push
-// its bullets into hostileBullets; score changes stay owned by
-// collision.js via hud.
+// loseLife()/resetPosition() on it; Level 2 pushes its bullets into
+// hostileBullets and awards its UFO bonus through hud; invader-kill score
+// changes stay owned by collision.js via hud.
 const levelContext = { player, hud, hostileBullets };
 
 // The active level object (created through the registry in levels.js) and
 // its 1-based number. currentLevel is null only while no module is
-// registered for the current level number — until "Level 2: they shoot
-// back" lands, clearing Level 1 leaves the Playing scene running with an
-// empty field while the HUD already shows the new level number.
-// currentLevel is exported as a live binding so the README's manual
-// verification can reach the active level's formation from the DevTools
-// console.
+// registered for the current level number — clearing a level whose
+// successor has not landed yet (today: Level 3) leaves the Playing scene
+// running with an empty field while the HUD already shows the new level
+// number. currentLevel is exported as a live binding so the README's
+// manual verification can reach the active level's formation from the
+// DevTools console.
 export let currentLevel = null;
 let levelNumber = 1;
 
@@ -109,11 +109,11 @@ function startGame() {
 }
 
 // Level-clear handoff: bump the level counter, mirror it into the HUD and
-// ask the registry for the next level's module. createLevel() returns null
-// when no module has registered that number yet — today that is the case
-// for level 2, whose module arrives with the sibling card "Level 2: they
-// shoot back" — which leaves the Playing scene running with an empty field
-// until then.
+// ask the registry for the next level's module. Level 2 is registered by
+// level2.js, so clearing Level 1 starts it immediately, in this same fixed
+// step, with the lives/score state untouched. createLevel() returns null
+// when no module has registered the new number yet (today: level 3), which
+// leaves the Playing scene running with an empty field until then.
 function advanceLevel() {
   levelNumber += 1;
   hud.level = levelNumber;
@@ -140,8 +140,8 @@ window.addEventListener('keydown', (event) => {
     // Manual stand-in only: ENTER ends the game so the full
     // Title -> Playing -> Game Over -> Title loop stays verifiable by
     // hand. The wired trigger is the hud.lives <= 0 check in update(),
-    // reached when Level 1's breach handling (and later the level cards'
-    // damage) takes the last life via player.loseLife().
+    // reached when Level 1's breach handling (or Level 2's invader fire)
+    // takes the last life via player.loseLife().
     endGame();
   } else if (scene === SCENES.GAME_OVER) {
     returnToTitle();
