@@ -1,22 +1,45 @@
 #!/bin/sh
-# Run the built prime_tester CLI, building it first if needed.
-# Usage: sh release/scripts/run.sh [prime_tester args...]
-set -e
+# run.sh -- start Space Invaders 0.1.0.
+#
+# WHAT IT DOES: opens the game's index.html in the default web browser via
+# a file:// URL (xdg-open on Linux, open on macOS, cmd start on Windows
+# Git Bash / MSYS). The game is fully static -- no server, no build step,
+# no dependencies.
+#
+# WHEN TO RUN: any time you want to play or smoke-test the released game:
+#   sh release/scripts/run.sh
 
-SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-REPO_ROOT=$(CDPATH= cd -- "$SCRIPT_DIR/../.." && pwd)
-BUILD_DIR=${BUILD_DIR:-build}
-BINARY="$REPO_ROOT/$BUILD_DIR/prime_tester"
+set -u
 
-if [ ! -x "$BINARY" ]; then
-  if [ ! -f "$REPO_ROOT/CMakeLists.txt" ]; then
-    echo "no CMakeLists.txt at $REPO_ROOT and no built binary at $BINARY -- nothing to run yet" >&2
-    exit 1
-  fi
-  echo "$BINARY not found -- building it first"
-  cmake -S "$REPO_ROOT" -B "$REPO_ROOT/$BUILD_DIR"
-  cmake --build "$REPO_ROOT/$BUILD_DIR"
+ROOT=$(CDPATH= cd "$(dirname "$0")/../.." && pwd)
+INDEX="$ROOT/index.html"
+
+if [ ! -f "$INDEX" ]; then
+  echo "ERROR: index.html not found at $INDEX"
+  echo "Run this script from a checkout (or unpacked zip) of the release."
+  exit 1
 fi
 
-echo "+ $BINARY $*"
-exec "$BINARY" "$@"
+echo "Opening $INDEX in the default browser ..."
+case "$(uname -s 2>/dev/null || echo unknown)" in
+  Darwin*)
+    open "$INDEX"
+    ;;
+  MINGW*|MSYS*|CYGWIN*)
+    if command -v cygpath >/dev/null 2>&1; then
+      cmd //c start "" "$(cygpath -w "$INDEX")"
+    else
+      cmd //c start "" "$INDEX"
+    fi
+    ;;
+  *)
+    if command -v xdg-open >/dev/null 2>&1; then
+      xdg-open "$INDEX"
+    else
+      echo "No opener found - open this file in your browser manually:"
+      echo "  $INDEX"
+    fi
+    ;;
+esac
+
+echo "Controls: ENTER = start/advance scene, Arrow keys or A/D = move, Space = fire."
