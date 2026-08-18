@@ -1,10 +1,10 @@
 import { CANVAS_WIDTH, CANVAS_HEIGHT, STARTING_LIVES } from './gameConfig.js';
+import { initInput } from './input.js';
+import { Player } from './player.js';
 
 // Future import sites — one line per sibling module with the card that owns
 // it. These are comments only: the files do not exist yet, and a real import
 // of a missing file would throw at load time.
-// input.js — added by "Keyboard input and the player ship"
-// player.js — added by "Keyboard input and the player ship"
 // collision.js — added by "Sprite rendering and collision detection"
 // invaders.js — added by "Level 1: the classic grid"
 // level1.js — added by "Level 1: the classic grid"
@@ -15,9 +15,22 @@ import { CANVAS_WIDTH, CANVAS_HEIGHT, STARTING_LIVES } from './gameConfig.js';
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 
+// Keyboard input: initInput() attaches the keydown/keyup listeners once at
+// startup; input.js owns the held-key state and every module reads the
+// keyboard through isKeyHeld().
+initInput();
+
+// The player ship, created once at startup and reset at the start of every
+// game. Exported for the collision/level cards: they read player.bullet
+// (the in-flight bullet, or null) and call player.loseLife() when the ship
+// is hit.
+export const player = new Player();
+
 // HUD state, owned by this card and exported for sibling cards: they import
-// and mutate this object (e.g. hud.score += ... on a kill, hud.lives -= 1 on
-// a hit) instead of declaring their own copy. In-memory only — no
+// and mutate this object (e.g. hud.score += ... on a kill). hud.lives is a
+// display mirror of the lives counter owned by player.js — every Playing
+// update copies player.lives into it, so the HUD text and the lives <= 0
+// game-over check below follow the player's counter. In-memory only — no
 // localStorage persistence (explicitly out of scope for this card).
 export const hud = {
   score: 0,
@@ -47,7 +60,8 @@ let lastTimestamp = null;
 
 function startGame() {
   hud.score = 0;
-  hud.lives = STARTING_LIVES;
+  player.reset();
+  hud.lives = player.lives;
   scene = SCENES.PLAYING;
 }
 
@@ -68,11 +82,11 @@ window.addEventListener('keydown', (event) => {
   if (scene === SCENES.TITLE) {
     startGame();
   } else if (scene === SCENES.PLAYING) {
-    // Manual stand-in only: this card ships no gameplay that can reduce
-    // lives, so ENTER ends the game to keep the full Title -> Playing ->
-    // Game Over -> Title loop verifiable by hand. The real trigger is the
-    // hud.lives <= 0 check in update(); the sibling card that introduces
-    // damage replaces this branch.
+    // Manual stand-in only: no card yet ships gameplay that reduces lives,
+    // so ENTER ends the game to keep the full Title -> Playing -> Game
+    // Over -> Title loop verifiable by hand. The real trigger is the
+    // hud.lives <= 0 check in update(); the level cards reduce lives via
+    // player.loseLife() and replace this branch.
     endGame();
   } else if (scene === SCENES.GAME_OVER) {
     returnToTitle();
@@ -84,10 +98,12 @@ function update(dt) {
     case SCENES.TITLE:
       break;
     case SCENES.PLAYING:
-      // The wired Playing -> Game Over transition: later cards write
-      // hud.lives, and the moment it reaches 0 the game ends (hiScore is
-      // updated inside endGame()). No gameplay-entity logic exists in this
-      // card — entities arrive in sibling cards.
+      player.update(dt);
+      // Mirror the player's lives counter into the HUD and run the wired
+      // Playing -> Game Over transition: the level cards call
+      // player.loseLife(), and the moment lives reach 0 the game ends
+      // (hiScore is updated inside endGame()).
+      hud.lives = player.lives;
       if (hud.lives <= 0) {
         endGame();
       }
@@ -121,7 +137,7 @@ function renderTitle() {
 }
 
 function renderPlaying() {
-  // The playfield is intentionally empty — entities arrive in later cards.
+  player.draw(ctx);
   drawHud();
 }
 
