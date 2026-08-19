@@ -1,30 +1,25 @@
-# run.ps1 -- build (if needed) and run the prime_tester CLI, forwarding
-# all arguments. Use it to quickly try the released binary:
-#   powershell -File release/scripts/run.ps1 2 4 17
-#   powershell -File release/scripts/run.ps1 --upto 30
-# Exits with prime_tester's own exit status (1 if any bad token occurred).
-$ErrorActionPreference = "Stop"
+# Launch the calculator desktop app.
+# Locates target/calculator-*.jar (running mvn -B package first if missing)
+# and starts it with java -jar. Requires a Java 21 runtime and a graphical
+# display. Run from the repository root.
+# Usage: powershell -File release/scripts/run.ps1
+$ErrorActionPreference = 'Stop'
 
-Set-Location (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
-
-if (-not (Test-Path "build/CMakeCache.txt")) {
-  Write-Host "[run] configuring: cmake -B build"
-  cmake -B build
-  if ($LASTEXITCODE -ne 0) { throw "cmake configure failed (exit $LASTEXITCODE)" }
+function Find-CalculatorJar {
+    $jars = @(Get-ChildItem -Path 'target' -Filter 'calculator-*.jar' -ErrorAction SilentlyContinue |
+              Where-Object { $_.Name -notlike '*-sources.jar' -and $_.Name -notlike '*-javadoc.jar' })
+    if ($jars.Count -eq 1) { return $jars[0].FullName }
+    return $null
 }
-Write-Host "[run] building: cmake --build build"
-cmake --build build
-if ($LASTEXITCODE -ne 0) { throw "cmake build failed (exit $LASTEXITCODE)" }
 
-$Exe = $null
-foreach ($candidate in @(
-    "build/prime_tester.exe", "build/prime_tester",
-    "build/Debug/prime_tester.exe", "build/Release/prime_tester.exe",
-    "build/Debug/prime_tester", "build/Release/prime_tester")) {
-  if (Test-Path $candidate) { $Exe = $candidate; break }
+$jar = Find-CalculatorJar
+if (-not $jar) {
+    Write-Host 'No built JAR found; running: mvn -B package (full test suite)'
+    mvn -B package
+    if ($LASTEXITCODE -ne 0) { throw "mvn package failed with exit code $LASTEXITCODE" }
+    $jar = Find-CalculatorJar
 }
-if (-not $Exe) { throw "[run] prime_tester binary not found under build/" }
-
-Write-Host "[run] starting: $Exe $args"
-& $Exe @args
+if (-not $jar) { throw 'No target/calculator-*.jar available after build.' }
+Write-Host "Launching: java -jar $jar"
+java -jar $jar
 exit $LASTEXITCODE

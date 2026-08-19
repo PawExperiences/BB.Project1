@@ -1,52 +1,33 @@
 #!/usr/bin/env python3
-"""Build (if needed) and run the prime_tester CLI, forwarding all arguments.
+"""Launch the calculator desktop app.
 
-Use it to quickly try the released binary, e.g.:
-    python release/scripts/run.py 2 4 17
-    python release/scripts/run.py --upto 30
-    printf '2\n4\n17\n' | python release/scripts/run.py
+Locates target/calculator-*.jar (running mvn -B package first if it is
+missing) and starts it with java -jar. Requires a Java 21 runtime and a
+graphical display. Run from the repository root:
 
-Exits with prime_tester's own exit status (1 if any bad token occurred).
+    python release/scripts/run.py
 """
 
+import glob
 import os
 import subprocess
 import sys
-from pathlib import Path
-
-ROOT = Path(__file__).resolve().parents[2]
-BUILD = ROOT / "build"
-
-EXE_CANDIDATES = (
-    "prime_tester",
-    "prime_tester.exe",
-    "Debug/prime_tester.exe",
-    "Release/prime_tester.exe",
-    "Debug/prime_tester",
-    "Release/prime_tester",
-)
 
 
-def main():
-    os.chdir(ROOT)
-    if not (BUILD / "CMakeCache.txt").exists():
-        print("[run] configuring: cmake -B build", flush=True)
-        subprocess.check_call(["cmake", "-B", "build"])
-    print("[run] building: cmake --build build", flush=True)
-    subprocess.check_call(["cmake", "--build", "build"])
-    exe = None
-    for rel in EXE_CANDIDATES:
-        candidate = BUILD / rel
-        if candidate.is_file():
-            exe = candidate
-            break
-    if exe is None:
-        print("[run] FAILED: prime_tester binary not found under build/", file=sys.stderr)
-        return 1
-    print("[run] starting: %s %s" % (exe, " ".join(sys.argv[1:])), flush=True)
-    result = subprocess.run([str(exe)] + sys.argv[1:])
-    return result.returncode
+def find_jar():
+    jars = [
+        j for j in glob.glob(os.path.join("target", "calculator-*.jar"))
+        if not j.endswith("-sources.jar") and not j.endswith("-javadoc.jar")
+    ]
+    return jars[0] if len(jars) == 1 else None
 
 
-if __name__ == "__main__":
-    sys.exit(main())
+jar = find_jar()
+if jar is None:
+    print("No single built JAR found; running: mvn -B package (full test suite)")
+    subprocess.run(["mvn", "-B", "package"], check=True)
+    jar = find_jar()
+if jar is None:
+    sys.exit("ERROR: no target/calculator-*.jar available after build.")
+print("Launching: java -jar " + jar)
+sys.exit(subprocess.run(["java", "-jar", jar]).returncode)
