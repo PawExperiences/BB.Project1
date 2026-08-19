@@ -5,28 +5,62 @@ interface. The domain logic (arithmetic expression evaluation) is kept in
 plain classes with no UI imports so it stays unit-testable; the Swing
 window is a thin layer on top.
 
-## Build and test
+## Requirements
 
-Requires a JDK 21+ and Maven. From the repository root:
+- JDK 21 or newer (Java 21 is the build and runtime requirement)
+- A recent Maven 3.x
+
+## Build
+
+From the repository root:
+
+```sh
+mvn -B package
+```
+
+This compiles the application, runs the entire JUnit 5 test suite via
+Maven Surefire (all tests are enabled; the build fails if any test
+fails) and assembles the runnable JAR at `target/calculator-0.1.0.jar`.
+`mvn -B package` passes green with the full test suite enabled.
+
+To run only the tests:
 
 ```sh
 mvn -B test
 ```
 
-runs the JUnit 5 test suite via Maven Surefire, and
+## Run
+
+On any machine with a graphical display and a Java 21 runtime:
 
 ```sh
-mvn package
+java -jar target/calculator-0.1.0.jar
 ```
 
-runs the tests and assembles the JAR. (Runnable-JAR packaging — a
-`Main-Class` manifest entry via maven-jar-plugin or maven-shade-plugin —
-is owned by the later card "Package as a runnable JAR".)
+launches the calculator window. The entry point,
+`com.buildboard.calculator.Main`, creates and shows the window on the
+Swing event dispatch thread via `SwingUtilities.invokeLater`, as Swing
+requires.
+
+The JAR is an ordinary thin JAR: the application has **no runtime
+dependencies**, so its manifest only needs the
+`Main-Class: com.buildboard.calculator.Main` entry, configured in
+`pom.xml` via `maven-jar-plugin`. No `maven-shade-plugin` or other
+uber-jar mechanism is used — there is nothing to shade. The manifest can
+be inspected with:
+
+```sh
+unzip -p target/calculator-0.1.0.jar META-INF/MANIFEST.MF
+```
+
+## Build definition
 
 The build is defined by `pom.xml` at the repository root: Java 21
 (`maven-compiler-plugin` with `<release>21</release>`), JUnit 5
-(`org.junit.jupiter:junit-jupiter:5.10.2`, test scope) and
-`maven-surefire-plugin:3.2.5` for test discovery and execution.
+(`org.junit.jupiter:junit-jupiter:5.10.2`, test scope),
+`maven-surefire-plugin:3.2.5` for test discovery and execution, and
+`maven-jar-plugin` configured with the `Main-Class` manifest entry that
+makes `target/calculator-0.1.0.jar` runnable with `java -jar`.
 
 ## Layout
 
@@ -37,22 +71,30 @@ the standard Maven directory layout:
 - `src/test/java/com/buildboard/calculator/` — JUnit 5 tests (tests are
   written before the implementation, TDD-style)
 
-### Planned files (owned by later cards — documented here, not created yet)
+### Application sources
 
-- `src/main/java/com/buildboard/calculator/Evaluator.java` — the
-  arithmetic expression evaluator; a plain class with no Swing/UI imports
-  so it stays testable.
-- `src/test/java/com/buildboard/calculator/EvaluatorTest.java` — the
-  JUnit 5 test suite for the evaluator, written tests-first by its owning
-  card.
-- `src/main/java/com/buildboard/calculator/CalculatorWindow.java` — the
-  Swing window (UI layer) built on top of the evaluator.
-- `src/main/java/com/buildboard/calculator/Main.java` — the application
-  entry point that launches the calculator window.
+- `Evaluator.java` — the arithmetic expression evaluator; a plain class
+  with no Swing/UI imports so it stays testable.
+- `CalculationException.java` — the exception thrown for malformed or
+  unevaluable expressions.
+- `CalculatorWindow.java` — the Swing window (UI layer) built on top of
+  the evaluator.
+- `Main.java` — the application entry point; launches the calculator
+  window on the EDT.
 
-### Present today (this skeleton card)
+### Tests
 
-- `pom.xml` — the Maven build described above.
-- `src/test/java/com/buildboard/calculator/SkeletonTest.java` — a
-  trivially-green placeholder test proving `mvn -B test` discovers and
-  runs JUnit 5 tests from a clean checkout.
+- `EvaluatorTest.java` — the evaluator test suite.
+- `CalculatorWindowTest.java` — the Swing window test suite.
+- `MainTest.java` — the tests-first contract for the entry point (the
+  class is loadable and declares `public static void main(String[])`);
+  it never opens a window, so it also passes on headless machines.
+- `SkeletonTest.java` — the original trivially-green placeholder proving
+  `mvn -B test` discovers and runs JUnit 5 tests from a clean checkout.
+
+## Unrelated files in this repository
+
+The repository also contains leftovers from earlier, unrelated projects
+(a JavaScript game at the repository root and C++ prime-tester sources
+such as `src/main.cpp`). They are not part of this application and are
+not referenced by the Maven build; they are kept untouched.
