@@ -1,3 +1,29 @@
+## 0.2.0 -- e2e calculator 0.2.0
+
+# Changelog — e2e calculator 0.2.0
+
+First release of the Calculator (Java Swing) project. There is no previous release to diff against; everything below is new.
+
+## Added
+- Maven build foundation: `pom.xml` (groupId `com.buildboard`, artifactId `calculator`, packaging `jar`) targeting Java 21 via maven-compiler-plugin `<release>21</release>`, JUnit 5 (`org.junit.jupiter:junit-jupiter:5.10.2`, test scope) and maven-surefire-plugin 3.2.5, so `mvn -B test` runs green from a clean checkout. (#377)
+- `SkeletonTest` smoke test plus a `README.md` documenting the planned project layout. (#377)
+- Expression evaluation core `com.buildboard.calculator.Evaluator` — a UI-free class with a single static `evaluate(String)` API supporting `+ - * /` with correct precedence and left-associativity, nested parentheses, decimal literals, unary minus in leading and post-operator positions, and insignificant whitespace. (#378)
+- Checked `com.buildboard.calculator.CalculationException` for every failure mode: division by zero and malformed input (unbalanced parentheses, empty/blank input) throw with descriptive, problem-naming messages; the evaluator never returns NaN, Infinity or a sentinel value. (#378)
+- `EvaluatorTest` JUnit 5 suite written test-first (red/green), covering precedence, nested parentheses, decimals, both unary-minus positions, division by zero, unbalanced parentheses and empty input. (#378)
+- Swing UI `CalculatorWindow`: title "Calculator", 320x420 initial and minimum size, a right-aligned non-editable display, and a GridBagLayout grid of 18 buttons (digits 0-9, `.`, `+ - * /`, `( )`, `C`, `=`). (#379)
+- Result formatting with up to 10 significant digits and trailing zeros stripped (`1+2` -> `3`, `10/4` -> `2.5`, `2/3` -> `0.6666666667`); all arithmetic stays in `Evaluator`. (#379)
+- Inline error handling: a `CalculationException` message is shown in the display and the next input clears it and starts a fresh expression; after a successful result a digit/`.`/`(` starts fresh while an operator continues from the result. (#379)
+- Full keyboard support independent of focused component: printable keys append, ENTER evaluates, ESCAPE clears, BACKSPACE edits an in-progress expression. (#379)
+- Headless-safe `CalculatorWindowTest` suite that skips frame-instantiating tests when no display is present. (#379)
+- `Main` launcher that opens the window on the Swing EDT via `SwingUtilities.invokeLater`, plus maven-jar-plugin config stamping `Main-Class: com.buildboard.calculator.Main` into the manifest — `java -jar target/calculator-0.1.0.jar` runs the app with zero runtime dependencies. (#380)
+- `MainTest` entry-point test and a `README.md` documenting the exact build (`mvn -B package`) and run (`java -jar target/calculator-0.1.0.jar`) commands. (#380)
+
+## Changed
+- Repository housekeeping: leftover files from earlier, unrelated e2e projects (JS game sources, C++ prime-tester sources, old release scripts and docs) were removed from the tree during this release window. They were never part of the calculator product.
+
+## Fixed
+- Nothing — first release, no prior defects to fix.
+
 ## 0.3.0 -- e2e prime tester 0.3.0
 
 # Changelog
