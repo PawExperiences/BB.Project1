@@ -26,13 +26,17 @@
 
 import { InvaderFormation, INVADER_COLS, INVADER_ROWS } from './invaders.js';
 import { registerLevel } from './levels.js';
+import {
+  LEVEL1_STEP_INTERVAL_MAX_MS,
+  LEVEL1_STEP_INTERVAL_MIN_MS,
+} from './gameConfig.js';
 
 // Step pacing: one discrete formation step every STEP_INTERVAL_MAX_MS while
 // all 55 invaders live, scaling linearly down to STEP_INTERVAL_MIN_MS with
 // exactly one invader left:
 //   interval = 800 - (55 - alive) * (700 / 54)   (ms)
-const STEP_INTERVAL_MAX_MS = 800;
-const STEP_INTERVAL_MIN_MS = 100;
+const STEP_INTERVAL_MAX_MS = LEVEL1_STEP_INTERVAL_MAX_MS;
+const STEP_INTERVAL_MIN_MS = LEVEL1_STEP_INTERVAL_MIN_MS;
 const TOTAL_INVADERS = INVADER_COLS * INVADER_ROWS; // 55
 
 export class Level1 {

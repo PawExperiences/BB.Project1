@@ -133,6 +133,26 @@ check:
    positive number — `update()` with a large `dt` advances the formation by
    several steps (including any edge drops) instead of skipping past a
    boundary.
+7. Keep clearing invaders and watch the marching pace: it visibly quickens
+   as the count drops (~800 ms per step near 55 alive, ~450 ms per step
+   around 28 alive, ~100 ms per step with 1 left) — the fewer invaders
+   remain, the faster the survivors step.
+8. Let the formation march down (or use the console snippet in step 6
+   repeatedly) until the lowest invader's row reaches the player's ship:
+   `Lives` in the HUD drops by exactly one, the formation resets to a fresh
+   55-invader grid at its starting position and pace, the ship re-centres,
+   and any bullet/explosion on screen is cleared. If that was the last
+   life, the scene switches to Game Over instead of restarting the level.
+9. Destroy all 55 invaders: the HUD's `LEVEL` value changes from `1` to
+   `2` and a new formation appears — in this build `level2.js` is already
+   registered (`registerLevel(2, ...)`), so clearing Level 1 hands off into
+   Level 2's gameplay rather than Game Over. (Level 1's own unregistered-
+   level fallback — asking the registry for a level with no registered
+   factory — still resolves to Game Over without throwing or freezing the
+   loop; it is just not reachable by clearing Level 1 in this codebase,
+   since Level 2 already exists. It can still be checked directly: `import
+   ('./levels.js').then((m) => console.log(m.isLevelRegistered(99),
+   m.createLevel(99, {})));` logs `false` and `null`.)
 
 ### Verifying the 250 ms delta clamp
 
