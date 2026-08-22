@@ -28,7 +28,18 @@
 // from Level 1 exactly as they stood. Game over at 0 lives stays owned by
 // game.js; invader kills/score/explosions stay owned by collision.js.
 
-import { CANVAS_WIDTH, CANVAS_HEIGHT } from './gameConfig.js';
+import {
+  CANVAS_WIDTH,
+  CANVAS_HEIGHT,
+  LEVEL2_MARCH_INTERVAL_FACTOR,
+  LEVEL2_FIRE_INTERVAL_MIN_MS,
+  LEVEL2_FIRE_INTERVAL_MAX_MS,
+  LEVEL2_INVADER_BULLET_SPEED,
+  LEVEL2_UFO_INTERVAL_MS,
+  LEVEL2_UFO_SPEED,
+  LEVEL2_UFO_SCORE_TIERS,
+  LEVEL2_RESPAWN_INVULNERABILITY_S,
+} from './gameConfig.js';
 import { INVADER_COLS } from './invaders.js';
 import { overlaps } from './collision.js';
 import { Level1 } from './level1.js';
@@ -37,20 +48,20 @@ import { registerLevel } from './levels.js';
 // March speed-up: every step interval of Level 1's acceleration curve is
 // multiplied by this factor (e.g. a 600 ms Level 1 interval becomes
 // 402 ms here).
-const MARCH_INTERVAL_FACTOR = 0.67;
+const MARCH_INTERVAL_FACTOR = LEVEL2_MARCH_INTERVAL_FACTOR;
 
 // Enemy fire: one bullet per volley on a single global timer (shared, not
 // per column), the next volley due in a fresh random 800–2000 ms drawn
 // after each shot.
-const FIRE_INTERVAL_MIN_MS = 800;
-const FIRE_INTERVAL_MAX_MS = 2000;
+const FIRE_INTERVAL_MIN_MS = LEVEL2_FIRE_INTERVAL_MIN_MS;
+const FIRE_INTERVAL_MAX_MS = LEVEL2_FIRE_INTERVAL_MAX_MS;
 
 // Invader bullet geometry/motion: straight down at 300 px/s. Several may
 // be on screen at once; they live in game.js's shared hostileBullets list
 // so the existing collision pass consumes them.
 const INVADER_BULLET_WIDTH = 4;
 const INVADER_BULLET_HEIGHT = 14;
-const INVADER_BULLET_SPEED = 300;
+const INVADER_BULLET_SPEED = LEVEL2_INVADER_BULLET_SPEED;
 const INVADER_BULLET_COLOR = '#ff5555';
 
 // Bonus UFO: one appearance every 20 s, timed from level start with the
@@ -58,8 +69,8 @@ const INVADER_BULLET_COLOR = '#ff5555';
 // below the HUD text (ends at y = 52), above the formation's home row
 // (y = 112) — at a constant 120 px/s, and each entry starts from the
 // opposite side to the previous appearance.
-const UFO_INTERVAL_MS = 20000;
-const UFO_SPEED = 120;
+const UFO_INTERVAL_MS = LEVEL2_UFO_INTERVAL_MS;
+const UFO_SPEED = LEVEL2_UFO_SPEED;
 const UFO_WIDTH = 44;
 const UFO_HEIGHT = 16;
 const UFO_Y = 64;
@@ -70,10 +81,10 @@ const UFO_DOME_RADIUS = 6;
 // 0 -> 50, 1 -> 100, 2 -> 150, 3 -> 300. The shot count lives in
 // player.js and accumulates across the whole session (both levels) — it
 // is not reset by the level transition.
-const UFO_SCORE_TIERS = [50, 100, 150, 300];
+const UFO_SCORE_TIERS = LEVEL2_UFO_SCORE_TIERS;
 
 // Post-respawn protection: 2 s of flashing invulnerability.
-const RESPAWN_INVULNERABILITY_S = 2;
+const RESPAWN_INVULNERABILITY_S = LEVEL2_RESPAWN_INVULNERABILITY_S;
 
 // A fresh random delay until the next volley, in [800, 2000) ms.
 function randomFireIntervalMs() {

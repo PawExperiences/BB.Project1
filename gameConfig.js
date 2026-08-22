@@ -32,3 +32,15 @@ export const LEVEL1_STEP_INTERVAL_MIN_MS = 100;
 export const SCORE_PER_INVADER = 10;
 export const EXPLOSION_DURATION = 0.3;
 export const PLAYER_INVULNERABILITY_SECONDS = 2;
+
+// Level 2 (level2.js): the march speed-up factor, the enemy-fire volley
+// interval, hostile bullet speed, the UFO's cadence/speed/score tiers and
+// the post-respawn invulnerability window.
+export const LEVEL2_MARCH_INTERVAL_FACTOR = 0.67;
+export const LEVEL2_FIRE_INTERVAL_MIN_MS = 800;
+export const LEVEL2_FIRE_INTERVAL_MAX_MS = 2000;
+export const LEVEL2_INVADER_BULLET_SPEED = 300;
+export const LEVEL2_UFO_INTERVAL_MS = 20000;
+export const LEVEL2_UFO_SPEED = 120;
+export const LEVEL2_UFO_SCORE_TIERS = [50, 100, 150, 300];
+export const LEVEL2_RESPAWN_INVULNERABILITY_S = 2;
