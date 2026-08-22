@@ -1,125 +1,88 @@
-# prime_tester (C++)
+# Space Invaders (JavaScript)
 
-A self-contained C++17 command-line prime-number tester, built with CMake.
-It answers "is this number prime?" for numbers supplied on the command
-line or piped in on stdin.
+A hand-written HTML/CSS/ES-modules Space Invaders clone. No framework, no
+bundler, no package manager, no npm install.
 
-## Build, run, and test
+## Running the game
 
-From the repository root:
+Open `index.html` directly in a browser — double-click it, or open the
+`file://` path. There is no build step and no dev server: the page loads
+`game.js` as an ES module and runs. Use a browser that allows ES modules
+over `file://` (Firefox or Safari; Chrome blocks module scripts on
+`file://` unless launched with `--allow-file-access-from-files`).
 
-```sh
-cmake -B build
-cmake --build build
-```
+Controls: ArrowLeft/ArrowRight (or A/D) to move, Space to fire, Enter to
+advance every scene transition (Title → Playing, Game Over → Title, Win →
+Title).
 
-This produces the `prime_tester` executable at `build/prime_tester`. The
-build has no third-party dependencies (standard library only).
+## Planned file layout
 
-Run it by piping a number on stdin, or with `--upto` for range mode:
+- `index.html` — the canvas page (768×896, dark background), loads
+  `game.js` as an ES module. Owned by this card.
+- `gameConfig.js` — shared constants (`CANVAS_WIDTH`, `CANVAS_HEIGHT`,
+  `PLAYER_SPEED`, `BULLET_SPEED`, `STARTING_LIVES`). Owned by this card.
+- `game.js` — the fixed-timestep loop (60 updates/s, 250 ms delta clamp),
+  the Title/Playing/Game Over/Win scene machine, the on-canvas HUD, the
+  exported `hud` state, and the level-registry wiring that hands each
+  level module its slice of game state. Owned by this card.
+- `input.js` — keyboard input (held-key tracking). Owned by "Keyboard
+  input and the player ship".
+- `player.js` — the player ship: movement, shooting, lives. Owned by
+  "Keyboard input and the player ship".
+- `collision.js` — AABB collision detection and explosion effects. Owned
+  by "Sprite rendering and collision detection".
+- `invaders.js` — the invader formation (grid, marching, drawing). Owned
+  by "Level 1: the classic grid".
+- `level1.js` — Level 1: the classic grid. Owned by "Level 1: the classic
+  grid".
+- `level2.js` — Level 2: invaders that shoot back, plus the UFO bonus.
+  Owned by "Level 2: they shoot back".
+- `level3.js` — shields and formations. Not yet created — owned by
+  "Level 3: shields and formations".
+- `boss.js` — the multi-phase boss fight and win screen. Owned by "Boss
+  level: multi-phase finale".
 
-```sh
-echo 7 | ./build/prime_tester
-./build/prime_tester --upto 30
-```
+Every module above `game.js` in this list already exists in the repo; this
+card only reconciles `index.html`, `gameConfig.js` and `game.js` and does
+not touch any of them.
 
-Run the test suite (covers the range sieve behind `--upto`) with CTest:
+## Manual verification checklist
 
-```sh
-ctest --test-dir build
-```
+Open `index.html` via a `file://` URL and check:
 
-## Worked examples
+- [ ] Title scene shows "SPACE INVADERS" and "Press ENTER to start" on a
+      768×896 canvas over a dark page background.
+- [ ] Pressing ENTER on the Title scene moves to the Playing scene; the
+      HUD shows `Score: 0` and `Lives: 3` and `LEVEL 1`.
+- [ ] During Playing, the HUD (score, lives, level, hi-score) is drawn on
+      the canvas itself, and the Level 1 invader grid is visible and
+      marching.
+- [ ] Clearing Level 1 (or losing all lives) either advances to Level 2 or
+      ends the run — both without any page reload or navigation.
+- [ ] Losing all lives (e.g. letting an invader breach the player's row,
+      or taking enough hits) moves to the Game Over scene, which shows
+      "GAME OVER", the final score, and "Press ENTER to restart".
+- [ ] Pressing ENTER on the Game Over scene returns to the Title scene,
+      and the `Hi` value on the next run reflects the previous run's
+      score if it was higher.
+- [ ] Browser DevTools console shows no errors throughout the whole flow.
 
-Each row below was produced by building `build/prime_tester` from the
-current source and running the exact command shown, capturing its stdout
-and its exit status (`echo $?`).
+### Verifying the game-over path without playing a full round
 
-| Command | Expected stdout | Exit status |
-|---|---|---|
-| `echo 7 \| ./build/prime_tester` | `7 is prime` | `0` |
-| `echo 9 \| ./build/prime_tester` | `9 is not prime` | `0` |
-| `echo 0 \| ./build/prime_tester` | `0 is not prime` | `0` |
-| `echo 1 \| ./build/prime_tester` | `1 is not prime` | `0` |
-| `echo "-5" \| ./build/prime_tester` | `-5 is not prime` | `0` |
-| `echo abc \| ./build/prime_tester` | (no output) | `1` |
-| `printf '' \| ./build/prime_tester` | (no output) | `0` |
-| `./build/prime_tester --upto 30` | `2`, `3`, `5`, `7`, `11`, `13`, `17`, `19`, `23`, `29`, each on its own line | `0` |
+To reach Game Over quickly by hand instead of losing legitimately:
 
-Notes:
+1. Start a game (ENTER on the Title scene).
+2. In the DevTools console run:
+   `import('./game.js').then((m) => { m.hud.lives = 0; });`
+3. The scene switches to Game Over within a frame, and `Hi` is updated to
+   the greater of its previous value and the final score.
 
-- For the `abc` row, the program writes `not a number: abc` to **stderr**,
-  not stdout; stdout is empty for that command, which is why the table
-  shows no stdout output there.
-- For the empty-stdin row, the program writes nothing to either stdout or
-  stderr and exits `0`.
+### Verifying the 250 ms delta clamp
 
-## Usage
-
-### Arguments mode
-
-Pass one or more integers as arguments:
-
-```sh
-$ ./build/prime_tester 7 8 1 -3 2
-7 is prime
-8 is not prime
-1 is not prime
--3 is not prime
-2 is prime
-$ echo $?
-0
-```
-
-### Stdin mode
-
-With no arguments, the program reads integers from stdin, one per line,
-until EOF:
-
-```sh
-$ printf '11\n12\n' | ./build/prime_tester
-11 is prime
-12 is not prime
-```
-
-### Bad input
-
-A token that is not an integer, or an integer that does not fit in a
-`long long`, is reported on stderr as `not a number: <token>`. The
-program keeps processing the remaining tokens/lines rather than
-stopping:
-
-```sh
-$ ./build/prime_tester 5 abc 6
-5 is prime
-6 is not prime
-$ echo $?
-1
-```
-
-(`not a number: abc` is printed on stderr.)
-
-### Exit codes
-
-- `0` — every token parsed cleanly (including the case of empty input:
-  no arguments and empty/closed stdin, which prints nothing and exits
-  0).
-- `1` — at least one token was rejected as not a number, regardless of
-  how many.
-
-## Layout
-
-- `CMakeLists.txt` — build definition for the `prime_tester` executable.
-- `src/prime.h` / `src/prime.cpp` — `bool is_prime(long long n)`: trial
-  division up to the square root with the 6k±1 optimisation.
-- `src/main.cpp` — command-line front-end: argument/stdin parsing and
-  output formatting.
-
-## Unrelated files in this repository
-
-The repository also contains leftovers from earlier, unrelated
-projects (a JavaScript game at the repository root, a Java Swing
-calculator under `src/main/java` and `src/test/java` with its own
-`pom.xml`, and `src/sieve.h` / `src/sieve.cpp` / `tests/sieve_test.cpp`
-for a range-sieve feature that is not part of this executable). They
-are not referenced by `CMakeLists.txt` and are kept untouched.
+1. Start a game and let it run for a few seconds.
+2. Switch to another browser tab (or minimize the window) for at least 10
+   seconds, then switch back.
+3. The ship and invaders should resume from roughly where they were, not
+   jump or teleport — at most 250 ms (15 fixed steps) of simulation runs
+   on the first frame after resuming, regardless of how long the tab was
+   backgrounded.
