@@ -1,108 +1,86 @@
-#Requires -Version 5.1
-<#
-run.ps1 -- build (if needed) and run the prime_tester console app.
+# run.ps1 - serve the Space Invaders game locally and open it in a browser.
+#
+# WHAT IT DOES
+#   Starts a read-only static file server (Python's standard-library
+#   http.server) rooted at the repository root and opens
+#   http://localhost:<port>/index.html.  Serving over http:// is what makes the
+#   ES module imports work: Chrome and Edge refuse <script type="module">
+#   imports from a file:// origin because the origin is null.
+#
+# WHEN TO RUN IT
+#   Whenever you want to play or smoke-test the game: the manual verification
+#   step of the release runbook, or after unzipping the release artifact.
+#   Ctrl-C stops the server.
+#
+# It writes nothing and serves only.  Idempotent: if something already answers
+# on the port it reports that and exits instead of starting a second server.
+#
+# Windows PowerShell 5.1 compatible (no PS7-only syntax).
 
-WHAT IT DOES: locates prime_tester under the build directory (including the
-Release and Debug config subdirectories that multi-config generators use),
-configures and builds it with CMake if it is missing (unless -NoBuild), then
-runs it with every remaining argument passed straight through and exits with the
-app's own exit code.
+param(
+    [int]$Port = 8080,
+    [switch]$NoBrowser
+)
 
-WHEN TO RUN: any time you want to exercise the app on Windows -- a smoke check
-of a fresh clone or of an unpacked release artefact.
+$ErrorActionPreference = "Continue"
 
-    powershell -File release\scripts\run.ps1 7 8 1 -3 2
-    powershell -File release\scripts\run.ps1 --upto 30
-
-Script options must come first and are consumed before the app's arguments:
-    -NoBuild / --no-build     fail instead of building when the exe is missing
-    -BuildDir DIR / --build-dir DIR   cmake build directory (default build)
-    --                        stop option parsing; the rest goes to the app
-
-Windows PowerShell 5.1 compatible, ASCII only. There is deliberately no param()
-block so that app arguments such as --upto and -3 reach the app verbatim instead
-of being parsed as PowerShell parameters. Idempotent: an existing build is
-reused. Progress messages go to stderr so the app's stdout stays pipeable.
-#>
-
-$ErrorActionPreference = "Stop"
-$ExeName = "prime_tester"
-
-function Note([string]$Message) {
-    [Console]::Error.WriteLine($Message)
+function Say([string]$Message) {
+    Write-Host "[run] $Message"
 }
 
-function Fail([string]$Message) {
-    [Console]::Error.WriteLine("error: " + $Message)
+$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$root = (Resolve-Path (Join-Path $scriptDir "..\..")).Path
+
+if (-not (Test-Path (Join-Path $root "index.html"))) {
+    Say "index.html was not found in $root"
+    Say "run this from the repository checkout (release\scripts\run.ps1)"
     exit 1
 }
 
-$buildDir = $env:BUILD_DIR
-if ([string]::IsNullOrEmpty($buildDir)) { $buildDir = "build" }
-$noBuild = $false
-
-$rest = @()
-if ($null -ne $args) { $rest = @($args) }
-
-while ($rest.Count -gt 0) {
-    $head = [string]$rest[0]
-    if ($head -eq "-NoBuild" -or $head -eq "--no-build") {
-        $noBuild = $true
-        if ($rest.Count -gt 1) { $rest = @($rest[1..($rest.Count - 1)]) } else { $rest = @() }
-    } elseif ($head -eq "-BuildDir" -or $head -eq "--build-dir") {
-        if ($rest.Count -lt 2) { Fail "-BuildDir needs a value" }
-        $buildDir = [string]$rest[1]
-        if ($rest.Count -gt 2) { $rest = @($rest[2..($rest.Count - 1)]) } else { $rest = @() }
-    } elseif ($head -eq "--") {
-        if ($rest.Count -gt 1) { $rest = @($rest[1..($rest.Count - 1)]) } else { $rest = @() }
-        break
-    } else {
+$python = $null
+foreach ($candidate in @("python3", "python")) {
+    $found = Get-Command $candidate -ErrorAction SilentlyContinue
+    if ($found) {
+        $python = $found.Source
         break
     }
 }
 
-$root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
-Set-Location -LiteralPath $root
-Note ("==> repository: " + $root)
+$url = "http://localhost:$Port/index.html"
 
-function Find-Exe([string]$Dir) {
-    $candidates = @(
-        (Join-Path $Dir ($ExeName + ".exe")),
-        (Join-Path (Join-Path $Dir "Release") ($ExeName + ".exe")),
-        (Join-Path (Join-Path $Dir "Debug") ($ExeName + ".exe")),
-        (Join-Path $Dir $ExeName)
-    )
-    foreach ($candidate in $candidates) {
-        if (Test-Path -LiteralPath $candidate -PathType Leaf) { return $candidate }
+$busy = $false
+try {
+    $client = New-Object System.Net.Sockets.TcpClient
+    $async = $client.BeginConnect("127.0.0.1", $Port, $null, $null)
+    if ($async.AsyncWaitHandle.WaitOne(500)) {
+        $client.EndConnect($async)
+        $busy = $true
     }
-    return ""
+    $client.Close()
+} catch {
+    $busy = $false
 }
 
-$exe = Find-Exe $buildDir
-
-if ([string]::IsNullOrEmpty($exe)) {
-    if ($noBuild) {
-        Fail ($ExeName + " not found under " + $buildDir + " and -NoBuild was given")
-    }
-    Note ("==> " + $ExeName + " not found under " + $buildDir + "; building it now")
-    Note ("    + cmake -B " + $buildDir + " -DCMAKE_BUILD_TYPE=Release")
-    & cmake -B $buildDir -DCMAKE_BUILD_TYPE=Release
-    if ($LASTEXITCODE -ne 0) { Fail "cmake configure failed" }
-    Note ("    + cmake --build " + $buildDir + " --config Release")
-    & cmake --build $buildDir --config Release
-    if ($LASTEXITCODE -ne 0) { Fail "cmake build failed" }
-    $exe = Find-Exe $buildDir
-    if ([string]::IsNullOrEmpty($exe)) {
-        Fail ("build finished but " + $ExeName + " is still not under " + $buildDir)
-    }
-} else {
-    Note "==> reusing existing build"
+if ($busy) {
+    Say "port $Port is already serving - not starting a second server"
+    Say "open $url"
+    exit 0
 }
 
-Note ("==> running: " + $exe + " " + ($rest -join " "))
-if ($rest.Count -gt 0) {
-    & $exe @rest
-} else {
-    & $exe
+if (-not $python) {
+    Say "no python interpreter found - cannot start a local server."
+    Say "install Python 3, or open $root\index.html directly (browsers may refuse"
+    Say "ES module imports from file:// origins)."
+    exit 1
 }
-exit $LASTEXITCODE
+
+Say "serving $root at $url"
+Say "controls: ENTER starts and restarts, Left/Right or A/D move, Space fires"
+Say "press Ctrl-C here to stop the server"
+
+if (-not $NoBrowser) {
+    Start-Job -ScriptBlock { param($u) Start-Sleep -Seconds 1; Start-Process $u } -ArgumentList $url | Out-Null
+}
+
+Set-Location $root
+& $python -m http.server $Port --bind 127.0.0.1

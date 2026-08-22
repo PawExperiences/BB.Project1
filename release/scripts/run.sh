@@ -1,77 +1,97 @@
 #!/bin/sh
-# run.sh -- build (if needed) and run the prime_tester console app.
+# run.sh - serve the Space Invaders game locally and open it in a browser.
 #
-# WHAT IT DOES: locates build/prime_tester relative to the repository root,
-# configures and builds it with CMake if it is missing (unless --no-build), then
-# runs it with every remaining argument passed straight through and exits with
-# the app's own exit code.
+# WHAT IT DOES
+#   Starts a read-only static file server (Python's standard-library
+#   http.server) rooted at the repository root and opens
+#   http://localhost:<port>/index.html.  Serving over http:// is what makes the
+#   ES module imports work: Chrome and Edge refuse <script type="module">
+#   imports from a file:// origin because the origin is null.
 #
-# WHEN TO RUN: any time you want to exercise the app -- a smoke check of a fresh
-# clone or of an unpacked release artefact.
+# WHEN TO RUN IT
+#   Whenever you want to play or smoke-test the game: the manual verification
+#   step of the release runbook, or after unzipping the release artifact.
+#   Ctrl-C stops the server.
 #
-#   ./release/scripts/run.sh 7 8 1 -3 2
-#   printf '11\n12\n' | ./release/scripts/run.sh
-#   ./release/scripts/run.sh --upto 30
-#
-# Script options must come first and are consumed before the app's arguments:
-#   --no-build        fail instead of building when the executable is missing
-#   --build-dir DIR   cmake build directory (default build, or $BUILD_DIR)
-#   --                stop option parsing; everything after goes to the app
-#
-# POSIX sh. Idempotent: an existing build is reused, never rebuilt from scratch.
-# All progress messages go to stderr so the app's stdout stays pipeable.
+# It writes nothing and serves only.  Idempotent: if something already answers
+# on the port it reports that and exits instead of starting a second server.
 
 set -eu
 
-EXE_NAME="prime_tester"
-BUILD_DIR="${BUILD_DIR:-build}"
-NO_BUILD=0
+PORT=8080
+OPEN_BROWSER=1
 
-note() { printf '%s\n' "$*" >&2; }
-fail() { printf 'error: %s\n' "$*" >&2; exit 1; }
+say() {
+  printf '[run] %s\n' "$*"
+}
+
+usage() {
+  printf '%s\n' "Usage: run.sh [--port N] [--no-browser]"
+}
 
 while [ $# -gt 0 ]; do
-    case "$1" in
-        --no-build)  NO_BUILD=1; shift ;;
-        --build-dir) BUILD_DIR="${2:?--build-dir needs a value}"; shift 2 ;;
-        --)          shift; break ;;
-        *)           break ;;
-    esac
+  case "$1" in
+    --port) PORT="${2:-}"; shift 2 ;;
+    --no-browser) OPEN_BROWSER=0; shift ;;
+    -h|--help) usage; exit 0 ;;
+    *) say "unknown option: $1"; usage; exit 1 ;;
+  esac
 done
 
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 ROOT=$(CDPATH= cd -- "$SCRIPT_DIR/../.." && pwd)
-cd "$ROOT"
-note "==> repository: $ROOT"
 
-find_exe() {
-    for cand in \
-        "$BUILD_DIR/$EXE_NAME" \
-        "$BUILD_DIR/Release/$EXE_NAME" \
-        "$BUILD_DIR/$EXE_NAME.exe" \
-        "$BUILD_DIR/Release/$EXE_NAME.exe"
-    do
-        if [ -f "$cand" ]; then printf '%s' "$cand"; return 0; fi
-    done
-    return 1
-}
-
-EXE=$(find_exe || true)
-
-if [ -z "$EXE" ]; then
-    if [ "$NO_BUILD" -eq 1 ]; then
-        fail "$EXE_NAME not found under $BUILD_DIR and --no-build was given"
-    fi
-    note "==> $EXE_NAME not found under $BUILD_DIR; building it now"
-    note "    + cmake -B $BUILD_DIR -DCMAKE_BUILD_TYPE=Release"
-    cmake -B "$BUILD_DIR" -DCMAKE_BUILD_TYPE=Release >&2
-    note "    + cmake --build $BUILD_DIR"
-    cmake --build "$BUILD_DIR" >&2
-    EXE=$(find_exe || true)
-    [ -n "$EXE" ] || fail "build finished but $EXE_NAME is still not under $BUILD_DIR"
-else
-    note "==> reusing existing build"
+if [ ! -f "$ROOT/index.html" ]; then
+  say "index.html was not found in $ROOT"
+  say "run this from the repository checkout (release/scripts/run.sh)"
+  exit 1
 fi
 
-note "==> running: $EXE $*"
-exec "$EXE" "$@"
+PY=""
+for candidate in python3 python; do
+  if command -v "$candidate" >/dev/null 2>&1; then
+    PY="$candidate"
+    break
+  fi
+done
+
+if [ -z "$PY" ]; then
+  say "no python interpreter found - cannot start a local server."
+  say "install Python 3, or open $ROOT/index.html in a browser that permits"
+  say "ES module imports from file:// origins."
+  exit 1
+fi
+
+URL="http://localhost:$PORT/index.html"
+
+BUSY=0
+if "$PY" -c "import socket,sys;s=socket.socket();s.settimeout(0.5);r=s.connect_ex(('127.0.0.1',int(sys.argv[1])));s.close();sys.exit(0 if r==0 else 1)" "$PORT"; then
+  BUSY=1
+fi
+
+if [ "$BUSY" -eq 1 ]; then
+  say "port $PORT is already serving - not starting a second server"
+  say "open $URL"
+  exit 0
+fi
+
+open_url() {
+  if command -v xdg-open >/dev/null 2>&1; then
+    xdg-open "$1" >/dev/null 2>&1 || true
+  elif command -v open >/dev/null 2>&1; then
+    open "$1" >/dev/null 2>&1 || true
+  else
+    say "open $1 in your browser"
+  fi
+}
+
+say "serving $ROOT at $URL"
+say "controls: ENTER starts and restarts, Left/Right or A/D move, Space fires"
+say "press Ctrl-C here to stop the server"
+
+if [ "$OPEN_BROWSER" -eq 1 ]; then
+  ( sleep 1; open_url "$URL" ) &
+fi
+
+cd "$ROOT"
+exec "$PY" -m http.server "$PORT" --bind 127.0.0.1

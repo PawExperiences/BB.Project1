@@ -1,3 +1,39 @@
+## 0.5.0 -- e2e space invaders cc 0.5.0
+
+# Changelog
+
+All notable changes to this project are recorded in this file. This is the first tagged release, so `0.5.0` describes the whole game.
+
+## [0.5.0] - e2e space invaders cc
+
+First tagged release (no previous tag). Bundles PRs #386-#392 (`4defccf`..`661e2ad`).
+
+### Added
+- **Entry point** - `index.html` at the repository root: dark page background, exactly one `<canvas>` at `width="768"` / `height="896"`, and `game.js` loaded via `<script type="module" src="game.js">`. No CDN, no bundler output, no npm package. (#386)
+- **Frame loop and scenes** - `game.js` runs a fixed-timestep loop at 60 update steps/s with `update` and `render` as distinct phases, and the Title / Playing / Game Over / Win scenes. ENTER drives every transition entirely in-page: no `location.reload()`, no assignment to `location`, no navigation. (#386)
+- **Shared HUD state** - `game.js` exports a single mutable HUD state object (`score`, `lives`, `hiScore`). Starting a game resets `score` to 0 and `lives` to 3; `hiScore` is the best score of the page session and survives restarts. (#386)
+- **Tunables** - `gameConfig.js` named exports: `CANVAS_WIDTH` 768, `CANVAS_HEIGHT` 896, `PLAYER_SPEED` 200, `BULLET_SPEED` 500, starting lives 3, plus grid dimensions, step distance/interval, row drop, explosion duration, points per invader and invulnerability seconds used by every level. (#386, #388)
+- **Keyboard input** - `input.js` exporting `initInput()` and `isKeyHeld(key)`. Held-key state is polled per frame rather than driven by OS key repeat; `ArrowLeft`/`ArrowRight`, `a`/`A`/`d`/`D` and `Space`/`" "` normalise to stable identifiers; arrows and space no longer scroll the page. (#387)
+- **Player ship** - `player.js` exporting `Player` with `update(dt)` / `draw(ctx)`: delta-time movement at 200 px/s clamped to the playfield, drawn procedurally from canvas arcs and rectangles (no sprites), a strictly one-bullet-at-a-time cannon at 500 px/s, and a lives counter with `loseLife()`, `grantInvulnerability(seconds)`, `resetPosition()` and a full reset path. (#387)
+- **Invader formation** - `invaders.js` exporting `InvaderFormation` (`reset`, `step`, `aliveCount`, `lowestBottom`, `draw`): 55 invaders in the classic 11x5 grid, advancing in discrete steps driven by a `dt` accumulator, dropping a row and reversing when the *living* bounding box would leave the playfield. Kills leave holes; the grid never re-flows. (#388)
+- **Collision and explosions** - `collision.js` exporting `overlaps(a, b)` and `collide(state)`: one axis-aligned bounding-box pass per frame for player-bullet-vs-invader (kill, explosion, score) and hostile-bullet-vs-player (life loss then brief invulnerability), plus `spawnExplosion` / `updateExplosions` / `drawExplosions` / `clearExplosions` built from canvas primitives only. (#388)
+- **Level registry** - `levels.js` exporting `registerLevel`, `isLevelRegistered` and `createLevel`; a request for an unregistered level falls through to the Game Over scene instead of crashing or blanking the canvas. (#389)
+- **Level 1: the classic grid** - `level1.js`, registered as level 1. Step interval `100 + (aliveCount - 1) * (700 / 54)` ms - about 800 ms at 55 alive, about 100 ms at 1 - so survivors visibly speed up. The formation reaching the player's row costs a life and restarts the level from a fresh grid; the last life routes to `endGame()`. Clearing all 55 calls `advanceLevel()`. The HUD gains the current level number. (#389)
+- **Level 2: they shoot back** - `level2.js`, extending `Level1`: every step interval multiplied by 0.67, a single global enemy-fire timer at a uniform 800-2000 ms that spawns one bullet from the lowest living invader of an occupied column, hostile bullets at 300 px/s, a bonus UFO every 20 s that alternates entry side and crosses at 120 px/s scoring `[50,100,150,300][shotCount % 4]` (session-cumulative shot count, never random), and death -> bottom-centre respawn with 2 s of flashing invulnerability. Lives carry over from Level 1; clearing the grid advances to level 3. (#390)
+- **Level 3: shields and formations** - `level3.js`, extending `Level2`: four destructible bunkers evenly spaced across the canvas with their tops at ~80% of canvas height, each a 4x4 grid of ~8 px cells (64 cells at level start), eroded permanently by player bullets, hostile bullets and descending invaders - never rebuilt, not even on respawn. At 28 kills the survivors split into independent left (original columns 1-6) and right (columns 7-11) groups that start moving apart and sweep-and-drop on their own schedules; clearing both advances to level 4. (#391)
+- **Boss level: multi-phase finale** - `boss.js`, self-registering as level 4: a 160x80 boss drawn purely with canvas 2D primitives, 10 HP with a health bar across the top of the canvas, 90 px/s horizontal drift with edge reversal and no vertical movement, and a three-bullet spread from its centre at 0 deg / +20 deg / -20 deg at 260 px/s - every 1500 ms while HP >= 6, every 700 ms from HP <= 5. Sudden death: any boss projectile touching the player ends the run regardless of remaining lives. 0 HP routes to `winGame()`. (#392)
+- **README** - the file layout plus a numbered manual verification path per level, runnable end to end from a browser. (#386-#392)
+- **Release tooling** - `release/scripts/release.{py,sh,ps1}` and `release/scripts/run.{py,sh,ps1}`.
+
+### Changed
+- **Repository toolchain** - the tree at this tag is a browser-only ES-module game with no build step, no package manager and no runtime dependency. The Maven project (`pom.xml`, `src/main/java/com/buildboard/calculator/**`) and the CMake project (`CMakeLists.txt`, `src/*.cpp`, `tests/sieve_test.cpp`) from earlier e2e runs are not present at this ref.
+- **Frame order** - one frame in `game.js` executes as entity updates -> `collide(state)` -> `updateExplosions(dt)` -> render. Nothing reachable from the render path kills an invader, removes a bullet, or changes score or lives.
+
+### Fixed
+- **Backgrounded-tab catch-up burst** - each frame's raw delta is clamped to 250 ms before it enters the accumulator, capping a single frame at 15 update steps, so returning to a backgrounded tab no longer teleports the ship and the invaders.
+- **Two end screens** - `boss.js` no longer renders its own win screen; it delegates to `winGame()` / `renderWin()` in `game.js`, so only one end screen can ever appear.
+- **Enemy-fire branch with no shooters** - `collide(state)` is a no-op and does not throw when the hostile-bullet list is absent or empty, so Level 1 (which has no enemy fire) runs clean.
+
 ## 0.2.0 -- e2e calculator 0.2.0
 
 # Changelog — e2e calculator 0.2.0
