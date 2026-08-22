@@ -44,3 +44,17 @@ export const LEVEL2_UFO_INTERVAL_MS = 20000;
 export const LEVEL2_UFO_SPEED = 120;
 export const LEVEL2_UFO_SCORE_TIERS = [50, 100, 150, 300];
 export const LEVEL2_RESPAWN_INVULNERABILITY_S = 2;
+
+// Level 3 (level3.js): the shield bunkers' grid/geometry/placement and the
+// formation-split trigger/column boundary.
+export const LEVEL3_BUNKER_COUNT = 4;
+export const LEVEL3_BUNKER_GRID_SIZE = 4; // 4x4 cells per bunker
+export const LEVEL3_BUNKER_CELL_SIZE = 8; // px, square cells
+export const LEVEL3_BUNKER_TOP_RATIO = 0.8; // bunker tops at 80% of canvas height
+export const LEVEL3_BUNKER_COLOR = '#33cc66';
+// The formation splits once this many or fewer of the 55 starting invaders
+// are still alive (i.e. on the 28th kill).
+export const LEVEL3_SPLIT_SURVIVOR_THRESHOLD = 27;
+// Original zero-based columns [0, LEVEL3_LEFT_GROUP_COLUMNS) join the left
+// half at the split; the rest join the right half.
+export const LEVEL3_LEFT_GROUP_COLUMNS = 6;
