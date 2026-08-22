@@ -135,9 +135,10 @@ function endGame() {
 
 // Boss-victory handoff ("Boss level: multi-phase finale"): the boss level
 // sets its `victory` flag when its HP reaches 0. The run then ends on the
-// win screen — drawn by the boss level itself via drawWinScreen() —
-// instead of advancing to a Level 5 that does not exist. ENTER on the win
-// screen starts a fresh run at Level 1 via startGame().
+// WIN scene, rendered by renderWin() below (this module's own hud, same
+// as renderGameOver()) instead of advancing to a Level 5 that does not
+// exist. ENTER on the win screen starts a fresh run at Level 1 via
+// startGame().
 function winGame() {
   if (hud.score > hud.hiScore) hud.hiScore = hud.score;
   scene = SCENES.WIN;
@@ -278,16 +279,22 @@ function renderGameOver() {
 }
 
 function renderWin() {
-  // The WIN scene is reachable only from the boss fight's victory flag,
-  // so currentLevel is the boss level, which owns the win screen's
-  // content (final score + restart prompt). The canvas has already been
-  // cleared by render().
-  if (
-    currentLevel !== null &&
-    typeof currentLevel.drawWinScreen === 'function'
-  ) {
-    currentLevel.drawWinScreen(ctx);
-  }
+  // The WIN scene is reachable only from a level's victory flag (today,
+  // the boss fight); this module owns the win screen's content itself —
+  // final score + restart prompt, the same shape as renderGameOver() —
+  // rather than delegating to the level, so no level-specific rendering
+  // hook exists in this scene.
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#ffffff';
+  ctx.font = '48px monospace';
+  ctx.fillText('YOU WIN!', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 - 60);
+
+  ctx.font = '24px monospace';
+  ctx.fillText(`Final Score: ${hud.score}`, CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 - 10);
+
+  ctx.font = '20px monospace';
+  ctx.fillText('Press ENTER to restart', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 40);
+  ctx.textAlign = 'left';
 }
 
 function render() {
