@@ -77,6 +77,36 @@ To reach Game Over quickly by hand instead of losing legitimately:
 3. The scene switches to Game Over within a frame, and `Hi` is updated to
    the greater of its previous value and the final score.
 
+### Verifying player movement, firing and lives
+
+Open `index.html` via a `file://` URL, press ENTER to start a game, and
+check:
+
+- [ ] Holding ArrowLeft moves the ship left, and holding ArrowRight moves it
+      right; releasing the key stops the movement immediately.
+- [ ] Holding A moves the ship left and holding D moves it right, exactly
+      like ArrowLeft/ArrowRight.
+- [ ] Holding ArrowLeft and ArrowRight (or A and D) at the same time leaves
+      the ship stationary — no drift in either direction.
+- [ ] Holding a direction key drives the ship all the way to that edge of
+      the canvas, where it stops flush with the edge (left edge at `x = 0`,
+      right edge at `x = 768`) instead of leaving the canvas; releasing that
+      key and holding the opposite one moves the ship away from the edge
+      immediately.
+- [ ] Movement speed looks the same regardless of the browser's actual frame
+      rate — e.g. throttling the tab (DevTools → Performance → CPU
+      throttling, or backgrounding/restoring the tab) does not make the ship
+      cover more or less ground per second of wall-clock time.
+- [ ] Pressing Space fires a single small white bullet from the ship's nose
+      that travels straight up.
+- [ ] While that bullet is on screen, pressing or holding Space again fires
+      nothing — at no point are two bullets visible at once.
+- [ ] Once the bullet reaches the top of the canvas and disappears, the next
+      Space press fires a new bullet.
+- [ ] In the DevTools console, `import('./game.js').then((m) =>
+      console.log(m.player.lives));` reports `3` at the start of a run (the
+      `STARTING_LIVES` value from `gameConfig.js`).
+
 ### Verifying the 250 ms delta clamp
 
 1. Start a game and let it run for a few seconds.
