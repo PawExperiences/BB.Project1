@@ -4,16 +4,55 @@ A self-contained C++17 command-line prime-number tester, built with CMake.
 It answers "is this number prime?" for numbers supplied on the command
 line or piped in on stdin.
 
-## Build
+## Build, run, and test
 
 From the repository root:
 
 ```sh
-cmake -B build && cmake --build build
+cmake -B build
+cmake --build build
 ```
 
 This produces the `prime_tester` executable at `build/prime_tester`. The
 build has no third-party dependencies (standard library only).
+
+Run it by piping a number on stdin, or with `--upto` for range mode:
+
+```sh
+echo 7 | ./build/prime_tester
+./build/prime_tester --upto 30
+```
+
+Run the test suite (covers the range sieve behind `--upto`) with CTest:
+
+```sh
+ctest --test-dir build
+```
+
+## Worked examples
+
+Each row below was produced by building `build/prime_tester` from the
+current source and running the exact command shown, capturing its stdout
+and its exit status (`echo $?`).
+
+| Command | Expected stdout | Exit status |
+|---|---|---|
+| `echo 7 \| ./build/prime_tester` | `7 is prime` | `0` |
+| `echo 9 \| ./build/prime_tester` | `9 is not prime` | `0` |
+| `echo 0 \| ./build/prime_tester` | `0 is not prime` | `0` |
+| `echo 1 \| ./build/prime_tester` | `1 is not prime` | `0` |
+| `echo "-5" \| ./build/prime_tester` | `-5 is not prime` | `0` |
+| `echo abc \| ./build/prime_tester` | (no output) | `1` |
+| `printf '' \| ./build/prime_tester` | (no output) | `0` |
+| `./build/prime_tester --upto 30` | `2`, `3`, `5`, `7`, `11`, `13`, `17`, `19`, `23`, `29`, each on its own line | `0` |
+
+Notes:
+
+- For the `abc` row, the program writes `not a number: abc` to **stderr**,
+  not stdout; stdout is empty for that command, which is why the table
+  shows no stdout output there.
+- For the empty-stdin row, the program writes nothing to either stdout or
+  stderr and exits `0`.
 
 ## Usage
 
