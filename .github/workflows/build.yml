@@ -22,17 +22,17 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    container: maven:3.9-eclipse-temurin-21
+    container: gcc:14-bookworm
     steps:
       - uses: actions/checkout@v4
       - name: Build
         run: |-
-          mvn -B -DskipTests=false package
+          apt-get update && apt-get install -y --no-install-recommends cmake && cmake -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: buildboard-artifact
-          path: target
+          path: build
           if-no-files-found: error
 
   publish:
