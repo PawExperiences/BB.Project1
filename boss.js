@@ -27,9 +27,9 @@
 //             runs the existing game-over -> title -> new game flow,
 //             which always restarts at Level 1 (no boss retry)
 //   victory   at 0 HP the fight sets `victory`; game.js switches to the
-//             WIN scene, where this module draws the win screen (final
-//             score + an ENTER-to-restart prompt; the restart starts a
-//             fresh run at Level 1)
+//             WIN scene and draws the win screen itself (final score + an
+//             ENTER-to-restart prompt; the restart starts a fresh run at
+//             Level 1) — this module renders no win screen of its own
 //
 // All hit-testing calls the shared overlaps() helper imported from
 // collision.js — this module contains no collision routine of its own.
@@ -98,13 +98,14 @@ const CORE_COLOR = '#ffcc33';
 
 export class BossLevel {
   // context is game.js's shared slice of game state
-  // ({ player, hud, hostileBullets }). The boss needs the player — its
-  // in-flight bullet, its bounding box and the lives counter sudden death
-  // zeroes — and the hud, whose score the win screen displays.
-  // hostileBullets is deliberately NOT used; see the header comment.
+  // ({ player, hud, hostileBullets }). The boss needs only the player —
+  // its in-flight bullet, its bounding box and the lives counter sudden
+  // death zeroes. game.js's own WIN-scene renderer owns the win screen
+  // (and reads its own hud for the score), so this level does not need
+  // hud at all. hostileBullets is deliberately NOT used; see the header
+  // comment.
   constructor(context) {
     this.player = context.player;
-    this.hud = context.hud;
 
     this.width = BOSS_WIDTH;
     this.height = BOSS_HEIGHT;
@@ -136,6 +137,24 @@ export class BossLevel {
     // so an empty list keeps that loop a no-op; the boss's own overlap
     // checks run in update() below via the shared overlaps() helper.
     this.formation = { invaders: [] };
+  }
+
+  // Back to the fight's initial state — the same lifecycle contract every
+  // level exposes (Level1.restart(), Level2.restart()), so advanceLevel()
+  // needs no special-casing to reach Level 4. Nothing in this level's own
+  // flow calls it today: a breach never happens here, and sudden death
+  // ends the whole run through game.js's game-over path (a fresh run
+  // creates a brand-new BossLevel via the registry) rather than restarting
+  // this instance in place.
+  restart() {
+    this.x = (CANVAS_WIDTH - this.width) / 2;
+    this.direction = 1;
+    this.hp = BOSS_MAX_HP;
+    this.bullets.length = 0;
+    this.fireTimerMs = 0;
+    this.flashTimer = 0;
+    this.cleared = false;
+    this.victory = false;
   }
 
   // One spread = three bullets from the boss's centre: straight down
@@ -318,32 +337,6 @@ export class BossLevel {
       ctx.fillRect(x, y, this.width, this.height);
       ctx.globalAlpha = 1;
     }
-  }
-
-  // The win screen, drawn by game.js while the WIN scene is active: the
-  // final score exactly as it stood when the boss died (there is no
-  // boss-kill bonus) plus the restart prompt. ENTER starts a fresh run
-  // at Level 1.
-  drawWinScreen(ctx) {
-    ctx.textAlign = 'center';
-    ctx.fillStyle = '#ffffff';
-    ctx.font = '48px monospace';
-    ctx.fillText('YOU WIN!', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 - 60);
-
-    ctx.font = '24px monospace';
-    ctx.fillText(
-      `Final Score: ${this.hud.score}`,
-      CANVAS_WIDTH / 2,
-      CANVAS_HEIGHT / 2 - 10,
-    );
-
-    ctx.font = '20px monospace';
-    ctx.fillText(
-      'Press ENTER to restart',
-      CANVAS_WIDTH / 2,
-      CANVAS_HEIGHT / 2 + 40,
-    );
-    ctx.textAlign = 'left';
   }
 }
 

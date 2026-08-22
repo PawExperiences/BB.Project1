@@ -40,8 +40,8 @@ Title).
 - `level3.js` — Level 3: four destructible shield bunkers plus the 28-kill
   formation split into independently-marching halves. Owned by "Level 3:
   shields and formations".
-- `boss.js` — the multi-phase boss fight and win screen. Owned by "Boss
-  level: multi-phase finale".
+- `boss.js` — the multi-phase boss fight (Level 4). Owned by "Boss level:
+  multi-phase finale".
 
 Every module above `game.js` in this list already exists in the repo; this
 card only reconciles `index.html`, `gameConfig.js` and `game.js` and does
@@ -293,6 +293,57 @@ Level 2), wait a moment, then run it again from Level 2 (advances to Level
 - [ ] No console errors: throughout the whole Level 3 sequence above
       (bunkers, split, independent sweeps, clear), the DevTools console
       shows no errors or unhandled promise rejections.
+
+### Verifying Level 4: the boss fight
+
+To reach Level 4 without clearing three levels' worth of invaders by hand,
+start a game and run the same "empty out the current formation" console
+snippet used in the Level 2/3 sections above, once per level:
+`import('./game.js').then((m) => { m.currentLevel.formation.invaders.forEach
+((i) => { i.alive = false; }); });`. Run it, wait a moment for the level's own
+`update()` to notice the clear, then run it again, wait, then run it a third
+time — the HUD's `LEVEL` value goes `1` -> `2` -> `3` -> `4`. Once `LEVEL 4`
+is showing, the invader grid is gone and the boss fight has begun; check:
+
+- [ ] Single boss, no grid: a single boss roughly 160x80 px, built entirely
+      from filled rects/arcs (no image assets), occupies the upper part of
+      the playfield in place of the invader grid. A health bar spans the
+      full width of the canvas at the very top.
+- [ ] Health bar starts full: the bar's filled portion covers the whole
+      track when the fight begins (10/10 HP).
+- [ ] Drift and edge reversal: watch the boss move — it drifts sideways at a
+      steady pace and never moves down or up. The instant its body reaches
+      either edge of the canvas it reverses direction, staying fully
+      on-screen (it never runs off either side).
+- [ ] Health-bar depletion: fire at the boss (Space, same as any other
+      level). Each bullet that lands removes exactly one hit's worth of HP —
+      the health bar's filled width visibly shrinks by 1/10 of the track per
+      hit, the bullet disappears, and the boss flashes white briefly.
+- [ ] Phase 1 -> Phase 2 fire-rate change: while HP is 6 or higher, time the
+      gap between volleys (three bullets fired together — one straight down,
+      one angled to each side) — roughly 1.5 s apart. Land a hit that brings
+      HP down to 5 and keep watching: from that hit on, volleys fire roughly
+      every 0.7 s instead, with the identical three-bullet spread. To reach
+      Phase 2 without landing five hits by hand, use the console:
+      `import('./game.js').then((m) => { m.currentLevel.hp = 5; });`, then
+      watch the very next volley land on the faster cadence.
+- [ ] Sudden death: let any single boss bullet touch the ship, regardless of
+      how many lives the HUD shows. The run ends immediately on that one
+      touch — straight to the Game Over scene — even with 2 or 3 lives
+      showing a moment before.
+- [ ] Win screen: reduce the boss to 0 HP (continue landing hits, or jump
+      ahead with `import('./game.js').then((m) => { m.currentLevel.hp = 1;
+      });` and land one more shot). The scene switches to "YOU WIN!",
+      showing the final score and "Press ENTER to restart"; pressing ENTER
+      starts a fresh run at Level 1 with `Score: 0`, `Lives: 3` and
+      `LEVEL 1`.
+- [ ] Only one end screen ever appears: 0 HP always shows the win screen
+      (never Game Over), and a boss bullet touching the ship always shows
+      Game Over (never the win screen) — the two outcomes are mutually
+      exclusive.
+- [ ] No console errors: throughout the whole Level 4 sequence above (drift,
+      hits, the phase change, and either sudden death or the win screen),
+      the DevTools console shows no errors or unhandled promise rejections.
 
 ### Verifying the 250 ms delta clamp
 
