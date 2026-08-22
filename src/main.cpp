@@ -1,6 +1,10 @@
 // prime_tester -- command-line front-end.
 //
 // Modes:
+//   prime_tester --upto <n>   range mode: every prime <= n, one per
+//                             line, ascending, on stdout; n < 2 prints
+//                             nothing. A missing or non-integer <n> is
+//                             a diagnostic on stderr and exit 1.
 //   prime_tester <n> [n ...]  arguments mode: each argument is one
 //                             token, echoed and answered on stdout as
 //                             "<n> is prime" / "<n> is not prime";
@@ -19,7 +23,9 @@
 // nothing.
 //
 // The single-number primality check (trial division, 6k+/-1) lives in
-// src/prime.cpp; this file only parses arguments and dispatches.
+// src/prime.cpp and serves the arguments/stdin modes; the range sieve
+// in src/sieve.cpp serves --upto. This file only parses arguments and
+// dispatches.
 
 #include <cctype>
 #include <exception>
@@ -27,6 +33,7 @@
 #include <string>
 
 #include "prime.h"
+#include "sieve.h"
 
 namespace {
 
@@ -79,6 +86,23 @@ bool answer_token(const std::string& token) {
 } // namespace
 
 int main(int argc, char* argv[]) {
+    if (argc > 1 && std::string(argv[1]) == "--upto") {
+        // Range mode: exactly one value is expected after --upto.
+        if (argc != 3) {
+            std::cerr << "--upto requires exactly one integer argument\n";
+            return 1;
+        }
+        long long n = 0;
+        if (!parse_integer(argv[2], n)) {
+            std::cerr << "not a number: " << argv[2] << '\n';
+            return 1;
+        }
+        for (long long p : primes_up_to(n)) {
+            std::cout << p << '\n';
+        }
+        return 0;
+    }
+
     bool all_parsed = true;
     if (argc > 1) {
         // Arguments mode: one token per argument, in order; stdin is

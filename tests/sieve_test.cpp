@@ -1,8 +1,11 @@
 // CTest coverage for the range sieve (src/sieve.h), required by the
 // "A sieve for ranges, and a benchmark" card: the boundary cases
-//   n < 2   (1, 0 and a negative) -> empty vector
-//   n == 2  -> exactly {2}        (N inclusive)
-//   n == 30 -> the known range {2,3,5,7,11,13,17,19,23,29}
+//   n < 2       (1, 0 and a negative) -> empty vector
+//   n == 2      -> exactly {2}        (N inclusive)
+//   n == 3      -> exactly {2,3}      (N inclusive)
+//   n == 30     -> the known range {2,3,5,7,11,13,17,19,23,29}
+//   n == 100    -> 25 primes, last one 97
+//   n == 10^6   -> 78498 primes, last one 999983
 // A tiny assertion binary, standard library only: exits 0 when every
 // check passes and 1 otherwise. Registered with CTest as the test
 // "sieve_boundaries" (see CMakeLists.txt); run it via
@@ -37,6 +40,24 @@ void check(const char* label, const std::vector<long long>& actual,
     std::cerr << "}\n";
 }
 
+// Check a result's size and last element without spelling out the
+// whole expected list -- used for the 100 and 1,000,000 counts, where
+// the full list would be unwieldy to write inline.
+void check_count(const char* label, const std::vector<long long>& actual,
+                  std::size_t expected_size, long long expected_last) {
+    if (actual.size() == expected_size &&
+        (actual.empty() || actual.back() == expected_last)) {
+        return;
+    }
+    ++failures;
+    std::cerr << "FAIL: " << label << " -> got size " << actual.size();
+    if (!actual.empty()) {
+        std::cerr << ", last " << actual.back();
+    }
+    std::cerr << "; expected size " << expected_size << ", last "
+              << expected_last << '\n';
+}
+
 } // namespace
 
 int main() {
@@ -44,13 +65,20 @@ int main() {
     check("primes_up_to(1)", primes_up_to(1), {});
     check("primes_up_to(0)", primes_up_to(0), {});
     check("primes_up_to(-5)", primes_up_to(-5), {});
+    check("primes_up_to(-7)", primes_up_to(-7), {});
 
-    // n == 2: the first prime, included (N inclusive).
+    // n == 2 and n == 3: the exact boundary cases (N inclusive).
     check("primes_up_to(2)", primes_up_to(2), {2});
+    check("primes_up_to(3)", primes_up_to(3), {2, 3});
 
-    // The known range up to 30.
+    // A small range and the known range up to 30.
+    check("primes_up_to(10)", primes_up_to(10), {2, 3, 5, 7});
     check("primes_up_to(30)", primes_up_to(30),
           {2, 3, 5, 7, 11, 13, 17, 19, 23, 29});
+
+    // Larger counts: exact size and last element.
+    check_count("primes_up_to(100)", primes_up_to(100), 25, 97);
+    check_count("primes_up_to(1000000)", primes_up_to(1000000), 78498, 999983);
 
     if (failures == 0) {
         std::cout << "all sieve boundary checks passed\n";
