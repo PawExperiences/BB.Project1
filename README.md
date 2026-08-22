@@ -154,6 +154,80 @@ check:
    ('./levels.js').then((m) => console.log(m.isLevelRegistered(99),
    m.createLevel(99, {})));` logs `false` and `null`.)
 
+### Verifying Level 2: they shoot back
+
+Open `index.html` via a `file://` URL, press ENTER to start a game, and clear
+Level 1 (or jump straight there — see the console snippet below) to reach
+Level 2.
+
+- [ ] Lives carry over: note the `Lives` value in the HUD in the moment
+      Level 1 clears, and confirm the HUD still shows that same value on the
+      very first frame of Level 2 — it is not reset to `3`.
+- [ ] Faster formation: watch the grid march. At any given alive-count it
+      steps noticeably faster than Level 1 did at the same alive-count
+      (~1.5x — e.g. around 536 ms per step near 55 alive, versus Level 1's
+      ~800 ms). To check the exact ratio without playing it out, run in the
+      DevTools console:
+      `import('./level1.js').then((m1) => import('./level2.js').then((m2) =>
+      { const l1 = new m1.Level1({ player: {}, hud: {}, hostileBullets: [] });
+      const l2 = new m2.Level2({ player: { lives: 3 }, hud: {},
+      hostileBullets: [] }); console.log(l1.stepIntervalMs(),
+      l2.stepIntervalMs(), l2.stepIntervalMs() / l1.stepIntervalMs()); }));`
+      — the ratio logs as `0.67`.
+- [ ] Enemy fire, lowest invader only: watch a single column that still has
+      invaders in more than one row. Only the bottom-most living invader in
+      that column ever fires; if it is destroyed, the invader now at the
+      bottom of that column becomes the one that fires next — an invader
+      with a living invader still below it in its own column never fires.
+- [ ] Enemy fire is a single global volley, not one per column: count the
+      hostile (red) bullets appearing over a stretch of several seconds —
+      they appear one at a time, roughly 0.8–2 s apart, never several at
+      once from different columns simultaneously.
+- [ ] Hostile bullets travel straight down and disappear at the bottom edge
+      of the canvas if they miss the ship.
+- [ ] UFO timing and side alternation: watch the top band of the playfield
+      (below the HUD text, above the grid's home row). A small red saucer
+      crosses it roughly every 20 s. Note which side it enters from each
+      time — left, then right, then left, and so on, alternating every
+      appearance.
+- [ ] UFO scoring tiers: let a UFO cross unhit — no score change and no
+      other effect. Then shoot a UFO with the player's bullet — it
+      disappears and `Score` jumps by one of `50`, `100`, `150` or `300`.
+      Sink four UFOs in a row (or check the shot count in the console via
+      `import('./game.js').then((m) => console.log(m.player.shotsFired))`)
+      and confirm the tiers cycle in the fixed order `50, 100, 150, 300,
+      50, 100, ...` keyed off the player's cumulative shot count — never at
+      random.
+- [ ] Death and respawn: let a hostile bullet (or a breaching invader) hit
+      the ship. `Lives` drops by exactly one, the ship reappears at its
+      fixed bottom-centre starting position, and it visibly flashes
+      (blinks on/off) for about 2 seconds. Any hit landing during that
+      flashing window causes no further life loss and no second respawn —
+      only after the flash stops does the next hit cost a life again.
+- [ ] Game Over and restart still work from Level 2: run the lives down to
+      zero while in Level 2 (or set `Lives` to `0` directly — see the
+      Game-Over console snippet earlier in this README). The scene switches
+      to Game Over, and pressing ENTER there returns to the Title scene.
+- [ ] Grid clear advances to Level 3: destroy all 55 invaders in Level 2
+      (or repeatedly run the invader-formation console snippet from the
+      Level 1 verification section against `currentLevel.formation`, then
+      let the level's own `update()` notice the clear). The HUD's `LEVEL`
+      value changes from `2` to `3`; because Level 3 is not implemented in
+      this build, the playfield goes empty afterwards instead of freezing,
+      throwing, or looping back to Level 2 — this is the expected
+      unregistered-level fallback documented in the Level 1 section above,
+      confirmed here at the Level 2 -> 3 boundary specifically.
+- [ ] No console errors: throughout the whole Level 2 sequence above
+      (formation, enemy fire, UFO, death/respawn, level clear), the
+      DevTools console shows no errors or unhandled promise rejections.
+
+To jump straight into Level 2 for testing instead of clearing Level 1 by
+hand, start a game and run in the DevTools console:
+`import('./game.js').then((m) => { m.currentLevel.formation.invaders.forEach
+((i) => { i.alive = false; }); });` — on the next fixed update tick Level 1
+notices all 55 invaders are gone and hands off to Level 2 exactly as a real
+clear would.
+
 ### Verifying the 250 ms delta clamp
 
 1. Start a game and let it run for a few seconds.
