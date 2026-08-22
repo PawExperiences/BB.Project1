@@ -1,32 +1,41 @@
 // The invader formation: an 11-column x 5-row grid (55 invaders, the
-// classic formation) of identical filled rectangles. The level cards drive
-// the march in discrete steps via step(): each step moves the whole
-// formation sideways by one fixed increment as a unit, and when the
-// edge-most living invader reaches a side edge of the canvas the formation
-// snaps flush to that edge, drops by exactly one invader cell height and
-// reverses horizontal direction.
-// Added by "Sprite rendering and collision detection"; the discrete-step
-// march and the aliveCount()/lowestBottom() lifecycle queries were added by
-// "Level 1: the classic grid".
+// classic formation) of identical filled rectangles. step() advances the
+// march by one discrete increment as a unit, and when the edge-most living
+// invader reaches a side edge of the canvas the formation snaps flush to
+// that edge, drops by exactly one invader cell height and reverses
+// horizontal direction. update(dt) paces step() on a fixed wall-clock
+// interval (INVADER_STEP_INTERVAL) via a dt accumulator, so a large dt
+// still runs the edge check once per interval crossed rather than skipping
+// it — level cards that need a different (e.g. difficulty-ramping) pacing
+// call step() directly on their own accumulator instead of using update().
+// Added by "Sprite rendering and collision detection".
 
-import { CANVAS_WIDTH } from './gameConfig.js';
+import {
+  CANVAS_WIDTH,
+  INVADER_COLS,
+  INVADER_ROWS,
+  INVADER_WIDTH,
+  INVADER_HEIGHT,
+  INVADER_H_SPACING,
+  INVADER_V_SPACING,
+  INVADER_STEP_X,
+  INVADER_ROW_DROP,
+  INVADER_STEP_INTERVAL,
+} from './gameConfig.js';
 
-// Grid shape — exported so the classic 11 x 5 = 55 formation is checkable
-// from the outside (README verification, the level cards).
-export const INVADER_COLS = 11;
-export const INVADER_ROWS = 5;
+// Re-exported so the classic 11 x 5 = 55 formation shape stays checkable
+// from the outside (README verification, the level cards) without every
+// caller reaching into gameConfig.js directly.
+export { INVADER_COLS, INVADER_ROWS };
 
-// Invader geometry in px. Every invader is the same filled rectangle in the
-// same single colour — no sprite art, no image assets, and no per-row
-// variety (distinct types/rows/colours are explicitly out of scope for this
-// card).
-const INVADER_WIDTH = 36;
-const INVADER_HEIGHT = 24;
+// Every invader is the same filled rectangle in the same single colour — no
+// sprite art, no image assets, and no per-row variety (distinct
+// types/rows/colours are explicitly out of scope for this card).
 const INVADER_COLOR = '#ffffff';
 
 // Cell pitch: the invader plus the gap to its neighbour.
-const CELL_WIDTH = 48; // 36 px invader + 12 px horizontal gap
-const CELL_HEIGHT = 32; // 24 px invader + 8 px vertical gap
+const CELL_WIDTH = INVADER_WIDTH + INVADER_H_SPACING;
+const CELL_HEIGHT = INVADER_HEIGHT + INVADER_V_SPACING;
 
 // Home position of the whole grid: horizontally centered, just below the
 // HUD band (the Score/Lives text ends at y = 52).
@@ -34,11 +43,10 @@ const FORMATION_WIDTH = (INVADER_COLS - 1) * CELL_WIDTH + INVADER_WIDTH; // 516
 const START_X = (CANVAS_WIDTH - FORMATION_WIDTH) / 2; // 126
 const START_Y = 112;
 
-// March increments: STEP_X px sideways per discrete step (how often step()
-// is called — the pacing — is owned by the level cards), and a downward
+// March increments: STEP_X px sideways per discrete step, and a downward
 // drop of exactly one invader cell height at each edge reversal.
-const STEP_X = 8;
-const DROP_STEP = CELL_HEIGHT;
+const STEP_X = INVADER_STEP_X;
+const DROP_STEP = INVADER_ROW_DROP;
 
 export class InvaderFormation {
   constructor() {
@@ -65,6 +73,22 @@ export class InvaderFormation {
     }
     // +1 = marching right, -1 = marching left.
     this.direction = 1;
+
+    // Seconds accumulated toward the next update()-paced step; see update().
+    this.stepAccumulator = 0;
+  }
+
+  // Fixed-interval pacing for step(): accumulates dt in seconds and runs
+  // step() once per INVADER_STEP_INTERVAL crossed. The while loop (rather
+  // than a single if) means a large dt — e.g. a tab resuming after being
+  // backgrounded — runs the edge check for every interval it spans instead
+  // of skipping straight past a boundary.
+  update(dt) {
+    this.stepAccumulator += dt;
+    while (this.stepAccumulator >= INVADER_STEP_INTERVAL) {
+      this.stepAccumulator -= INVADER_STEP_INTERVAL;
+      this.step();
+    }
   }
 
   // One discrete march step: every living invader moves STEP_X px in the
