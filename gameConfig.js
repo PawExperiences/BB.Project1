@@ -21,6 +21,12 @@ export const INVADER_STEP_X = 8;
 export const INVADER_ROW_DROP = INVADER_HEIGHT + INVADER_V_SPACING;
 export const INVADER_STEP_INTERVAL = 0.8;
 
+// Level 1 (level1.js): the march pacing's linear speed-up as invaders die,
+// from LEVEL1_STEP_INTERVAL_MAX_MS at 55 alive down to
+// LEVEL1_STEP_INTERVAL_MIN_MS at 1 alive.
+export const LEVEL1_STEP_INTERVAL_MAX_MS = 800;
+export const LEVEL1_STEP_INTERVAL_MIN_MS = 100;
+
 // Collision pass (collision.js): score award, explosion lifetime and the
 // invulnerability window granted after the player is hit.
 export const SCORE_PER_INVADER = 10;
