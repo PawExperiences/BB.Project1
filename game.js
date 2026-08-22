@@ -189,6 +189,20 @@ function update(dt) {
           advanceLevel();
         }
       }
+      // Collision pass: exactly once per fixed update step, after entity
+      // updates and before explosions are aged or anything is drawn. All
+      // AABB/overlap checks live in collision.js; render() performs none.
+      // The formation under test belongs to the active level (an empty
+      // stand-in during the boss fight — boss.js runs its own checks
+      // through the shared overlaps() helper).
+      if (currentLevel !== null) {
+        collide({
+          player,
+          formation: currentLevel.formation,
+          hostileBullets,
+          hud,
+        });
+      }
       // Explosions are pure visuals owned by collision.js; aging them here
       // keeps their ~0.3 s lifetime on the same fixed timestep as the rest
       // of the world.
@@ -304,28 +318,15 @@ function frame(timestamp) {
   if (delta > MAX_DELTA) delta = MAX_DELTA;
 
   // Phase 1 — fixed-timestep simulation: 0..15 updates of exactly 1/60 s.
+  // Each update() runs entity updates, the collision pass and explosion
+  // aging together, in that order (see update() above).
   accumulator += delta;
   while (accumulator >= FIXED_DT) {
     update(FIXED_DT);
     accumulator -= FIXED_DT;
   }
 
-  // Phase 2 — collision pass: exactly once per animation frame, after the
-  // world updates and before any drawing. All AABB/overlap checks live in
-  // collision.js; the render code below performs none. The formation under
-  // test belongs to the active level (an empty stand-in during the boss
-  // fight — boss.js runs its own checks through the shared overlaps()
-  // helper).
-  if (scene === SCENES.PLAYING && currentLevel !== null) {
-    collide({
-      player,
-      formation: currentLevel.formation,
-      hostileBullets,
-      hud,
-    });
-  }
-
-  // Phase 3 — draw exactly once per animation frame.
+  // Phase 2 — draw exactly once per animation frame.
   render();
 
   requestAnimationFrame(frame);

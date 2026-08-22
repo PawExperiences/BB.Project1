@@ -32,7 +32,7 @@ Title).
 - `collision.js` — AABB collision detection and explosion effects. Owned
   by "Sprite rendering and collision detection".
 - `invaders.js` — the invader formation (grid, marching, drawing). Owned
-  by "Level 1: the classic grid".
+  by "Sprite rendering and collision detection".
 - `level1.js` — Level 1: the classic grid. Owned by "Level 1: the classic
   grid".
 - `level2.js` — Level 2: invaders that shoot back, plus the UFO bonus.
@@ -106,6 +106,33 @@ check:
 - [ ] In the DevTools console, `import('./game.js').then((m) =>
       console.log(m.player.lives));` reports `3` at the start of a run (the
       `STARTING_LIVES` value from `gameConfig.js`).
+
+### Verifying the invader formation and collisions
+
+Open `index.html` via a `file://` URL, press ENTER to start a game, and
+check:
+
+1. The invader grid on screen is 11 columns wide and 5 rows tall (55
+   identical white rectangles), positioned entirely within the canvas.
+2. Watch the grid march: it steps sideways at a steady pace, moving as one
+   unit; releasing focus from the tab and returning does not change how far
+   it has travelled per second of wall-clock time.
+3. Keep watching until the formation reaches either side of the canvas: on
+   that step it drops down one row and reverses horizontal direction, then
+   resumes stepping sideways in the new direction on the next step.
+4. Move the ship under an invader and fire (Space). On a hit: the bullet
+   disappears, a brief orange flash (the explosion) appears where the
+   invader was, the invader is gone, and the `Score` in the HUD increases.
+5. Keep firing at invaders in one column until the whole column is cleared,
+   then watch the next few steps: the column stays empty (the grid does not
+   re-flow to fill the hole), and the formation's surviving invaders now
+   travel further on that side before the next edge drop.
+6. In the DevTools console, `import('./invaders.js').then((m) => { const f
+   = new m.InvaderFormation(); f.update(5); console.log(f.aliveCount(),
+   f.lowestBottom()); });` runs without throwing and logs `55` and a
+   positive number — `update()` with a large `dt` advances the formation by
+   several steps (including any edge drops) instead of skipping past a
+   boundary.
 
 ### Verifying the 250 ms delta clamp
 

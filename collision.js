@@ -4,18 +4,20 @@
 // and the score increment.
 // Added by "Sprite rendering and collision detection".
 //
-// game.js invokes the pass exactly once per animation frame, after the
-// world updates and before any drawing; no overlap checks live in any
-// draw/render code.
+// game.js invokes the pass once per fixed update step, after the world
+// updates and before explosions are aged or anything is drawn; no overlap
+// checks live in any draw/render code.
 
-// Score awarded per invader destroyed.
-const SCORE_PER_INVADER = 10;
+import {
+  SCORE_PER_INVADER,
+  EXPLOSION_DURATION,
+  PLAYER_INVULNERABILITY_SECONDS,
+} from './gameConfig.js';
 
 // Explosion: a short, purely visual effect at a kill position — an
 // expanding, fading filled rectangle visible for EXPLOSION_DURATION
 // seconds (spec: roughly 0.2–0.4 s). Explosions have no hitbox: they never
 // take part in any overlap test. Several may be visible concurrently.
-const EXPLOSION_DURATION = 0.3;
 const EXPLOSION_MIN_SIZE = 8;
 const EXPLOSION_MAX_SIZE = 48;
 const EXPLOSION_COLOR = '#ffaa33';
@@ -81,7 +83,8 @@ export function overlaps(a, b) {
 //   state.hud            the HUD state (game.js); hud.score is incremented
 //                        here on each kill
 export function collide(state) {
-  const { player, formation, hostileBullets, hud } = state;
+  const { player, formation, hud } = state;
+  const hostileBullets = state.hostileBullets || [];
 
   // Player bullet vs invader: on overlap both the bullet and the invader
   // are removed, an explosion spawns at the invader's position and the
@@ -106,14 +109,22 @@ export function collide(state) {
   // Invader bullet vs player: the same shared AABB test, applied from the
   // game state's hostile-bullet list against the player's bounding box
   // (the Player object already exposes x/y/width/height). On a hit the
-  // bullet is spent and the player loses a life through the documented
-  // loseLife() interface (player.js); what happens at 0 lives is owned by
-  // game.js, not here. No hostile bullets exist until "Level 2: they shoot
-  // back", so this loop currently iterates zero times.
+  // bullet is spent, an explosion spawns at the player's centre and the
+  // player loses a life through the documented loseLife() interface
+  // (player.js), then gets a fresh invulnerability window so a cluster of
+  // hits in this frame or the next few cannot drain several lives at once;
+  // what happens at 0 lives is owned by game.js, not here. No hostile
+  // bullets exist until "Level 2: they shoot back", so this loop currently
+  // iterates zero times.
   for (let i = hostileBullets.length - 1; i >= 0; i--) {
     if (overlaps(hostileBullets[i], player)) {
       hostileBullets.splice(i, 1);
+      spawnExplosion(
+        player.x + player.width / 2,
+        player.y + player.height / 2,
+      );
       player.loseLife();
+      player.grantInvulnerability(PLAYER_INVULNERABILITY_SECONDS);
     }
   }
 }
