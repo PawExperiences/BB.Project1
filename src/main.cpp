@@ -1,13 +1,6 @@
 // prime_tester -- command-line front-end.
 //
 // Modes:
-//   prime_tester --upto N     range mode ("A sieve for ranges, and a
-//                             benchmark"): print every prime p with
-//                             2 <= p <= N (N inclusive), one per line
-//                             to stdout, and exit 0. N < 2 (1, 0 and
-//                             negatives) prints nothing and still exits
-//                             0. Recognized only as the first argument
-//                             followed by exactly one operand.
 //   prime_tester <n> [n ...]  arguments mode: each argument is one
 //                             token, echoed and answered on stdout as
 //                             "<n> is prime" / "<n> is not prime";
@@ -26,8 +19,7 @@
 // nothing.
 //
 // The single-number primality check (trial division, 6k+/-1) lives in
-// src/prime.cpp and the range sieve lives in src/sieve.cpp; this file
-// only parses arguments and dispatches.
+// src/prime.cpp; this file only parses arguments and dispatches.
 
 #include <cctype>
 #include <exception>
@@ -35,7 +27,6 @@
 #include <string>
 
 #include "prime.h"
-#include "sieve.h"
 
 namespace {
 
@@ -88,30 +79,6 @@ bool answer_token(const std::string& token) {
 } // namespace
 
 int main(int argc, char* argv[]) {
-    // Range mode: --upto N. The flag is recognized only as the first
-    // argument, followed by exactly one operand; anything else falls
-    // through to the token modes below unchanged. Errors follow the
-    // same conventions as bad tokens (message on stderr, exit 1).
-    if (argc >= 2 && std::string(argv[1]) == "--upto") {
-        if (argc != 3) {
-            std::cerr << "usage: prime_tester --upto N" << '\n';
-            return 1;
-        }
-        long long n = 0;
-        if (!parse_integer(argv[2], n)) {
-            std::cerr << "not a number: " << argv[2] << '\n';
-            return 1;
-        }
-        // primes_up_to() already yields nothing for N < 2, so 1, 0 and
-        // negatives are a silent exit-0 run by construction. The mode
-        // doubles as the manual benchmark: time it externally, e.g.
-        //   time ./build/prime_tester --upto 10000000
-        for (long long prime : primes_up_to(n)) {
-            std::cout << prime << '\n';
-        }
-        return 0;
-    }
-
     bool all_parsed = true;
     if (argc > 1) {
         // Arguments mode: one token per argument, in order; stdin is
@@ -122,11 +89,15 @@ int main(int argc, char* argv[]) {
     } else {
         // stdin mode: one token per line until EOF. Immediate EOF
         // (zero lines) is a clean, silent run; a blank or
-        // all-whitespace line trims to an empty token and is reported
-        // as "not a number: ".
+        // all-whitespace line trims to an empty token, which is
+        // skipped silently rather than treated as a bad token.
         std::string line;
         while (std::getline(std::cin, line)) {
-            all_parsed = answer_token(trim(line)) && all_parsed;
+            std::string token = trim(line);
+            if (token.empty()) {
+                continue;
+            }
+            all_parsed = answer_token(token) && all_parsed;
         }
     }
     return all_parsed ? 0 : 1;
