@@ -15,11 +15,10 @@ import { createLevel } from './levels.js';
 import './level1.js';
 // level2.js — added by "Level 2: they shoot back"
 import './level2.js';
+// level3.js — added by "Level 3: shields and formations"
+import './level3.js';
 // boss.js — added by "Boss level: multi-phase finale"
 import './boss.js';
-// Future import sites — comments only: the files do not exist yet, and a
-// real import of a missing file would throw at load time.
-// level3.js — added by "Level 3: shields and formations"
 
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
@@ -71,11 +70,11 @@ const levelContext = { player, hud, hostileBullets };
 // The active level object (created through the registry in levels.js) and
 // its 1-based number. currentLevel is null only while no module is
 // registered for the current level number — clearing a level whose
-// successor has not landed yet (today: Level 3) leaves the Playing scene
-// running with an empty field while the HUD already shows the new level
-// number. currentLevel is exported as a live binding so the README's
-// manual verification can reach the active level from the DevTools
-// console.
+// successor has not landed yet leaves the Playing scene running with an
+// empty field while the HUD already shows the new level number (levels 1-4
+// are all registered in this build, so that gap is not reachable today).
+// currentLevel is exported as a live binding so the README's manual
+// verification can reach the active level from the DevTools console.
 export let currentLevel = null;
 let levelNumber = 1;
 
@@ -116,12 +115,13 @@ function startGame() {
 
 // Level-clear handoff: bump the level counter, mirror it into the HUD and
 // ask the registry for the next level's module. Level 2 is registered by
-// level2.js, so clearing Level 1 starts it immediately, in this same fixed
-// step, with the lives/score state untouched. The boss fight is registered
-// for Level 4 by boss.js, so clearing Level 3 starts it through this same
-// dispatch — no special-case entry point. createLevel() returns null when
-// no module has registered the new number yet (today: level 3), which
-// leaves the Playing scene running with an empty field until then.
+// level2.js and Level 3 by level3.js, so clearing Level 1 or Level 2 starts
+// the next one immediately, in this same fixed step, with the lives/score
+// state untouched. The boss fight is registered for Level 4 by boss.js, so
+// clearing Level 3 starts it through this same dispatch — no special-case
+// entry point. createLevel() returns null when no module has registered the
+// new number yet, which leaves the Playing scene running with an empty
+// field until then (not reachable today, with levels 1-4 all registered).
 function advanceLevel() {
   levelNumber += 1;
   hud.level = levelNumber;

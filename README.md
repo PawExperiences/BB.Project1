@@ -37,8 +37,9 @@ Title).
   grid".
 - `level2.js` — Level 2: invaders that shoot back, plus the UFO bonus.
   Owned by "Level 2: they shoot back".
-- `level3.js` — shields and formations. Not yet created — owned by
-  "Level 3: shields and formations".
+- `level3.js` — Level 3: four destructible shield bunkers plus the 28-kill
+  formation split into independently-marching halves. Owned by "Level 3:
+  shields and formations".
 - `boss.js` — the multi-phase boss fight and win screen. Owned by "Boss
   level: multi-phase finale".
 
@@ -212,11 +213,9 @@ Level 2.
       (or repeatedly run the invader-formation console snippet from the
       Level 1 verification section against `currentLevel.formation`, then
       let the level's own `update()` notice the clear). The HUD's `LEVEL`
-      value changes from `2` to `3`; because Level 3 is not implemented in
-      this build, the playfield goes empty afterwards instead of freezing,
-      throwing, or looping back to Level 2 — this is the expected
-      unregistered-level fallback documented in the Level 1 section above,
-      confirmed here at the Level 2 -> 3 boundary specifically.
+      value changes from `2` to `3`, four shield bunkers appear and a fresh
+      11x5 formation of invaders spawns — see the Level 3 section below for
+      the full verification path.
 - [ ] No console errors: throughout the whole Level 2 sequence above
       (formation, enemy fire, UFO, death/respawn, level clear), the
       DevTools console shows no errors or unhandled promise rejections.
@@ -227,6 +226,73 @@ hand, start a game and run in the DevTools console:
 ((i) => { i.alive = false; }); });` — on the next fixed update tick Level 1
 notices all 55 invaders are gone and hands off to Level 2 exactly as a real
 clear would.
+
+### Verifying Level 3: shields and formations
+
+To jump straight into Level 3 for testing instead of clearing Levels 1 and 2
+by hand, start a game and run this DevTools console snippet, which empties
+whichever formation is currently active and so advances one level per run:
+`import('./game.js').then((m) => { m.currentLevel.formation.invaders.forEach
+((i) => { i.alive = false; }); });`. Run it once from Level 1 (advances to
+Level 2), wait a moment, then run it again from Level 2 (advances to Level
+3). Once the HUD shows `LEVEL 3`, check:
+
+- [ ] Fresh 11x5 grid and Level 2 behaviours: 55 invaders appear in the
+      classic grid, invader fire (red bullets) appears, a bonus UFO
+      eventually crosses the top band, and losing a life still respawns the
+      ship at its bottom-centre start with ~2 s of flashing invulnerability
+      — exactly as in Level 2.
+- [ ] Four shield bunkers: evenly spaced across the width, each a small
+      solid-colour 4x4 block of square cells, sitting with their tops at
+      roughly 80% of the way down the canvas (well above the ship, below the
+      invaders' home row).
+- [ ] Bunker erosion from the player's own bullet: stand under a bunker and
+      fire straight up into it. The bullet stops at the bunker — a single
+      cell disappears and the bullet does not reappear above the bunker or
+      go on to hit an invader.
+- [ ] Bunker erosion from hostile fire: wait for a hostile (red) bullet to
+      fall through a bunker's column. A cell in its path disappears and the
+      bullet vanishes at the bunker instead of continuing down to the ship
+      — position the ship directly behind an intact cell and confirm a
+      hostile bullet aimed at it is stopped by the bunker rather than
+      costing a life.
+- [ ] Bunker erosion from a descending invader: let the formation march down
+      (drop by drop) until it reaches a bunker's row. Cells directly under
+      the passing invaders disappear as the invader's body crosses them,
+      while the invader itself is unaffected (still alive, same speed).
+- [ ] Erosion is permanent: note which cells are gone, then lose a life
+      (respawn) without breaching. The same cells are still gone — nothing
+      is rebuilt. Only a full level restart (a breach, or re-entering Level
+      3 from scratch) produces four intact 4x4 bunkers again.
+- [ ] No split before the 28th kill: destroy invaders one at a time (or in
+      small numbers) and confirm the formation still marches, drops and
+      reverses as a single unit while 28 or more remain alive (27 or fewer
+      killed).
+- [ ] The 28-kill split: destroy invaders until exactly 27 remain (a quick
+      way, from the DevTools console right after entering Level 3):
+      `import('./game.js').then((m) => { const invaders =
+      m.currentLevel.formation.invaders; for (let i = 0; i < 28; i++)
+      invaders[i].alive = false; });` — on the next tick the formation
+      visibly splits into two groups with no invader jumping position: a
+      left group (originally columns 1-6, including the middle column) and
+      a right group (columns 7-11).
+- [ ] Opposite initial directions: the instant of the split, the left group
+      visibly starts moving left and the right group starts moving right —
+      confirm in the console with `import('./game.js').then((m) =>
+      console.log(m.currentLevel.leftGroup.direction,
+      m.currentLevel.rightGroup.direction));`, which logs `-1 1`.
+- [ ] Independent sweeps: keep watching — each group reverses at the canvas
+      edges and drops on its own schedule (they do not stay in lockstep),
+      while both keep stepping at the same pace as each other and both keep
+      firing hostile bullets.
+- [ ] Clear and advance to the boss: destroy every invader in both groups
+      (or, from the console, set every remaining invader's `alive` to
+      `false` the same way as above). The HUD's `LEVEL` value changes from
+      `3` to `4` and the boss fight begins — the same `advanceLevel()`
+      handoff used for every earlier level transition.
+- [ ] No console errors: throughout the whole Level 3 sequence above
+      (bunkers, split, independent sweeps, clear), the DevTools console
+      shows no errors or unhandled promise rejections.
 
 ### Verifying the 250 ms delta clamp
 
