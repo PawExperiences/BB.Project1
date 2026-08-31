@@ -1,7 +1,10 @@
 import pytest
 from src.romans import to_roman, from_roman
 
-def test_round_trip():
-    for n in range(1, 4000):
-        roman_numeral = to_roman(n)
-        assert from_roman(roman_numeral) == n, f"Failed for {n}: {roman_numeral} -> {from_roman(roman_numeral)}"
+# Round-trip test for Roman numeral conversion
+
+
+def test_round_trip_conversion():
+    for i in range(1, 4000):
+        roman = to_roman(i)
+        assert roman == from_roman(roman), f"Failed on {i}: {roman}"
