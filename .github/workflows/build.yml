@@ -22,17 +22,17 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    container: node:20-bookworm
+    container: python:3.12-bookworm
     steps:
       - uses: actions/checkout@v4
       - name: Build
         run: |-
-          echo 'no build step: open index.html'
+          pip install build && pip install -e . && python -m build
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: buildboard-artifact
-          path: .
+          path: dist
           if-no-files-found: error
 
   publish:
