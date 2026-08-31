@@ -1,8 +1,4 @@
-from typing import List, Tuple
-
-# Numeral table for Roman numerals in descending order.
-
-NUMERAL_TABLE: List[Tuple[int, str]] = [
+roman_numerals = [
     (1000, 'M'),
     (900, 'CM'),
     (500, 'D'),
@@ -17,3 +13,5 @@ NUMERAL_TABLE: List[Tuple[int, str]] = [
     (4, 'IV'),
     (1, 'I'),
 ]
+
+

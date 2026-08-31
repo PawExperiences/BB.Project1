@@ -1,1 +1,1 @@
-from .table import NUMERAL_TABLE
+from .table import roman_numerals
