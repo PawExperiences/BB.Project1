@@ -8,7 +8,10 @@ The acceptance check ensures that the conversion between Arabic numbers (1 to 39
 
 ### Acceptance Criteria
 - All numbers from 1 to 3999 must maintain their value through conversion to Roman numerals and back.
-
+- The `to_roman` function converts integers from 1 to 3999 to Roman numerals without errors.
+- The `from_roman` function converts valid Roman numerals back to integers without loss of information.
+- The `to_roman` function raises a ValueError with the message 'Input must be between 1 and 3999.' for out-of-range inputs.
+- The `from_roman` function raises a ValueError naming the offending character if the input is a malformed numeral.
 ### Instructions to Run Acceptance Test
 1. Ensure the environment is set up with the necessary dependencies.
 2. Execute the provided test suite with `pytest` to validate the implementation of conversion.
