@@ -1,38 +1,45 @@
-def to_roman(n: int) -> str:
-    if not (1 <= n <= 3999):
-        raise ValueError('Input must be between 1 and 3999.')
+"""Roman numeral conversion library.
 
-    val = [1000, 900, 500, 400, 100, 90, 50, 40, 10, 9, 5, 4, 1]
-    syms = ['M', 'CM', 'D', 'CD', 'C', 'XC', 'L', 'XL', 'X', 'IX', 'V', 'IV', 'I']
-    roman_numeral = ''
+The public API is :func:`to_roman` and :func:`from_roman`. Both conversion
+directions derive from the single canonical value-to-numeral table kept in
+:mod:`romans.table` and imported here, so this module stays focused on the
+public API.
+"""
 
-    for i in range(len(val)):
-        while n >= val[i]:
-            roman_numeral += syms[i]
-            n -= val[i]
-    return roman_numeral
+from .table import NUMERAL_TABLE
+
+__all__ = ["to_roman", "from_roman"]
 
 
-def from_roman(s: str) -> int:
-    roman_numerals = {
-        'I': 1,
-        'V': 5,
-        'X': 10,
-        'L': 50,
-        'C': 100,
-        'D': 500,
-        'M': 1000,
-    }
-    total = 0
-    prev_value = 0
+def to_roman(number: int) -> str:
+    """Convert an integer between 1 and 3999 to a Roman numeral.
 
-    for char in reversed(s):
-        if char not in roman_numerals:
-            raise ValueError(f'Malformed numeral: {char}')
-        value = roman_numerals[char]
-        if value < prev_value:
-            total -= value
-        else:
-            total += value
-        prev_value = value
-    return total
+    Raises:
+        ValueError: if ``number`` is outside the supported range.
+    """
+    if not 1 <= number <= 3999:
+        raise ValueError("Input must be between 1 and 3999.")
+    parts = []
+    for value, symbol in NUMERAL_TABLE:
+        while number >= value:
+            parts.append(symbol)
+            number -= value
+    return "".join(parts)
+
+
+def from_roman(numeral: str) -> int:
+    """Convert a Roman numeral to its integer value.
+
+    Raises:
+        ValueError: naming the offending character if ``numeral`` is
+            malformed.
+    """
+    value = 0
+    index = 0
+    for pair_value, symbol in NUMERAL_TABLE:
+        while numeral.startswith(symbol, index):
+            value += pair_value
+            index += len(symbol)
+    if index != len(numeral):
+        raise ValueError(f"Invalid character in Roman numeral: {numeral[index]!r}")
+    return value
