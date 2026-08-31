@@ -4,9 +4,9 @@
 This document outlines the acceptance criteria that ensures the lossless round-trip conversion of numbers between 1 and 3999 for the Roman numeral conversion project.
 
 ## Acceptance Criteria
-- The documentation must explicitly state the acceptance criterion for lossless round-trip conversion for integers within the range 1 to 3999.
-- Examples of numeral representations for boundary values (1, 3999) must be included.
-- References to related tasks, specifically the following, must be clearly mentioned:
+- The acceptance criterion is a lossless round-trip conversion for integers within the range 1 to 3999.
+- Examples of numeral representations for boundary values (1, 3999) are included.
+- References to related tasks are clearly mentioned, specifically:
   - Roman numerals both ways
   - The numeral table
   - Round-trip test
