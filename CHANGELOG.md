@@ -1,3 +1,18 @@
+## 0.1.0 -- e2e provider openai 0.1.0
+
+# Changelog
+
+## Added
+- Roman numeral conversion package with functions `to_roman` and `from_roman`.
+- The numeral table module `table.py` for value-to-numeral pairs.
+
+## Changed
+- Implemented round-trip testing for conversion functions.
+- Updated documentation to include acceptance criteria for tests.
+
+## Fixed
+- Ensured error handling for invalid inputs in conversion functions.
+
 ## 0.5.0 -- e2e space invaders cc 0.5.0
 
 # Changelog
