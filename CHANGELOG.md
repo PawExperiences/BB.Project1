@@ -1,3 +1,33 @@
+## 0.1.0 -- e2e provider kimi 0.1.0
+
+# Changelog
+
+All notable changes to this project are documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
+
+## [0.1.0] - Initial release
+
+First release of `romans`, a typed Python library converting integers to canonical Roman numerals and back, losslessly, over the range 1-3999.
+
+### Added
+- Public API `to_roman(n: int) -> str` and `from_roman(s: str) -> int` in `src/romans/__init__.py`: canonical Roman numerals for 1-3999, including the subtractive pairs IV, IX, XL, XC, CD, CM (#405).
+- Strict, documented error contract: `to_roman` raises `ValueError` naming the lower bound (1) or upper bound (3999) for out-of-range input and the valid integer range for non-integer input (float, str, None, bool); `from_roman` is case-sensitive and raises `ValueError` naming the offending character for invalid characters, non-canonical sequences (`IIII`, `IL`, `VV`, `IC`, ...) and empty input (#405).
+- Numeral table extracted into `src/romans/table.py`: exactly 13 (value, numeral) pairs - the 7 single symbols plus the 6 subtractive pairs (CM, CD, XC, XL, IX, IV) - in strictly descending order, the single source of truth shared by both converters (#406).
+- Exhaustive round-trip test `tests/test_roundtrip.py`: asserts `from_roman(to_roman(n)) == n` for every integer n in 1..3999, importing only the public API (#407).
+- `tests/test_table.py` pinning the table's exact contents and ordering.
+- Packaging per the project Blueprint: `pyproject.toml` (`[project]` name `romans`, version `0.1.0`, src-layout package discovery, pytest + ruff as dev tooling) and the PEP 561 marker `src/romans/py.typed`; `uv build` produces a wheel containing `romans/__init__.py`, `romans/table.py` and `romans/py.typed` (#405).
+- `README.md` documenting the library's purpose, usage examples for both functions, the valid range 1-3999, the error contract, and the acceptance check with the exact command `uv run pytest tests/test_roundtrip.py` (#408).
+
+### Changed
+- Nothing user-visible. The numeral-table extraction (#406) is a pure refactor: conversion results are byte-for-byte identical before and after.
+
+### Fixed
+- None (initial release).
+
+### Removed
+- Repository reset commits (`chore: reset repo`, `chore: reset for the next e2e project`) cleared the sources of earlier, unrelated e2e exercises (JavaScript space-invaders game, Java/Swing calculator, C++ prime tester) that previously lived in this repository. They are not part of the `romans` library and are listed only because 0.1.0 is the first tagged release and the full history precedes it.
+
 ## 0.1.0 -- e2e provider openai 0.1.0
 
 # Changelog
