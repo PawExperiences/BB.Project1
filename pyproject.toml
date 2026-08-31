@@ -1,0 +1,31 @@
+[project]
+name = "romans"
+version = "0.1.0"
+description = "Roman numeral conversion library, built on one canonical value-to-numeral table shared by the encoder and decoder."
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = []
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+# src layout inside a polyglot repository: only the romans package is built.
+[tool.hatch.build.targets.wheel]
+packages = ["src/romans"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "ruff>=0.6",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+# This repository also carries non-Python deliverables (a JS game, a C++
+# CLI, a Java app) plus BuildBoard-owned release helper scripts under
+# release/. The romans library's lint scope is the package and its tests,
+# so the release scripts stay out of ruff's path.
+[tool.ruff]
+extend-exclude = ["release"]
