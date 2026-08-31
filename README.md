@@ -1,19 +1,30 @@
-# Project Title
+# romans
 
-Description of the project.
+A small, typed Python library for converting between integers and Roman numerals over the supported range **1..3999 (inclusive)**. `to_roman(n)` encodes an integer in that range as a Roman numeral; `from_roman(s)` decodes a valid Roman numeral back to its integer. Integers outside 1..3999 and malformed numerals raise `ValueError`.
 
-## Acceptance Criteria for Round-Trip Test of Roman Numerals
+```python
+from romans import to_roman, from_roman
 
-The acceptance check ensures that the conversion between Arabic numbers (1 to 3999) and Roman numerals is lossless, meaning that every number can be converted to a Roman numeral and back to the original number without loss of accuracy.
+to_roman(1999)         # "MCMXCIX"
+from_roman("MCMXCIX")  # 1999
+```
 
-### Acceptance Criteria
-- All numbers from 1 to 3999 must maintain their value through conversion to Roman numerals and back.
-- The `to_roman` function converts integers from 1 to 3999 to Roman numerals without errors.
-- The `from_roman` function converts valid Roman numerals back to integers without loss of information.
-- The `to_roman` function raises a ValueError with the message 'Input must be between 1 and 3999.' for out-of-range inputs.
-- The `from_roman` function raises a ValueError naming the offending character if the input is a malformed numeral.
-### Instructions to Run Acceptance Test
-1. Ensure the environment is set up with the necessary dependencies.
-2. Execute the provided test suite with `pytest` to validate the implementation of conversion.
-   - Example command: `pytest tests/test_roundtrip.py`
-3. Verify that all test cases pass, which confirms the round-trip conversion accuracy.
+## Acceptance criterion
+
+The acceptance gate for this library is a **lossless round-trip over the full supported range**: for every integer `n` in `1..3999` (inclusive),
+
+```python
+from_roman(to_roman(n)) == n
+```
+
+That identity is the definition of "the library works": each of the 3999 integers converts to a Roman numeral and back to exactly itself, with no loss. Boundary examples: `1 -> "I" -> 1` and `3999 -> "MMMCMXCIX" -> 3999`.
+
+## Running the acceptance check
+
+The criterion is enforced by the test `test_round_trip_conversion` in `tests/test_roundtrip.py`, which performs the round-trip for every `n` in `1..3999`. Run it from the repository root with the project's toolchain (`uv` + `pytest`):
+
+```bash
+uv run pytest tests/test_roundtrip.py
+```
+
+`uv run` creates and syncs the project environment (including the `pytest` dev dependency) on first use, so no separate setup step is required. The command exits with status 0 when all 3999 round-trips succeed; a non-zero exit means the acceptance criterion is not met.
