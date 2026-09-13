@@ -59,7 +59,7 @@ The acceptance gate for this library is a **lossless round-trip over the full su
 from_roman(to_roman(n)) == n
 ```
 
-That identity is the definition of "the library works": each of the 3999 integers converts to a Roman numeral and back to exactly itself, with no loss. Boundary examples: `1 -> "I" -> 1` and `3999 -> "MMMCMXCIX" -> 3999`.
+That identity is the definition of "the library works": each of the 3999 integers converts to a Roman numeral and back to exactly itself, with no loss. Boundary examples: `1 -> "I" -> 1` and `3999 -> "MMMCMXCIX" -> 3999.
 
 ## Running the acceptance check
 

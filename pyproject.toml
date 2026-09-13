@@ -23,9 +23,7 @@ dev = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 
-# This repository also carries non-Python deliverables (a JS game, a C++
-# CLI, a Java app) plus BuildBoard-owned release helper scripts under
-# release/. The romans library's lint scope is the package and its tests,
+# This repository also carries non-Python deliverables (a JS game, a C++ CLI, a Java app) plus BuildBoard-owned release helper scripts under release/. The romans library's lint scope is the package and its tests,
 # so the release scripts stay out of ruff's path.
 [tool.ruff]
 extend-exclude = ["release"]
