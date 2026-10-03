@@ -12,8 +12,8 @@ no framework, no bundler, no package manager.
 | `game.js` | Game loop and canvas framework | done |
 | `input.js` | Keyboard input and the player ship | done |
 | `player.js` | Keyboard input and the player ship | done |
-| `invaders.js` | Invaders | planned |
-| `collision.js` | Collision detection | planned |
+| `invaders.js` | Sprite rendering and collision detection | done |
+| `collision.js` | Sprite rendering and collision detection | done |
 | `level1.js` | Level 1 | planned |
 | `level2.js` | Level 2 | planned |
 | `level3.js` | Level 3 | planned |
@@ -28,18 +28,34 @@ and writes:
 import { hud } from './game.js';
 ```
 
-`hud` has three fields:
+`hud` has four fields:
 
-- `hud.score` -- the current run's score. Written by `invaders.js` (and any
-  other card that awards points).
-- `hud.lives` -- remaining player lives. Written by `collision.js` when the
-  player is hit.
+- `hud.score` -- the current run's score. Written by `collision.js`'s
+  player-bullet-vs-invader pass (+10 per invader destroyed), and any other
+  card that awards points.
+- `hud.lives` -- remaining player lives. Not yet written by anything: no
+  card currently decrements it on a player hit (see "Collision contract"
+  below) -- that is a known backlog gap, not a bug in this card.
 - `hud.hiScore` -- best score seen this session (in memory only; it resets on
   page reload, which is expected). Written only by `game.js` itself, via
   `hud.hiScore = Math.max(hud.score, hud.hiScore)` when a run ends.
+- `hud.playerHit` -- true only during a frame in which an invader bullet
+  overlapped the player; overwritten every frame by `collision.js`'s
+  invader-bullet-vs-player pass, so it never stays latched from a previous
+  frame. Nothing currently consumes it (no life loss, no game-over) --
+  also a known backlog gap.
 
-`game.js` is the only source of truth for these three values; sibling cards
+`game.js` is the only source of truth for these four values; sibling cards
 mutate `hud`'s fields directly instead of keeping their own copies.
+
+`game.js` also exports `invaderBullets`, an initially-empty array:
+
+```js
+import { invaderBullets } from './game.js';
+```
+
+It is iterated every frame by `collision.js`'s invader-bullet-vs-player pass.
+This card never pushes into it; the later "they shoot back" card populates it.
 
 ## Player bullet contract
 
@@ -60,6 +76,50 @@ on impact:
   (e.g. on a confirmed hit), which also re-arms firing on the very next
   `update(dt)` -- the fire gate reads this same flag, not the bullet's
   position.
+
+## Invader fleet contract
+
+`invaders.js` exports a single `Invaders` entity, mirroring `Player`:
+
+```js
+import { Invaders } from './invaders.js';
+```
+
+- `Invaders.fleet` -- an array of exactly 55 (11 columns x 5 rows) entries
+  shaped `{ x, y, width, height, alive }`. `collision.js` reads/writes
+  `alive` directly; `invaders.js` never imports `collision.js`.
+- `Invaders.update(dt)` -- advances the formation. Internally it only steps
+  once every 500 ms (8 px per step); calling it every fixed `dt` is correct
+  because it accumulates its own step timer.
+- `Invaders.draw(ctx)` -- draws every live invader as a plain 32x24
+  `fillRect`. Dead invaders (`alive === false`) are skipped.
+
+## Collision contract
+
+`collision.js` has no canvas calls of its own -- `game.js` draws explosions,
+`invaders.js` draws invaders. It exports:
+
+- `aabbOverlap(a, b)` -- the shared axis-aligned bounding-box test; both
+  arguments are any `{ x, y, width, height }` shape.
+- `checkPlayerBulletVsInvaders(player, fleet, hud)` -- reads `player`'s
+  in-flight bullet via `getBulletBounds()`/`deactivateBullet()`, tests it
+  against every live entry in `fleet`, and on a hit marks that invader dead,
+  deactivates the bullet, spawns an explosion at the invader's bounds, and
+  adds 10 to `hud.score`.
+- `checkInvaderBulletsVsPlayer(invaderBullets, player, hud)` -- tests every
+  bullet in `invaderBullets` against `player`'s bounds; on a hit, removes
+  that bullet from the list and spawns an explosion at the player's bounds.
+  Sets `hud.playerHit` to whether any hit happened this call (so it is
+  always current, never stale from a previous frame).
+- `updateExplosions(dt)` -- ticks every spawned explosion's ~200 ms lifetime
+  down and drops the ones that expired.
+- `getExplosions()` -- the live list of `{ x, y, width, height }` explosion
+  rectangles for `game.js` to draw.
+
+`game.js` runs these every fixed update step, strictly in this order:
+`Player.update` / `Invaders.update` -> the two collision checks ->
+`updateExplosions` -> (later) `render()`. An invader killed during the
+collision step is already excluded from that same frame's `render()`.
 
 ## Manual verification
 
@@ -118,8 +178,9 @@ server needed; use it for this manual path:
 15. Switch to another browser tab and wait ~10 seconds, then switch back:
     confirm the game resumes at normal speed with no visible fast-forward
     through the missed time.
-16. `collision.js` (which will decrement `hud.lives` on a hit) doesn't exist
-    yet, so force the end of the run from the devtools console instead:
+16. No card decrements `hud.lives` on a hit yet (tracked as a backlog gap,
+    not something this card owns), so force the end of the run from the
+    devtools console instead:
     ```js
     const { hud } = await import('./game.js');
     hud.score = 50;
@@ -134,3 +195,57 @@ server needed; use it for this manual path:
     `0` and `hud.lives` is back to `3`.
 20. Throughout, check the browser console: there should be no uncaught
     errors or error-level output.
+
+### Invader fleet and collision (this card)
+
+21. **Formation shape**: on reaching Playing (press ENTER from Title),
+    confirm a grid of 55 identically-sized, identically-coloured rectangles
+    appears in the upper part of the canvas -- count 11 across and 5 down.
+    All 55 look exactly alike (same size, same colour); nothing is an image.
+22. **Centring and spacing**: confirm the grid is horizontally centred on
+    the canvas, with even gaps between columns and between rows, and the
+    top row starts a small, consistent distance below the canvas top.
+23. **Marching step**: watch the formation for a few seconds. Confirm it
+    moves sideways in small, discrete jumps roughly twice a second (not a
+    smooth continuous glide) -- the spacing between invaders never changes
+    as the whole block moves together.
+24. **Edge-drop-reverse, right side**: let the formation march right until
+    its rightmost column nears the right edge of the canvas. Confirm that
+    on the step where it would cross the edge, it instead shifts down by
+    one row-height and then starts marching left.
+25. **Edge-drop-reverse, left side**: keep watching until it marches back
+    to the left edge. Confirm the same drop-then-reverse happens there too,
+    and it resumes marching right.
+26. **Kill an invader**: aim the ship (ArrowLeft/ArrowRight or A/D) under
+    an invader and fire (Space). Confirm that on the frame the bullet
+    reaches it: the invader rectangle disappears immediately, a brief
+    differently-coloured explosion rectangle flashes at that spot for
+    roughly a third of a second and then vanishes leaving nothing drawn
+    there, the bullet itself disappears (it does not pass through), and
+    `SCORE` on the canvas increases by exactly 10.
+27. **Miss**: fire straight up through a gap with no invader above it (or
+    after killing the invaders in a column). Confirm the bullet keeps
+    travelling straight up and off the top of the canvas exactly as before,
+    with no explosion and no score change.
+28. **Clear the fleet**: keep firing until all 55 invaders are destroyed.
+    Confirm `SCORE` reads exactly `550` above whatever it was when this
+    card's verification started, and the canvas now shows an empty
+    formation area (the game keeps running -- no win screen is expected
+    from this card).
+29. **Player-hit flag (manual injection)**: `invaderBullets` starts empty,
+    so trigger the invader-bullet-vs-player pass from the devtools console
+    once a run is in progress:
+    ```js
+    const { hud, invaderBullets } = await import('./game.js');
+    const { Player } = await import('./player.js');
+    invaderBullets.push({ x: Player.x, y: Player.y, width: 1, height: 1 });
+    ```
+    Within the next frame, confirm a brief explosion rectangle flashes at
+    the player's ship and then `hud.playerHit` reads `true` immediately
+    after (check in the console on the following tick). Confirm nothing
+    else changes -- `hud.lives` is unaffected and there is no game-over.
+30. **No false hit**: push a bullet far from the player instead
+    (`{ x: 0, y: 0, width: 1, height: 1 }`) and confirm no explosion appears
+    at the player and `hud.playerHit` reads `false`.
+31. Throughout steps 21-30, check the browser console: there should be no
+    uncaught errors or error-level output.
