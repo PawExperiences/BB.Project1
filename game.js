@@ -8,6 +8,7 @@ import { initInput } from './input.js';
 import { Player } from './player.js';
 import { Level1 } from './level1.js';
 import { Level2 } from './level2.js';
+import { Level3 } from './level3.js';
 import { Boss } from './boss.js';
 import {
   checkPlayerBulletVsInvaders,
@@ -15,14 +16,6 @@ import {
   updateExplosions,
   getExplosions,
 } from './collision.js';
-
-// level3.js is a sibling card owned by a later task; it doesn't exist yet.
-// Clearing Level 2 advances `levelState.current` to 3, and the dispatch's
-// default branch below ends the run via the Game Over scene until the
-// Level 3 card lands -- that is the specified interim behaviour, not a bug
-// (Level 1 advancing into Level 2 worked the same way before the "they
-// shoot back" card landed). See README.md's Level 4 section for the
-// devtools path used to reach Level 4 directly in the meantime.
 
 const STEP = 1 / 60;
 
@@ -52,9 +45,8 @@ export const invaderBullets = [];
 
 // Which level is live during Scene.PLAYING. An object (not a bare `export
 // let`) for the same reason `hud` is one: sibling cards -- and the devtools
-// console path documented in README.md for reaching Level 4 before Level 3
-// is wired -- need to write `levelState.current`, and an imported
-// `export let` binding is read-only at the importer.
+// console paths documented in README.md -- need to write `levelState.current`,
+// and an imported `export let` binding is read-only at the importer.
 export const levelState = { current: 1 };
 
 let scene = Scene.TITLE;
@@ -79,6 +71,7 @@ function startRun() {
   levelState.current = 1;
   Level1.reset();
   Level2.reset();
+  Level3.reset();
   Boss.reset();
   Player.resetShotCount();
   scene = Scene.PLAYING;
@@ -147,6 +140,40 @@ function updateLevel2(dt) {
   }
 }
 
+function updateLevel3(dt) {
+  // Level3.update() owns marching (single formation, then the two
+  // independently-sweeping halves after the 28-kill split), invader fire,
+  // and bunker erosion from descending invader bodies; it never ends the
+  // run or touches hud.lives itself, same contract as updateLevel2.
+  Level3.update(dt);
+
+  // Bunkers sit between the invaders and the player, so each side's
+  // projectile is tested against them first -- a bullet a bunker cell
+  // stops is consumed there and never reaches the invaders/player check
+  // below (Player.getBulletBounds() is already null by then).
+  Level3.checkPlayerBulletVsBunkers(Player);
+  checkPlayerBulletVsInvaders(Player, Level3.fleet, hud);
+  Level3.checkInvaderBulletsVsBunkers();
+  checkInvaderBulletsVsPlayer(Level3.bullets, Player, hud);
+  const bodyContact = Level3.checkPlayerContact(Player);
+
+  // Player.invulnerable suppresses every damage source for the 2 s after a
+  // respawn, per spec -- not just the bullet that triggered it.
+  if ((hud.playerHit || bodyContact) && !Player.invulnerable) {
+    hud.lives -= 1;
+    Player.respawn();
+  }
+
+  if (hud.lives <= 0) {
+    endRun(Scene.GAME_OVER);
+    return;
+  }
+
+  if (Level3.isCleared()) {
+    levelState.current = 4;
+  }
+}
+
 function updateBossLevel(dt) {
   Boss.update(dt);
   Boss.checkPlayerBulletHit(Player);
@@ -175,11 +202,15 @@ function updatePlaying(dt) {
     case 2:
       updateLevel2(dt);
       break;
+    case 3:
+      updateLevel3(dt);
+      break;
     case 4:
       updateBossLevel(dt);
       break;
     default:
-      // Level 3 has no module yet -- see the top-of-file comment.
+      // Every level 1-4 has a branch above; an unknown level number ends
+      // the run defensively instead of rendering nothing.
       endRun(Scene.GAME_OVER);
       break;
   }
@@ -234,13 +265,16 @@ function renderPlaying() {
     case 2:
       Level2.draw(ctx);
       break;
+    case 3:
+      Level3.draw(ctx);
+      break;
     case 4:
       Boss.draw(ctx);
       break;
     default:
-      // Level 3 has no module yet; updatePlaying() already moves the scene
-      // to GAME_OVER the same frame levelState.current lands here, so
-      // render() won't actually call this branch -- nothing to draw.
+      // Every level 1-4 has a branch above; updatePlaying() already moves
+      // the scene to GAME_OVER the same frame an unknown level number lands
+      // here, so render() won't actually call this branch -- nothing to draw.
       break;
   }
 
