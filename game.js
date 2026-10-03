@@ -6,12 +6,17 @@ import {
 } from './gameConfig.js';
 import { initInput } from './input.js';
 import { Player } from './player.js';
+import { Invaders } from './invaders.js';
+import {
+  checkPlayerBulletVsInvaders,
+  checkInvaderBulletsVsPlayer,
+  updateExplosions,
+  getExplosions,
+} from './collision.js';
 
 // Sibling cards owned by later tasks. They will import `hud` from this
 // module and write the fields listed in README.md. Nothing here imports
 // them yet -- each is added by its own card.
-// - invaders.js: the invader grid entity.
-// - collision.js: hit detection between bullets, player and invaders.
 // - level1.js / level2.js / level3.js: the three level definitions.
 // - boss.js: the boss encounter.
 
@@ -31,7 +36,14 @@ export const hud = {
   score: 0,
   lives: STARTING_LIVES,
   hiScore: 0,
+  playerHit: false,
 };
+
+// Invader bullets, owned here (not by collision.js) so a later card can push
+// into it without importing the collision pass. Empty until the "they shoot
+// back" card starts spawning into it; collision.js already iterates it every
+// frame via checkInvaderBulletsVsPlayer below.
+export const invaderBullets = [];
 
 let scene = Scene.TITLE;
 let finalScore = 0;
@@ -51,6 +63,7 @@ initInput();
 function startRun() {
   hud.score = 0;
   hud.lives = STARTING_LIVES;
+  hud.playerHit = false;
   scene = Scene.PLAYING;
 }
 
@@ -68,9 +81,19 @@ function updateTitle() {
 
 function updatePlaying(dt) {
   Player.update(dt);
+  Invaders.update(dt);
 
-  // collision.js will decrement hud.lives on a hit; this watches the
-  // shared HUD state for depletion rather than owning hit detection.
+  // Collide only after every entity's update() has run this step, and
+  // always before render() -- an invader killed here is already gone by
+  // the time draw happens, never collide-inside-draw.
+  checkPlayerBulletVsInvaders(Player, Invaders.fleet, hud);
+  checkInvaderBulletsVsPlayer(invaderBullets, Player, hud);
+  updateExplosions(dt);
+
+  // No card decrements hud.lives yet -- this card's collision pass only
+  // sets hud.playerHit and spawns an explosion on a player hit (see
+  // README). This still watches hud.lives for depletion so endRun() fires
+  // once a later card wires a life loss into a hit.
   if (hud.lives <= 0) {
     endRun();
   }
@@ -107,7 +130,13 @@ function renderTitle() {
 }
 
 function renderPlaying() {
+  Invaders.draw(ctx);
   Player.draw(ctx);
+
+  ctx.fillStyle = '#ffaa00';
+  for (const explosion of getExplosions()) {
+    ctx.fillRect(explosion.x, explosion.y, explosion.width, explosion.height);
+  }
 
   ctx.fillStyle = '#ffffff';
   ctx.textAlign = 'left';
