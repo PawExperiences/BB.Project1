@@ -14,7 +14,7 @@ no framework, no bundler, no package manager.
 | `player.js` | Keyboard input and the player ship | done |
 | `collision.js` | Sprite rendering and collision detection | done |
 | `level1.js` | Level 1: the classic grid | done |
-| `level2.js` | Level 2 | planned |
+| `level2.js` | Level 2: they shoot back | done |
 | `level3.js` | Level 3 | planned |
 | `boss.js` | Boss level: multi-phase finale | done |
 
@@ -31,32 +31,32 @@ import { hud } from './game.js';
 
 - `hud.score` -- the current run's score. Written by `collision.js`'s
   player-bullet-vs-invader pass (+10 per invader destroyed), and any other
-  card that awards points.
+  card that awards points (Level 2's UFO adds 50/100/150/300 directly).
 - `hud.lives` -- remaining player lives. Written by `level1.js`, which
   decrements it by 1 on an invasion (the lowest living invader reaching the
-  player's row). Not yet decremented on a player *hit* (an invader bullet
-  striking the player, see "Collision contract" below) -- that remains a
-  known backlog gap until the "they shoot back" card lands.
+  player's row), and by `game.js`'s own Level 2 dispatch (`updateLevel2`),
+  which decrements it by 1 on a bullet hit or body contact -- but only when
+  `Player.invulnerable` is false. Level 1 and Level 2 intentionally have
+  different death semantics; see "Level 2 contract" below.
 - `hud.hiScore` -- best score seen this session (in memory only; it resets on
   page reload, which is expected). Written only by `game.js` itself, via
   `hud.hiScore = Math.max(hud.score, hud.hiScore)` when a run ends.
 - `hud.playerHit` -- true only during a frame in which an invader bullet
   overlapped the player; overwritten every frame by `collision.js`'s
   invader-bullet-vs-player pass, so it never stays latched from a previous
-  frame. Nothing currently consumes it (no life loss, no game-over) --
-  also a known backlog gap.
+  frame. Level 1 still doesn't consume it. Level 2's dispatch does: it ORs
+  this with its own body-contact check and, outside the invulnerability
+  window, turns that into the life loss described above.
 
 `game.js` is the only source of truth for these four values; sibling cards
 mutate `hud`'s fields directly instead of keeping their own copies.
 
-`game.js` also exports `invaderBullets`, an initially-empty array:
-
-```js
-import { invaderBullets } from './game.js';
-```
-
-It is iterated every frame by `collision.js`'s invader-bullet-vs-player pass.
-This card never pushes into it; the later "they shoot back" card populates it.
+`game.js` also exports `invaderBullets`, an initially-empty array that no
+level currently populates -- Level 1 has no invader fire, and Level 2 owns
+its own `Level2.bullets` instead (see below), mirroring how `boss.js` owns
+`Boss.bullets` rather than sharing this one. It remains iterated every frame
+by `collision.js`'s invader-bullet-vs-player pass in `updateLevel1`, where it
+stays permanently empty.
 
 ## Player bullet contract
 
@@ -77,6 +77,24 @@ on impact:
   (e.g. on a confirmed hit), which also re-arms firing on the very next
   `update(dt)` -- the fire gate reads this same flag, not the bullet's
   position.
+- `Player.shotCount` -- read-only count of bullets actually fired this
+  session, incremented the instant a bullet becomes active (not on the
+  key-press). Session-cumulative: it survives every level transition and is
+  only zeroed by `resetShotCount()` below. Level 2's bonus UFO reads it
+  (`shotCount % 4`) to pick its score tier.
+- `Player.resetShotCount()` -- zeroes `shotCount`. Called only by `game.js`'s
+  `startRun()`, so a brand new run restarts the UFO tier sequence from 50;
+  no level transition calls this.
+- `Player.respawn()` -- snaps the ship back to its fixed bottom-centre start
+  position and opens a 2-second invulnerability window (see `invulnerable`
+  below). Called by Level 2's death handling; Level 1's own invasion-reset
+  path never calls it, so the two levels keep different death semantics (see
+  "Level 2 contract").
+- `Player.invulnerable` -- read-only, true for 2 seconds after each
+  `respawn()`. While true, `draw(ctx)` blinks the ship on/off every 100 ms
+  instead of rendering it solid; the in-flight bullet (if any) still draws
+  normally. Callers (Level 2's dispatch) are expected to skip every damage
+  source while this is true, not just bullets.
 
 ## Level 1 contract
 
@@ -112,6 +130,85 @@ import { Level1 } from './level1.js';
 - `Level1.reset()` -- rebuilds the 55-invader fleet at its start position,
   direction and step timer. Called internally on an invasion, and by
   `game.js`'s `startRun()` so every fresh run begins Level 1 clean.
+- `Level1.stepIntervalSeconds(n)` -- the marching-cadence curve itself
+  (seconds between steps when `n` invaders are alive), exposed so `level2.js`
+  can derive its own faster cadence by multiplying this curve instead of
+  restating the 800 ms/100 ms numbers.
+
+## Level 2 contract
+
+`level2.js` exports a single `Level2` entity, mirroring `Level1`/`Boss`. It
+reuses Level 1's 11x5 grid (via the same `gameConfig.js` constants Level 1
+reads) and Level 1's step-interval curve (via `Level1.stepIntervalSeconds`
+above), but is otherwise a fully independent module with its own fleet,
+timers and bullets:
+
+```js
+import { Level2 } from './level2.js';
+```
+
+- `Level2.fleet` -- same shape as `Level1.fleet`, exposed the same way (a
+  getter, so callers see the current fleet across `reset()` calls).
+- `Level2.update(dt)` -- advances the formation, invader fire and the bonus
+  UFO. It never touches `hud` or ends the run itself -- `game.js`'s
+  `updateLevel2` decides every life-losing outcome after calling this.
+  - **Faster marching**: same stepping/wall-drop mechanics as `Level1.update`,
+    but the tick interval is `Level1.stepIntervalSeconds(n) * 0.67` (a single
+    named constant in `level2.js`), so the formation marches about 1.5x
+    faster than Level 1 at every stage of the curve.
+  - **Invader fire**: a single global timer (no per-column timers) counts
+    down a fresh uniformly random 800-2000 ms delay; on reaching zero, it
+    picks a random column that still has a living invader and fires from
+    that column's *lowest* living invader only -- never from above a
+    survivor in the same column. Bullets move straight down at a constant
+    300 px/s (`bullet.y += 300 * dt`), and are removed once they pass the
+    bottom of the canvas (a hit removes them too, but that happens in
+    `collision.js`, see `Level2.bullets` below).
+  - **Bonus UFO**: a level-time accumulator fires every 20 seconds
+    (regardless of whether the previous UFO was hit, missed, or still
+    mid-flight) and spawns a UFO that crosses the canvas at a constant
+    120 px/s. Spawns alternate entry side on each call -- first from the
+    left moving right, then from the right moving left, and so on -- and an
+    unhit UFO that exits the far edge is simply dropped with no score
+    change.
+- `Level2.bullets` -- the live list of invader bullets, in the same shape
+  `Boss.bullets` uses, so `game.js` runs it through `collision.js`'s existing
+  `checkInvaderBulletsVsPlayer(Level2.bullets, Player, hud)` instead of a new
+  hit-test. (`game.js`'s shared `invaderBullets` export is not used here --
+  see "HUD contract".)
+- `Level2.checkUfoHit(player, hud)` -- tests `player`'s in-flight bullet
+  against the live UFO (if any) via `collision.js`'s shared `aabbOverlap`. On
+  a hit, it deactivates the bullet, removes the UFO, and adds one of
+  50/100/150/300 to `hud.score`, chosen as `player.shotCount % 4` mapped
+  ascending (`0`->50, `1`->100, `2`->150, `3`->300). This is a pure lookup --
+  no RNG -- so the same shot count always awards the same tier, and because
+  `Player.shotCount` already includes the shot that just landed, the count
+  that hit the UFO is the one used to pick its tier.
+- `Level2.checkPlayerContact(player)` -- `true` if any living invader's body
+  overlaps `player`'s bounds. This is Level 2's "descending invader touches
+  the ship" death condition; it is a plain AABB test, not Level 1's
+  invasion-reset mechanic.
+- `Level2.draw(ctx)` -- draws every live invader (same look as Level 1),
+  every live invader bullet, and the UFO when present.
+- `Level2.isCleared()` -- `true` once every invader is dead. `game.js`
+  checks this right after Level 2's hit detection and advances
+  `levelState.current` to `3` the frame it flips true, via the same hook
+  `Level1.isCleared()` uses for its own transition.
+- `Level2.reset()` -- rebuilds the fleet and every timer (marching, fire,
+  UFO) at their start state and empties `Level2.bullets`. Called by
+  `game.js`'s `startRun()` so every fresh run begins Level 2 clean even if a
+  previous run left it mid-fight.
+
+`game.js`'s `updateLevel2` is where life loss and respawn actually happen,
+since that's where both `hud.playerHit` (from the bullets collision check)
+and `Level2.checkPlayerContact`'s result are available together: if either
+is true *and* `Player.invulnerable` is false, it decrements `hud.lives` by 1
+and calls `Player.respawn()` -- once per frame, so a bullet hit and a body
+contact in the same frame can never cost two lives. This intentionally
+differs from Level 1's own death handling (an invasion resets the whole
+formation instead of costing exactly one life with a respawn) -- that
+divergence is a known, accepted gap between the two levels' intakes, not a
+bug to unify here.
 
 ## Collision contract
 
@@ -150,16 +247,23 @@ import { levelState } from './game.js';
 
 - `levelState.current` -- which level is live while `scene` is `PLAYING`.
   `game.js`'s `updatePlaying`/`renderPlaying` switch on it: `case 1` routes
-  to the classic grid (`level1.js`), `case 4` routes to the boss level
-  (`boss.js`), and anything else (`2`, `3`, or beyond) ends the run
-  immediately via the Game Over scene. `startRun()` resets it to `1` at the
-  start of every run.
+  to the classic grid (`level1.js`), `case 2` routes to the faster formation
+  and invader fire (`level2.js`), `case 4` routes to the boss level
+  (`boss.js`), and anything else (`3`, or beyond) ends the run immediately
+  via the Game Over scene. `startRun()` resets it to `1` at the start of
+  every run.
 - Clearing Level 1 (destroying all 55 invaders) advances `levelState.current`
-  to `2`. Level 2 and Level 3 have no card wiring them in yet, so reaching
-  `2` lands straight on that Game Over default -- this is the specified
-  interim behaviour for the Level 1 card, not a bug. See "Level 4: boss
-  fight" below for the devtools path used to reach Level 4 directly for
-  manual verification until the Level 2/3 cards land.
+  to `2`, with no level-select, menu or intermission screen in between --
+  the very next frame renders Level 2's formation, and `hud.lives` is left
+  untouched by the transition, so it reads whatever it was the instant
+  before the last Level 1 invader died.
+- Clearing Level 2 (destroying all 55 of its invaders) likewise advances
+  `levelState.current` to `3`. Level 3 has no card wiring it in yet, so
+  reaching `3` lands straight on the Game Over default -- this is the
+  specified interim behaviour for this card, the same way reaching `2` was
+  for the Level 1 card before this one landed. See "Level 4: boss fight"
+  below for the devtools path used to reach Level 4 directly for manual
+  verification until the Level 3 card lands.
 
 ## Boss contract
 
@@ -345,24 +449,100 @@ server needed; use it for this manual path:
     wherever it was when it was bumped down.
 33. **HUD level readout**: throughout steps 21-32, confirm the canvas shows
     a `LEVEL: 1` readout alongside `SCORE` and `LIVES`.
-34. **Clear the grid -> Level 2 -> Game Over**: keep firing until all 55
-    invaders are destroyed (or shortcut it from the console:
-    `Level1.fleet.forEach((invader) => { invader.alive = false; })`).
-    Confirm `SCORE` reads exactly `550` above whatever it was when this
-    section's verification started, and the canvas immediately shows the
-    `GAME OVER` screen with that score -- Level 2 has no module yet, so the
-    dispatch's default branch ends the run instead of showing a placeholder
-    level or an error.
-35. Press ENTER on that Game Over screen: confirm the scene returns to
-    Title, and a fresh run (press ENTER again) starts back at Level 1 with
-    a full 11x5 grid, `SCORE: 0`, `LIVES: 3`, and `LEVEL: 1`.
-36. Throughout steps 21-35, check the browser console: there should be no
+34. **Clear the grid -> Level 2, lives carry over**: note the current
+    `LIVES` reading, then keep firing until all 55 invaders are destroyed (or
+    shortcut it from the console:
+    `Level1.fleet.forEach((invader) => { invader.alive = false; })`). Confirm
+    `SCORE` reads exactly `550` above whatever it was when this section's
+    verification started, and on the very next frame the canvas shows a
+    fresh 11x5 formation (same look as Level 1's grid) with no level-select,
+    menu or intermission screen in between, `LEVEL` now reads `2`, and
+    `LIVES` is exactly whatever it read the instant before the last Level 1
+    invader died (unchanged by the transition).
+35. Throughout steps 21-34, check the browser console: there should be no
+    uncaught errors or error-level output.
+
+### Level 2: they shoot back (this card)
+
+Continue directly from step 34 above (already in Level 2, run in progress).
+
+36. **Faster marching**: watch the new formation step for a few seconds and
+    compare the cadence to Level 1's from step 23. Confirm the jumps land
+    noticeably faster than Level 1's ~800 ms-at-full-strength cadence --
+    roughly 535 ms (800 ms x 0.67) with all 55 alive -- and that the cadence
+    still visibly quickens as invaders die, the same relationship as Level 1
+    just uniformly faster.
+37. **Invader fire -- single global timer, lowest-in-column**: without
+    firing, watch Level 2 for 15-20 seconds. Confirm individual invaders
+    occasionally fire a distinctly-coloured bullet straight downward, shots
+    land roughly every 0.8-2 seconds apart (not synchronized across columns,
+    not from every column at once), and every shot visibly originates from
+    the bottom-most living invader of whichever column fires -- never from
+    an invader with a living invader still below it in the same column.
+    Confirm unblocked invader bullets travel straight down and disappear off
+    the bottom of the canvas.
+38. **Invader bullet hit -> life lost, respawn, flash**: let an invader
+    bullet strike the ship (or move into one deliberately). Confirm `LIVES`
+    drops by exactly 1, the ship immediately reappears at the fixed
+    bottom-centre start position, and for about 2 seconds afterward it
+    visibly blinks on and off rather than rendering solid.
+39. **Invulnerability suppresses every hit**: during the flash window from
+    step 38, deliberately move the ship into another invader bullet, or let
+    a descending invader's body touch it. Confirm `LIVES` does not change and
+    the ship does not move or re-respawn while still flashing. Once the
+    flash stops (~2 s after step 38), confirm a new hit behaves like step 38
+    again (life lost, respawn, new flash window).
+40. **Body contact with a descending invader**: reaching the player's row by
+    ordinary play takes a while, so force it instead (once any earlier flash
+    window has ended) by teleporting one living invader onto the ship's
+    current position from the devtools console:
+    ```js
+    const { Level2 } = await import('./level2.js');
+    const { Player } = await import('./player.js');
+    const invader = Level2.fleet.find((i) => i.alive);
+    invader.x = Player.x;
+    invader.y = Player.y;
+    ```
+    Within a step or two, confirm contact between that invader and the ship
+    costs exactly 1 life and respawns the ship, the same as step 38 -- Level 2
+    does not reset the whole formation the way Level 1's invasion does.
+41. **UFO cadence and alternating sides**: watch for about 20 seconds from
+    entering Level 2 (or keep watching from step 34). Confirm a UFO enters
+    from the left edge and crosses to the right at a slow, constant speed;
+    confirm that roughly 20 seconds later a second UFO enters from the
+    *right* edge and crosses to the left. If either is left un-hit, confirm
+    it simply exits the far edge and disappears with no score change.
+42. **UFO scoring is deterministic, not random**: check the cumulative shot
+    count in the devtools console (`const { Player } = await
+    import('./player.js'); Player.shotCount`). Fire until `Player.shotCount`
+    is about to become a multiple of 4 (e.g. currently 3, 7, 11...), then
+    land the next shot on a UFO: confirm `SCORE` increases by exactly 50.
+    Repeat, landing a hit at shot counts 1, 2 and 3 mod 4: confirm the
+    awards are 100, then 150, then 300, in that fixed order, with no
+    variation if repeated.
+43. **Shot count carries over from Level 1**: note that `Player.shotCount`
+    from step 42 already reflects shots fired back in Level 1 (it was never
+    zero on first entering Level 2 if any shots were fired in Level 1) --
+    confirming the UFO tier sequence continues across the Level 1 -> Level 2
+    boundary instead of restarting at 0.
+44. **Clear Level 2 -> Level 3**: destroy all 55 Level 2 invaders (or
+    shortcut via console: `Level2.fleet.forEach((invader) => { invader.alive
+    = false; })`). Confirm `LEVEL` immediately reads `3` -- Level 3 has no
+    module yet, so the dispatch's default branch ends the run via the
+    regular Game Over screen, the same interim behaviour Level 1 -> Level 2
+    had before this card landed.
+45. **Game Over -> Title**: starting a fresh run and reducing `hud.lives` to
+    0 while in Level 2 (via ordinary hits, or forced in the console with
+    `const { hud } = await import('./game.js'); hud.lives = 0;`) shows the
+    same `GAME OVER` screen as the base framework. Press ENTER: confirm the
+    scene returns to Title, same as steps 17-18 earlier.
+46. Throughout steps 36-45, check the browser console: there should be no
     uncaught errors or error-level output.
 
 ### Level 4: boss fight (this card)
 
-Level 2 and Level 3 have no card wiring them in yet, so clearing Level 1
-lands straight on the Game Over default described above -- there is
+Level 3 has no card wiring it in yet, so clearing Level 2 lands straight on
+the Game Over default described above -- there is
 currently no in-play way to reach Level 4. Jump straight to it for manual
 verification with one devtools console command, run from Firefox with
 `index.html` open (press ENTER from Title first, so a run is in progress
@@ -373,43 +553,43 @@ const { levelState } = await import('./game.js');
 levelState.current = 4;
 ```
 
-37. **Boss appears, health bar full**: immediately after running the
+47. **Boss appears, health bar full**: immediately after running the
     snippet above, confirm a large pink/red rectangle (160x80) appears below
     a segmented bar across the very top of the canvas, and all 10 segments
     of that bar are lit (full health). The invader grid from Level 1 is no
     longer drawn.
-38. **Horizontal drift, no descent**: watch the boss for 10-15 seconds.
+48. **Horizontal drift, no descent**: watch the boss for 10-15 seconds.
     Confirm it drifts sideways smoothly (not in discrete jumps like the
     invader formation), visibly reverses direction on touching both the left
     and right edges of the canvas without any part of it leaving the canvas,
     and its vertical position never changes for the whole fight.
-39. **Phase 1 fire rate and spread shape**: with the health bar still above
+49. **Phase 1 fire rate and spread shape**: with the health bar still above
     half (6-10 segments lit), watch the boss fire. Confirm a volley of
     exactly three bullets leaves the boss' centre roughly every 1.5 seconds
     (about 2 volleys every 3 seconds) -- one travelling straight down, one
     angled slightly left, one angled slightly right, fanning out as they
     fall.
-40. **Health bar shrinks in steps, hit registers**: aim the ship under the
+50. **Health bar shrinks in steps, hit registers**: aim the ship under the
     boss and fire. Confirm each confirmed hit removes exactly one of the 10
     health-bar segments (never a partial segment) and the player's bullet
     disappears on impact.
-41. **Phase 2 fire rate**: keep damaging the boss until the health bar drops
+51. **Phase 2 fire rate**: keep damaging the boss until the health bar drops
     to half (5 segments) or below. Confirm volleys now visibly arrive about
-    twice as often as step 39 (roughly every 0.7 seconds), with the same
+    twice as often as step 49 (roughly every 0.7 seconds), with the same
     three-bullet fan shape as before.
-42. **Sudden death**: let a boss bullet touch the player ship (or manually
+52. **Sudden death**: let a boss bullet touch the player ship (or manually
     move the ship into one). Confirm the run ends immediately -- the game
     shows the regular `GAME OVER` screen with the score at the moment of the
     hit -- even if the lives readout shown earlier in the run was still above
     zero. Press ENTER twice (Game Over -> Title -> Playing) and confirm the
     new run starts at Level 1 (the invader grid, not the boss).
-43. **Win screen**: start a fresh run, jump back to Level 4 with the console
+53. **Win screen**: start a fresh run, jump back to Level 4 with the console
     snippet above, and destroy the boss (10 confirmed hits total; repeat
-    step 40 until the health bar is fully empty). Confirm a `YOU WIN` screen
+    step 50 until the health bar is fully empty). Confirm a `YOU WIN` screen
     appears showing `SCORE:` followed by the run's final score, and `Press
     ENTER to restart`.
-44. **Restart from win**: press ENTER on the win screen. Confirm a new run
+54. **Restart from win**: press ENTER on the win screen. Confirm a new run
     starts immediately at Level 1 (the invader grid is shown, `SCORE: 0`,
     `LIVES: 3`, `LEVEL: 1`) -- no need to pass back through the Title screen.
-45. Throughout steps 37-44, check the browser console: there should be no
+55. Throughout steps 47-54, check the browser console: there should be no
     uncaught errors or error-level output.
