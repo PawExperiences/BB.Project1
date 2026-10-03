@@ -25,13 +25,6 @@ export const INVADER_GUTTER_X = 16;
 export const INVADER_GUTTER_Y = 16;
 export const INVADER_TOP_MARGIN = 48;
 
-// Rigid-body formation movement: the whole fleet advances sideways in
-// discrete steps rather than continuously, so this is a distance-per-step
-// and a step cadence, not a px/s speed like PLAYER_SPEED/BULLET_SPEED above.
-export const INVADER_STEP_DISTANCE = 8; // px per step
-export const INVADER_STEP_INTERVAL = 0.5; // seconds between steps
-export const INVADER_ROW_DROP = 24; // px, one row height
-
 export const INVADER_KILL_SCORE = 10;
 
 // How long a kill/hit explosion rectangle stays on screen before collision.js
