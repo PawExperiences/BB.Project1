@@ -6,7 +6,7 @@ import {
 } from './gameConfig.js';
 import { initInput } from './input.js';
 import { Player } from './player.js';
-import { Invaders } from './invaders.js';
+import { Level1 } from './level1.js';
 import { Boss } from './boss.js';
 import {
   checkPlayerBulletVsInvaders,
@@ -15,15 +15,12 @@ import {
   getExplosions,
 } from './collision.js';
 
-// Sibling cards owned by later tasks. They will import `hud` from this
-// module and write the fields listed in README.md. Nothing here imports
-// them yet -- each is added by its own card.
-// - level1.js / level2.js / level3.js: the three level definitions.
-//
-// Level 4 (boss.js) is wired below via `levelState` and the `case 4` branch,
-// but until the level1-3 cards land there is no in-play way to advance
-// `levelState.current` past 1 -- see README.md's Level 4 section for the
-// devtools path used to reach it in the meantime.
+// level2.js / level3.js are sibling cards owned by later tasks; neither
+// exists yet. Clearing Level 1 advances `levelState.current` to 2, and the
+// dispatch's default branch below ends the run via the Game Over scene
+// until the Level 2/3 cards land -- that is the specified interim
+// behaviour, not a bug. See README.md's Level 4 section for the devtools
+// path used to reach Level 4 directly in the meantime.
 
 const STEP = 1 / 60;
 
@@ -53,8 +50,8 @@ export const invaderBullets = [];
 
 // Which level is live during Scene.PLAYING. An object (not a bare `export
 // let`) for the same reason `hud` is one: sibling cards -- and the devtools
-// console path documented in README.md for reaching Level 4 before Levels
-// 1-3 are wired -- need to write `levelState.current`, and an imported
+// console path documented in README.md for reaching Level 4 before Level 3
+// is wired -- need to write `levelState.current`, and an imported
 // `export let` binding is read-only at the importer.
 export const levelState = { current: 1 };
 
@@ -78,6 +75,7 @@ function startRun() {
   hud.lives = STARTING_LIVES;
   hud.playerHit = false;
   levelState.current = 1;
+  Level1.reset();
   Boss.reset();
   scene = Scene.PLAYING;
 }
@@ -94,21 +92,25 @@ function updateTitle() {
   }
 }
 
-function updateInvaderLevel(dt) {
-  Invaders.update(dt);
+function updateLevel1(dt) {
+  // Level1.update() owns the formation's marching, wall drops, and the
+  // invasion check -- an invasion decrements hud.lives and restarts the
+  // level internally; it never ends the run itself.
+  Level1.update(dt, Player, hud);
 
   // Collide only after every entity's update() has run this step, and
   // always before render() -- an invader killed here is already gone by
   // the time draw happens, never collide-inside-draw.
-  checkPlayerBulletVsInvaders(Player, Invaders.fleet, hud);
+  checkPlayerBulletVsInvaders(Player, Level1.fleet, hud);
   checkInvaderBulletsVsPlayer(invaderBullets, Player, hud);
 
-  // No card decrements hud.lives yet -- this card's collision pass only
-  // sets hud.playerHit and spawns an explosion on a player hit (see
-  // README). This still watches hud.lives for depletion so endRun() fires
-  // once a later card wires a life loss into a hit.
   if (hud.lives <= 0) {
     endRun(Scene.GAME_OVER);
+    return;
+  }
+
+  if (Level1.isCleared()) {
+    levelState.current = 2;
   }
 }
 
@@ -134,11 +136,15 @@ function updatePlaying(dt) {
   Player.update(dt);
 
   switch (levelState.current) {
+    case 1:
+      updateLevel1(dt);
+      break;
     case 4:
       updateBossLevel(dt);
       break;
     default:
-      updateInvaderLevel(dt);
+      // Level 2/3 have no module yet -- see the top-of-file comment.
+      endRun(Scene.GAME_OVER);
       break;
   }
 
@@ -186,11 +192,16 @@ function renderTitle() {
 
 function renderPlaying() {
   switch (levelState.current) {
+    case 1:
+      Level1.draw(ctx);
+      break;
     case 4:
       Boss.draw(ctx);
       break;
     default:
-      Invaders.draw(ctx);
+      // Level 2/3 have no module yet; updatePlaying() already moves the
+      // scene to GAME_OVER the same frame levelState.current lands here,
+      // so render() won't actually call this branch -- nothing to draw.
       break;
   }
 
@@ -206,6 +217,7 @@ function renderPlaying() {
   ctx.font = '20px monospace';
   ctx.fillText(`SCORE: ${hud.score}`, 16, 28);
   ctx.fillText(`LIVES: ${hud.lives}`, 16, 52);
+  ctx.fillText(`LEVEL: ${levelState.current}`, 16, 76);
 }
 
 function renderGameOver() {
