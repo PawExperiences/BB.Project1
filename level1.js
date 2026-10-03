@@ -176,6 +176,11 @@ export const Level1 = {
   draw,
   isCleared,
   reset,
+  // Exposed so level2.js can derive its own (faster) formation cadence by
+  // multiplying this curve instead of restating the MIN/MAX interval
+  // numbers -- Level 1's own curve is unaffected by anything level2.js does
+  // with the result.
+  stepIntervalSeconds,
   get fleet() {
     return fleet;
   },

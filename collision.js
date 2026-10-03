@@ -49,10 +49,10 @@ export function checkPlayerBulletVsInvaders(player, fleet, hud) {
   }
 }
 
-// Checks every bullet in the invader-bullet list (populated by the later
-// "they shoot back" card; empty here) against the player. hud.playerHit is
-// overwritten every call to reflect only this frame's outcome -- nothing
-// downstream latches it yet.
+// Checks every bullet in the given invader-bullet list against the player --
+// reused as-is for Level 1's always-empty list, Level 2's `Level2.bullets`,
+// and `Boss.bullets`. hud.playerHit is overwritten every call to reflect
+// only this frame's outcome, so callers must consume it the same frame.
 export function checkInvaderBulletsVsPlayer(invaderBullets, player, hud) {
   let hit = false;
 

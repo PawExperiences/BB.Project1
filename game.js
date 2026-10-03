@@ -7,6 +7,7 @@ import {
 import { initInput } from './input.js';
 import { Player } from './player.js';
 import { Level1 } from './level1.js';
+import { Level2 } from './level2.js';
 import { Boss } from './boss.js';
 import {
   checkPlayerBulletVsInvaders,
@@ -15,12 +16,13 @@ import {
   getExplosions,
 } from './collision.js';
 
-// level2.js / level3.js are sibling cards owned by later tasks; neither
-// exists yet. Clearing Level 1 advances `levelState.current` to 2, and the
-// dispatch's default branch below ends the run via the Game Over scene
-// until the Level 2/3 cards land -- that is the specified interim
-// behaviour, not a bug. See README.md's Level 4 section for the devtools
-// path used to reach Level 4 directly in the meantime.
+// level3.js is a sibling card owned by a later task; it doesn't exist yet.
+// Clearing Level 2 advances `levelState.current` to 3, and the dispatch's
+// default branch below ends the run via the Game Over scene until the
+// Level 3 card lands -- that is the specified interim behaviour, not a bug
+// (Level 1 advancing into Level 2 worked the same way before the "they
+// shoot back" card landed). See README.md's Level 4 section for the
+// devtools path used to reach Level 4 directly in the meantime.
 
 const STEP = 1 / 60;
 
@@ -76,7 +78,9 @@ function startRun() {
   hud.playerHit = false;
   levelState.current = 1;
   Level1.reset();
+  Level2.reset();
   Boss.reset();
+  Player.resetShotCount();
   scene = Scene.PLAYING;
 }
 
@@ -114,6 +118,35 @@ function updateLevel1(dt) {
   }
 }
 
+function updateLevel2(dt) {
+  // Level2.update() owns marching, invader fire and the bonus UFO; it never
+  // ends the run or touches hud.lives itself -- every life-losing path is
+  // decided here, right after this frame's hit detection, so a bullet hit
+  // and a body-contact hit in the same frame can only ever cost one life.
+  Level2.update(dt);
+
+  checkPlayerBulletVsInvaders(Player, Level2.fleet, hud);
+  Level2.checkUfoHit(Player, hud);
+  checkInvaderBulletsVsPlayer(Level2.bullets, Player, hud);
+  const bodyContact = Level2.checkPlayerContact(Player);
+
+  // Player.invulnerable suppresses every damage source for the 2 s after a
+  // respawn, per spec -- not just the bullet that triggered it.
+  if ((hud.playerHit || bodyContact) && !Player.invulnerable) {
+    hud.lives -= 1;
+    Player.respawn();
+  }
+
+  if (hud.lives <= 0) {
+    endRun(Scene.GAME_OVER);
+    return;
+  }
+
+  if (Level2.isCleared()) {
+    levelState.current = 3;
+  }
+}
+
 function updateBossLevel(dt) {
   Boss.update(dt);
   Boss.checkPlayerBulletHit(Player);
@@ -139,11 +172,14 @@ function updatePlaying(dt) {
     case 1:
       updateLevel1(dt);
       break;
+    case 2:
+      updateLevel2(dt);
+      break;
     case 4:
       updateBossLevel(dt);
       break;
     default:
-      // Level 2/3 have no module yet -- see the top-of-file comment.
+      // Level 3 has no module yet -- see the top-of-file comment.
       endRun(Scene.GAME_OVER);
       break;
   }
@@ -195,13 +231,16 @@ function renderPlaying() {
     case 1:
       Level1.draw(ctx);
       break;
+    case 2:
+      Level2.draw(ctx);
+      break;
     case 4:
       Boss.draw(ctx);
       break;
     default:
-      // Level 2/3 have no module yet; updatePlaying() already moves the
-      // scene to GAME_OVER the same frame levelState.current lands here,
-      // so render() won't actually call this branch -- nothing to draw.
+      // Level 3 has no module yet; updatePlaying() already moves the scene
+      // to GAME_OVER the same frame levelState.current lands here, so
+      // render() won't actually call this branch -- nothing to draw.
       break;
   }
 
