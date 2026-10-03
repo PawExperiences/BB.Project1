@@ -17,7 +17,7 @@ no framework, no bundler, no package manager.
 | `level1.js` | Level 1 | planned |
 | `level2.js` | Level 2 | planned |
 | `level3.js` | Level 3 | planned |
-| `boss.js` | Boss | planned |
+| `boss.js` | Boss level: multi-phase finale | done |
 
 ## HUD contract
 
@@ -120,6 +120,61 @@ import { Invaders } from './invaders.js';
 `Player.update` / `Invaders.update` -> the two collision checks ->
 `updateExplosions` -> (later) `render()`. An invader killed during the
 collision step is already excluded from that same frame's `render()`.
+
+## Level switch contract
+
+`game.js` exports a second mutable state object, mirroring `hud`:
+
+```js
+import { levelState } from './game.js';
+```
+
+- `levelState.current` -- which level is live while `scene` is `PLAYING`.
+  `game.js`'s `updatePlaying`/`renderPlaying` switch on it; `case 4` routes to
+  the boss level (`boss.js`), anything else currently falls through to the
+  plain invader fleet (`invaders.js`) as a placeholder for the not-yet-landed
+  Level 1-3 cards. `startRun()` resets it to `1` at the start of every run.
+- Levels 1-3 have no card wiring them in yet, so **there is currently no
+  in-play way to advance past Level 1** -- see "Level 4: boss fight" below
+  for the devtools path used to reach Level 4 for manual verification until
+  the "Level 3: shields and formations" card lands.
+
+## Boss contract
+
+`boss.js` exports a single `Boss` entity, mirroring `Player`/`Invaders`:
+
+```js
+import { Boss } from './boss.js';
+```
+
+- `Boss.update(dt)` -- drifts the boss horizontally at a fixed 90 px/s,
+  reversing at each canvas edge; its vertical position is set once at module
+  load and never written again. Also ticks its fire timer and spawns a fixed
+  three-bullet spread (straight down, and the same speed rotated +/-20
+  degrees from that down vector) from the boss' centre, every 1500 ms while
+  HP is 6-10 and every 700 ms once HP drops to 5 or below.
+- `Boss.draw(ctx)` -- draws the boss body, its live bullets, and the 10-step
+  health bar across the reserved strip at the top of the canvas, all with
+  plain canvas 2D primitives (no image assets).
+- `Boss.checkPlayerBulletHit(player)` -- tests `player`'s in-flight bullet
+  against the boss' bounds using `collision.js`'s shared `aabbOverlap` (no
+  second overlap implementation in `boss.js`); each confirmed hit removes
+  exactly 1 HP and deactivates the bullet.
+- `Boss.bullets` -- the live list of boss projectiles, in the same shape
+  `invaderBullets` uses, so `game.js` runs it through `collision.js`'s
+  existing `checkInvaderBulletsVsPlayer(Boss.bullets, Player, hud)` instead
+  of a new hit-test. The boss fight is sudden death: `game.js` treats any
+  `hud.playerHit === true` from that call as an immediate run-ending hit,
+  regardless of `hud.lives`.
+- `Boss.hp` -- read-only current HP (starts at 10; 0 means defeated).
+- `Boss.reset()` -- returns the boss to its starting position/HP/empty
+  bullet list; `game.js` calls this from `startRun()` so every fresh run
+  (including one started from the win screen) begins the fight clean.
+
+Reaching 0 HP ends the run via `game.js`'s `Scene.WIN` (final score + restart
+control, restart starts a fresh run at Level 1). A boss bullet touching the
+player ends the run via the existing `Scene.GAME_OVER` (lives are never
+consulted on this path).
 
 ## Manual verification
 
@@ -248,4 +303,60 @@ server needed; use it for this manual path:
     (`{ x: 0, y: 0, width: 1, height: 1 }`) and confirm no explosion appears
     at the player and `hud.playerHit` reads `false`.
 31. Throughout steps 21-30, check the browser console: there should be no
+    uncaught errors or error-level output.
+
+### Level 4: boss fight (this card)
+
+Levels 1-3 are not wired into the level switch yet (their cards have not
+landed), so there is currently no in-play way to advance `levelState.current`
+past `1` -- **Level 4 is implemented and wired but unreachable by play**
+until the "Level 3: shields and formations" card lands. Jump straight to it
+for manual verification with one devtools console command, run from Firefox
+with `index.html` open (press ENTER from Title first, so a run is in
+progress and `scene` is `PLAYING`):
+
+```js
+const { levelState } = await import('./game.js');
+levelState.current = 4;
+```
+
+32. **Boss appears, health bar full**: immediately after running the
+    snippet above, confirm a large pink/red rectangle (160x80) appears below
+    a segmented bar across the very top of the canvas, and all 10 segments
+    of that bar are lit (full health). The 55-invader grid from earlier
+    levels is no longer drawn.
+33. **Horizontal drift, no descent**: watch the boss for 10-15 seconds.
+    Confirm it drifts sideways smoothly (not in discrete jumps like the
+    invader formation), visibly reverses direction on touching both the left
+    and right edges of the canvas without any part of it leaving the canvas,
+    and its vertical position never changes for the whole fight.
+34. **Phase 1 fire rate and spread shape**: with the health bar still above
+    half (6-10 segments lit), watch the boss fire. Confirm a volley of
+    exactly three bullets leaves the boss' centre roughly every 1.5 seconds
+    (about 2 volleys every 3 seconds) -- one travelling straight down, one
+    angled slightly left, one angled slightly right, fanning out as they
+    fall.
+35. **Health bar shrinks in steps, hit registers**: aim the ship under the
+    boss and fire. Confirm each confirmed hit removes exactly one of the 10
+    health-bar segments (never a partial segment) and the player's bullet
+    disappears on impact.
+36. **Phase 2 fire rate**: keep damaging the boss until the health bar drops
+    to half (5 segments) or below. Confirm volleys now visibly arrive about
+    twice as often as step 34 (roughly every 0.7 seconds), with the same
+    three-bullet fan shape as before.
+37. **Sudden death**: let a boss bullet touch the player ship (or manually
+    move the ship into one). Confirm the run ends immediately -- the game
+    shows the regular `GAME OVER` screen with the score at the moment of the
+    hit -- even if the lives readout shown earlier in the run was still above
+    zero. Press ENTER twice (Game Over -> Title -> Playing) and confirm the
+    new run starts at Level 1 (the invader grid, not the boss).
+38. **Win screen**: start a fresh run, jump back to Level 4 with the console
+    snippet above, and destroy the boss (10 confirmed hits total; repeat
+    step 35 until the health bar is fully empty). Confirm a `YOU WIN` screen
+    appears showing `SCORE:` followed by the run's final score, and `Press
+    ENTER to restart`.
+39. **Restart from win**: press ENTER on the win screen. Confirm a new run
+    starts immediately at Level 1 (the invader grid is shown, `SCORE: 0`,
+    `LIVES: 3`) -- no need to pass back through the Title screen.
+40. Throughout steps 32-39, check the browser console: there should be no
     uncaught errors or error-level output.
