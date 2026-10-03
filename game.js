@@ -4,12 +4,12 @@ import {
   STARTING_LIVES,
   MAX_FRAME_DELTA,
 } from './gameConfig.js';
+import { initInput } from './input.js';
+import { Player } from './player.js';
 
 // Sibling cards owned by later tasks. They will import `hud` from this
 // module and write the fields listed in README.md. Nothing here imports
 // them yet -- each is added by its own card.
-// - input.js: keyboard state for player movement and firing.
-// - player.js: the player ship entity.
 // - invaders.js: the invader grid entity.
 // - collision.js: hit detection between bullets, player and invaders.
 // - level1.js / level2.js / level3.js: the three level definitions.
@@ -46,6 +46,8 @@ window.addEventListener('keydown', (event) => {
   }
 });
 
+initInput();
+
 function startRun() {
   hud.score = 0;
   hud.lives = STARTING_LIVES;
@@ -64,7 +66,9 @@ function updateTitle() {
   }
 }
 
-function updatePlaying() {
+function updatePlaying(dt) {
+  Player.update(dt);
+
   // collision.js will decrement hud.lives on a hit; this watches the
   // shared HUD state for depletion rather than owning hit detection.
   if (hud.lives <= 0) {
@@ -103,6 +107,8 @@ function renderTitle() {
 }
 
 function renderPlaying() {
+  Player.draw(ctx);
+
   ctx.fillStyle = '#ffffff';
   ctx.textAlign = 'left';
   ctx.font = '20px monospace';
