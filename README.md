@@ -371,6 +371,46 @@ control, restart starts a fresh run at Level 1). A boss bullet touching the
 player ends the run via the existing `Scene.GAME_OVER` (lives are never
 consulted on this path).
 
+## Pause contract
+
+- `P` (physical key, matched on `event.code === 'KeyP'` the same way
+  `input.js` matches its own keys) toggles pause on and off -- one physical
+  key press flips the state, not a hold. `game.js`'s `keydown` listener sets
+  a one-shot `pausePressed` flag, ignoring `event.repeat` events so OS
+  key-repeat while `P` is held does not flip the state back and forth; the
+  flag is consumed (and the toggle applied) once per `update(dt)` call, the
+  same edge-triggered pattern the existing `enterPressed` flag uses.
+- The toggle only has an effect while `scene` is `PLAYING`; `P` is a no-op
+  on Title, Game Over and Win -- those scenes keep responding only to
+  ENTER, exactly as before this card.
+- While paused, `game.js`'s `update(dt)` skips `updatePlaying(dt)` entirely
+  for that step. Since every piece of gameplay simulation -- invader
+  marching and fire timers, invader and player bullets, the Level 2 UFO,
+  explosion lifetimes (`updateExplosions`), player movement and firing, and
+  the post-respawn invulnerability countdown (`Player.update`) -- is driven
+  from inside `updatePlaying(dt)`, skipping that one call freezes all of it
+  at once with no separate per-system pause flag.
+- `render()` keeps calling `renderPlaying()` every frame while paused, so
+  the frozen world (including the HUD's `SCORE`/`LIVES`/`LEVEL` line) stays
+  drawn exactly as it was the instant pause was pressed, then draws a
+  `PAUSED` message centred on the canvas on top of it, in the same white
+  monospace canvas-text style `renderTitle()`/`renderGameOver()` use. The
+  canvas is never cleared to black and the scene never switches away from
+  `PLAYING` while paused.
+- The animation frame loop (`requestAnimationFrame(frame)`) and its
+  `MAX_FRAME_DELTA`-clamped accumulator keep running unchanged while
+  paused; only the simulation step is skipped. So resuming after any pause
+  length replays none of the paused wall-clock time as game steps -- no
+  fast-forward, no burst of catch-up motion.
+- `startRun()` resets the pause flag to `false`, so every new run --
+  including one started from the Game Over or Win screens -- always begins
+  un-paused even if the previous run ended mid-pause.
+- Out of scope for this card: auto-pausing on window blur/tab switch (the
+  existing `MAX_FRAME_DELTA` clamp above already covers a backgrounded tab
+  without needing a pause state; a dedicated blur-triggered pause remains a
+  possible future follow-up), a pause menu, rebindable keys, and saving or
+  serialising game state.
+
 ## Manual verification
 
 This project has no automated test runner; verify by hand.
@@ -740,4 +780,81 @@ levelState.current = 4;
     starts immediately at Level 1 (the invader grid is shown, `SCORE: 0`,
     `LIVES: 3`, `LEVEL: 1`) -- no need to pass back through the Title screen.
 65. Throughout steps 57-64, check the browser console: there should be no
+    uncaught errors or error-level output.
+
+### Pause (this card)
+
+Start a fresh run (press ENTER from Title, or reload and press ENTER) for
+steps 66-70.
+
+66. **Pause freezes level 1 instantly**: let the Level 1 formation march and
+    fire a bullet so it is mid-flight, then press `P` once. Within the same
+    visible moment, confirm the formation stops stepping, the bullet stops
+    mid-flight, and holding ArrowLeft/ArrowRight/`A`/`D` no longer moves the
+    ship.
+67. **PAUSED overlay, world and HUD stay visible**: while still paused from
+    step 66, confirm a `PAUSED` message is drawn centred on the canvas, the
+    frozen formation/bullet/ship are still visible around it (the canvas is
+    not black and the scene has not switched to Title/Game Over), and
+    `SCORE`/`LIVES`/`LEVEL` still read the same values they held the instant
+    before pausing.
+68. **Resume continues from the frozen state**: press `P` again. Confirm the
+    formation resumes stepping, the bullet resumes travelling from the exact
+    position it was frozen at (no jump), and the ship responds to the
+    movement keys again.
+69. **No motion while paused, no fire while paused**: press `P` to pause
+    again. While paused, hold a movement key and confirm the ship does not
+    move; press Space and confirm no bullet spawns. Press `P` to resume and
+    confirm the game behaves normally again -- the ship moves if the key is
+    still held, and Space fires.
+70. **Auto-repeat does not flicker the toggle**: with the run still in
+    progress and not paused, press and hold `P` continuously for about 3
+    seconds, then release. Confirm the game ends up paused and stays paused
+    (OS key auto-repeat does not flip it back to running).
+
+Advance to Level 2 for steps 71-74 (clear Level 1 by ordinary play, or the
+console shortcut from step 34).
+
+71. **Long pause on level 2, bullets and UFO included**: wait until an
+    invader bullet is in flight and, if one is currently crossing, the bonus
+    UFO is on screen, then press `P`. Wait at least 10 seconds. Confirm the
+    formation, the invader bullet(s) and the UFO all stay exactly where they
+    were for the whole wait. Press `P` to resume: confirm everything
+    continues from those frozen positions with no fast-forward, no burst of
+    catch-up motion and no teleporting invaders, bullets or UFO.
+72. **Pause freezes an explosion mid-flash**: fire at an invader so its
+    explosion rectangle is on screen (it normally lasts `EXPLOSION_DURATION`
+    = 0.2 s), and press `P` while it is still visible. Confirm the explosion
+    rectangle stays drawn, unchanged, for as long as the pause lasts, and
+    only disappears after pressing `P` again to resume.
+73. **Pause freezes respawn invulnerability**: let an invader bullet hit the
+    ship (or force it, per step 38) so it respawns and starts flashing, then
+    press `P` within the 2-second invulnerability window. Wait about 15
+    seconds, then press `P` to resume. Confirm the ship is still briefly
+    invulnerable/flashing after resuming (the window did not drain while
+    paused) and a hit landed immediately on resume does not cost a life
+    until the flash actually stops.
+74. **Pause on level 4 (boss)**: jump to Level 4 with the console shortcut
+    from step 57 (`levelState.current = 4`), let the boss drift and fire a
+    volley, then press `P`. Confirm the boss' horizontal drift and its
+    in-flight bullets stop. Press `P` to resume: confirm the boss resumes
+    drifting and its bullets resume falling from the same positions, with no
+    jump.
+75. **No-op on Title/Game Over/Win**: on the Title screen, press `P` and
+    confirm nothing changes (no `PAUSED` message, screen unchanged) and
+    ENTER still starts a run as usual. Reach Game Over (e.g. force it via
+    `hud.lives = 0` per step 16) and press `P`: confirm nothing changes and
+    ENTER still returns to Title. Reach Win (defeat the boss per step 63)
+    and press `P`: confirm nothing changes and ENTER still starts a new run.
+76. **Pause does not persist across runs**: start a run, press `P` to pause,
+    then set `hud.lives = 0` from the devtools console (`const { hud } =
+    await import('./game.js'); hud.lives = 0;`). While still paused, confirm
+    the `PAUSED` message stays up and the scene has not changed yet -- the
+    life-loss/game-over check lives inside the simulation step this card
+    skips while paused, so it only runs once play resumes. Press `P` to
+    resume: confirm the Game Over screen now appears (within the next step).
+    Press ENTER to reach Title, then ENTER again to start a new run. Confirm
+    the new run is not paused -- no `PAUSED` message, and the formation
+    marches immediately.
+77. Throughout steps 66-76, check the browser console: there should be no
     uncaught errors or error-level output.

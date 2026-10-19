@@ -52,6 +52,8 @@ export const levelState = { current: 1 };
 let scene = Scene.TITLE;
 let finalScore = 0;
 let enterPressed = false;
+let paused = false;
+let pausePressed = false;
 
 const canvas = document.getElementById('game-canvas');
 const ctx = canvas.getContext('2d');
@@ -59,6 +61,12 @@ const ctx = canvas.getContext('2d');
 window.addEventListener('keydown', (event) => {
   if (event.key === 'Enter') {
     enterPressed = true;
+  }
+  // event.repeat is true on the synthetic keydown events OS auto-repeat
+  // fires while P stays held -- ignoring those is what makes the toggle
+  // fire once per physical press no matter how long the key is held.
+  if (event.code === 'KeyP' && !event.repeat) {
+    pausePressed = true;
   }
 });
 
@@ -74,6 +82,7 @@ function startRun() {
   Level3.reset();
   Boss.reset();
   Player.resetShotCount();
+  paused = false;
   scene = Scene.PLAYING;
 }
 
@@ -231,12 +240,25 @@ function updateWin() {
 }
 
 function update(dt) {
+  // The toggle only applies in PLAYING -- P is a no-op on Title/Game
+  // Over/Win -- and is consumed here every call so a press made on another
+  // scene never carries over and fires once PLAYING is reached.
+  if (scene === Scene.PLAYING && pausePressed) {
+    paused = !paused;
+  }
+  pausePressed = false;
+
   switch (scene) {
     case Scene.TITLE:
       updateTitle(dt);
       break;
     case Scene.PLAYING:
-      updatePlaying(dt);
+      // Skipping updatePlaying(dt) entirely while paused is what freezes
+      // every simulation (marching, bullets, UFO, explosions, timers) in
+      // place -- there is no separate frozen/not-frozen flag per system.
+      if (!paused) {
+        updatePlaying(dt);
+      }
       break;
     case Scene.GAME_OVER:
       updateGameOver(dt);
@@ -293,6 +315,13 @@ function renderPlaying() {
   ctx.fillText(`LEVEL: ${levelState.current}`, 16, 76);
 }
 
+function renderPaused() {
+  ctx.fillStyle = '#ffffff';
+  ctx.textAlign = 'center';
+  ctx.font = '48px monospace';
+  ctx.fillText('PAUSED', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2);
+}
+
 function renderGameOver() {
   ctx.fillStyle = '#ffffff';
   ctx.textAlign = 'center';
@@ -325,6 +354,9 @@ function render() {
       break;
     case Scene.PLAYING:
       renderPlaying();
+      if (paused) {
+        renderPaused();
+      }
       break;
     case Scene.GAME_OVER:
       renderGameOver();
